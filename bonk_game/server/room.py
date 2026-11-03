@@ -75,7 +75,8 @@ class Room:
         self.members = {}          # token -> Member, in join order
         self.host = None
         self.settings = {"map": DEFAULT_MAP, "first_to": 5, "bots": ["bot:medium"],
-                         "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal"}
+                         "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal",
+                         "power_ups": False}
         self.match = None
         self.match_tokens = []     # slot -> member token (None for bots)
         self.results = None
@@ -362,6 +363,8 @@ class Room:
             if msg["round_time"] not in ROUND_TIMES:
                 return "Unknown round time."
             s["round_time"] = msg["round_time"]
+        if "power_ups" in msg:
+            s["power_ups"] = bool(msg["power_ups"])
         if "gravity" in msg:
             if msg["gravity"] not in GRAVITY:
                 return "Unknown gravity."
@@ -470,7 +473,7 @@ class Room:
             return
         self.match = Match(s["map"], slots, s["first_to"], agents, mode=s["mode"],
                            round_time=s["round_time"] if mode.uses_round_time else None,
-                           gravity=GRAVITY[s["gravity"]])
+                           gravity=GRAVITY[s["gravity"]], power_ups=s["power_ups"])
         self.match_tokens = humans + [None] * len(bots)
         self.results = None
         self.votes.clear()

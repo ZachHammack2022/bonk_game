@@ -22,7 +22,7 @@ Open the page, pick a name and **Create a room**. You get a 4-letter room code; 
 
 The respawning modes (Lives, Knockouts and Crown) don't work on Sinking Swing, whose floor is gone by the end of a round.
 
-The host can also set the **round time** (how long before the sudden-death walls close in, or off) and **gravity** (low, normal or high).
+The host can also set the **round time** (how long before the sudden-death walls close in, or off), **gravity** (low, normal or high) and turn on **power-ups**. With power-ups on, a pickup appears every few seconds; touch it for a few seconds of ⚡ speed (push harder, faster top speed), 🎈 float (much less gravity), 🪨 iron (as heavy as a heavy ball the whole time, but you move as if you weren't) or 👊 punch (the next ball you bump goes flying).
 
 A knockout counts for whoever last hit you in the past 3 seconds; if nobody did, you just fell. The feed in the top right shows who knocked out whom, and the results screen hands out awards: most knockouts, hardest hit, butterfingers (most falls with nobody near) and survivor (knocked out the fewest times).
 
@@ -36,7 +36,9 @@ Going **heavy** makes you 5x heavier for a moment, so you hit harder and get kno
 - Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it with a slow connection, add `?lag=150` to the page address (150 ms of fake delay); `?predict=0` turns prediction off for comparison.
 - If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
 - People who join during a match watch it and play in the next one.
-- Click your ball in the lobby to pick a colour. Press 1-4 (or the buttons in the corner) for emotes during a match.
+- **Your ball:** pick a favourite colour and a pattern (stripes, dots, eyes and more) with **Customize** on the home page, or by clicking your ball in the lobby. They're saved in your browser (no sign-up needed) and come with you into every room; you get your colour whenever it's free.
+- **Settings** (⚙, or Esc): volume, mute, screen shake, show ping, and your keys. The arrow keys and Shift always work as well.
+- Press 1-4 (or the buttons in the corner) for emotes during a match.
 - After a match everyone can vote to play again; the next one starts when everyone has voted (or the host starts it). The host can also remove someone from the room (✕ next to their name); they can't rejoin it.
 - Trained agents can play online too: if the server has stable-baselines3 installed and agents in `./agents`, they show up next to the bots.
 
@@ -166,4 +168,4 @@ node tests/web/e2e.js
 - `bonk_game/envs/training_env.py`: the gym env agents train on
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
 - `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), running a match (`match.py`), the game modes (`modes.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`)

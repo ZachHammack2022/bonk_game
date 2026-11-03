@@ -37,6 +37,7 @@ class player():
         self.can_fly = True
         self.jump_speed = 0
         self.gravity = 1.5  # added to the vertical speed every step
+        self.force_mult = 1.0  # multiplies the push from inputs (power-ups)
         self.grounded = False
         self.jump_buffer = 0     # steps left on a remembered "up" press
         self.air_steps = COYOTE_TIME + 1  # steps since last standing on something
@@ -126,7 +127,7 @@ class player():
     
     def move_up(self,force):
         if self.can_fly:
-            self.y_v -= force/self.m
+            self.y_v -= force*self.force_mult/self.m
         else:
             self.jump_buffer = JUMP_BUFFER
             self.try_jump()
@@ -159,13 +160,13 @@ class player():
             self.jump_buffer = max(0, self.jump_buffer - 1)
     
     def move_down(self,force):
-        self.y_v += force/self.m
+        self.y_v += force*self.force_mult/self.m
     
     def move_left(self,force):
-        self.x_v -= force/self.m
+        self.x_v -= force*self.force_mult/self.m
     
     def move_right(self,force):
-        self.x_v += force/self.m
+        self.x_v += force*self.force_mult/self.m
         
     def normalize(self,low,high,val):
         return ((val - low)/(high-low)-0.5)*2

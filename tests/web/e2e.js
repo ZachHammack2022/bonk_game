@@ -165,6 +165,9 @@ function check(cond, what) {
     await host.selectOption("#gravity", "low");
     await guest.waitForFunction(() => document.querySelector("#gravity").value === "low");
     check(true, "gravity reaches the guest");
+    await host.check("#power-ups");
+    await guest.waitForFunction(() => document.querySelector("#power-ups").checked);
+    check(await guest.isDisabled("#power-ups"), "power-ups can be turned on (by the host only)");
     await shot(host, "lobby-crown");
 
     // A phone joins by typing the code

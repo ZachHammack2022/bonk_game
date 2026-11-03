@@ -108,7 +108,9 @@
     s.x += s.vx;
     s.y += s.vy;
     if (phys.clamp_bottom != null) s.y = Math.min(phys.clamp_bottom - r, s.y);
-    if (s.m > phys.min_m) s.m = Math.max(s.m - phys.mass_decay, phys.min_m);
+    // pin_heavy: the Iron power-up keeps you at full weight
+    if (phys.pin_heavy) s.m = phys.max_m;
+    else if (s.m > phys.min_m) s.m = Math.max(s.m - phys.mass_decay, phys.min_m);
     return s;
   }
 

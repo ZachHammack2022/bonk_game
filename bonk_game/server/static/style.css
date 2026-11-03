@@ -240,3 +240,4 @@ body.touch #emotes { left: 60px; }
 .swatch.any { color: var(--dim); font-size: 16px; }
 #profile { z-index: 10; }
 .seat canvas.ball { box-shadow: none; background: none !important; width: 22px; height: 22px; }
+.power-help { margin: -8px 0 0 30px; }

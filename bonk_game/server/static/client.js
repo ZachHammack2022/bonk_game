@@ -322,6 +322,8 @@ function renderLobby() {
   $("round-time").disabled = !host;
   $("gravity").value = s.gravity;
   $("gravity").disabled = !host;
+  $("power-ups").checked = !!s.power_ups;
+  $("power-ups").disabled = !host;
   const teams = s.mode === "teams";
   const mine = L.seats.find((x) => x.id === me.token);
   $("switch-team").classList.toggle("hidden", !teams || !mine);
@@ -533,6 +535,7 @@ $("first-to").addEventListener("change", () => send({ type: "settings", first_to
 $("mode").addEventListener("change", () => send({ type: "settings", mode: $("mode").value }));
 $("round-time").addEventListener("change", () => send({ type: "settings", round_time: JSON.parse($("round-time").value) }));
 $("gravity").addEventListener("change", () => send({ type: "settings", gravity: $("gravity").value }));
+$("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
 $("switch-team").addEventListener("click", () => {
   const mine = app.lobby.seats.find((x) => x.id === me.token);
   if (mine) send({ type: "team", team: 1 - mine.team });
@@ -611,7 +614,9 @@ function showResults(msg) {
   else if (teamWin !== null && teamWin !== undefined && M.team_colors) fx.confetti(M.team_colors[teamWin]);
 }
 
-const AWARD_ICONS = { kos: "💥", hit: "🔨", falls: "🧈", survivor: "🛡️" };
+const AWARD_ICONS = { kos: "💥", hit: "🔨", falls: "🧈", survivor: "🛡️", pickups: "🍬" };
+const POWER_ICONS = { speed: "⚡", float: "🎈", iron: "🪨", punch: "👊" };
+const POWER_COLORS = { speed: "#ffd166", float: "#9be7ff", iron: "#a0aec6", punch: "#ff8a65" };
 
 function awardDetail(a) {
   switch (a.id) {
@@ -619,6 +624,7 @@ function awardDetail(a) {
     case "hit": return `power ${Math.round(a.value)}`;
     case "falls": return `fell ${a.value} time${a.value === 1 ? "" : "s"}`;
     case "survivor": return a.value ? `out ${a.value === 1 ? "once" : a.value + " times"}` : "never out";
+    case "pickups": return `${a.value} power-up${a.value === 1 ? "" : "s"}`;
   }
   return "";
 }
@@ -944,7 +950,10 @@ function drawFeed(now) {
     // Pieces drawn right to left: [text, colour, ball colour or null]
     const victim = slots[f.victim];
     const parts = [];
-    if (f.crown !== undefined) {
+    if (f.power !== undefined) {
+      const k = app.match.powerups && app.match.powerups[f.power];
+      parts.push([slotName(f.who), T.text, slots[f.who].color], [`${POWER_ICONS[f.power]} ${k ? k.title : f.power}`, POWER_COLORS[f.power], null]);
+    } else if (f.crown !== undefined) {
       parts.push([slotName(f.crown), T.text, slots[f.crown].color], ["👑", T.text, null]);
     } else if (f.by !== null && slots[f.by]) {
       parts.push([slotName(f.by), T.text, slots[f.by].color], ["💥", T.text, null], [slotName(f.victim), T.text, victim.color]);
@@ -1038,6 +1047,24 @@ function onEvent(ev, state) {
       sound.play("point");
       break;
     }
+    case "spawn":
+      fx.ring(ev.x, ev.y, POWER_COLORS[ev.k] || T.accent, 0.5);
+      break;
+    case "pickup": {
+      const k = app.match.powerups && app.match.powerups[ev.k];
+      fx.burst(ev.x, ev.y, POWER_COLORS[ev.k] || T.accent, 16, 5, 3.5, 0.5, false);
+      sound.play("point");
+      if (isMe(ev.i)) fx.tell(`${POWER_ICONS[ev.k]} ${k ? k.title : ev.k}!`, POWER_COLORS[ev.k]);
+      fx.feed.push({ power: ev.k, who: ev.i, at: performance.now() });
+      if (fx.feed.length > FEED_LINES) fx.feed.shift();
+      break;
+    }
+    case "punch":
+      fx.burst(ev.x, ev.y, POWER_COLORS.punch, 30, 10, 4.5, 0.6);
+      fx.ring(ev.x, ev.y, POWER_COLORS.punch, 0.4);
+      fx.kick(12);
+      sound.play("hit", 1);
+      break;
     case "overtime": fx.say("Overtime!", T.accent); fx.tell("Next knockout wins", T.text); sound.play("go"); break;
     case "sudden": fx.say("Sudden death!", T.danger); fx.kick(6); sound.play("go"); break;
     case "hit":
@@ -1079,7 +1106,17 @@ function predictFrom(entry, now) {
   const n = Math.min((now - arrived + rtt) / tick + 0.5, 15);
   const inputs = [];
   for (let k = 0; k <= Math.ceil(n); k++) inputs.push(buttonsAt(arrived - rtt + (k + 1) * tick));
-  return BonkPredict.predict(S.players[i], M.physics, S.level, inputs, n, M.radius);
+  return BonkPredict.predict(S.players[i], effectPhysics(M, S, i), S.level, inputs, n, M.radius);
+}
+
+// Your ball's physics with any power-up you're holding
+function effectPhysics(M, S, i) {
+  const eff = S.effects && S.effects[i];
+  const k = eff && M.powerups && M.powerups[eff[0]];
+  if (!k) return M.physics;
+  const P = M.physics;
+  const force = P.force * k.force * (k.pin_heavy ? P.max_m / P.min_m : 1);
+  return { ...P, force, max_speed: P.max_speed * k.max_speed, gravity: P.gravity * k.gravity, pin_heavy: !!k.pin_heavy };
 }
 
 // Where to draw your ball: predicted, with corrections from the server
@@ -1564,6 +1601,18 @@ function frame(now) {
   for (const s of st.level) drawShape(s);
   drawWalls(st.walls, st.t);
 
+  // Power-ups waiting to be picked up: a bobbing bubble with an icon
+  for (const [x, y, k] of st.pickups || []) {
+    const bob = Math.sin(now / 300 + x) * 2.5;
+    const c = POWER_COLORS[k] || T.accent;
+    ctx.globalAlpha = 0.25 + 0.1 * Math.sin(now / 200);
+    circle(x, y + bob, 16, c);
+    ctx.globalAlpha = 1;
+    circle(x, y + bob, 11, "rgba(19,27,43,0.85)");
+    ctx.beginPath(); ctx.arc(x, y + bob, 11, 0, Math.PI * 2); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
+    text(POWER_ICONS[k] || "?", 12, T.text, x, y + bob + 1, { shadow: false });
+  }
+
   for (const r of fx.rings) {
     const k = r.age / r.life;
     ctx.beginPath(); ctx.arc(r.x, r.y, 20 + 30 * k, 0, Math.PI * 2);
@@ -1588,6 +1637,14 @@ function frame(now) {
   st.players.forEach((p, i) => {
     if (!p[3]) return;
     const slot = app.match.slots[i];
+    const eff = st.effects && st.effects[i];
+    if (eff) {
+      // A glow in the power-up's colour, fading as it runs out
+      const c = POWER_COLORS[eff[0]] || T.accent;
+      ctx.globalAlpha = clamp(eff[1] / 1.5, 0.25, 1) * (0.45 + 0.15 * Math.sin(now / 120));
+      circle(p[0], p[1], R + 6, c);
+      ctx.globalAlpha = 1;
+    }
     drawPlayer(p[0], p[1], R, p[2], slot.color, slot.pattern);
   });
   if (mine >= 0) debug.drawn = { x: st.players[mine][0], y: st.players[mine][1], t: now };
