@@ -223,7 +223,7 @@ def test_a_full_team_sends_newcomers_to_the_other():
     async def go():
         names = [f"p{i}" for i in range(7)]
         room, _ = await _room(*names)
-        await room.handle("p0", {"type": "settings", "mode": "teams", "bots": []})
+        await room.handle("p0", {"type": "settings", "mode": "teams", "map": "grand", "bots": []})
         for n in names:
             await room.handle(n, {"type": "team", "team": 1})
         teams = [s["team"] for s in room.lineup()]

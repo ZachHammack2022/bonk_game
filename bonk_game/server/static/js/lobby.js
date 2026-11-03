@@ -53,15 +53,18 @@ function renderLobby() {
   $("mode").value = s.mode;
   $("mode").disabled = !host;
   $("mode-desc").textContent = mode.description;
+  const here = L.members.filter((m) => m.connected).length;
   for (const o of $("map").options) {
     const m = Wm.maps.find((x) => x.name === o.value);
-    o.disabled = mode.respawns && !m.respawn_ok;
-    o.textContent = m.title + (o.disabled ? " (not for this mode)" : "");
+    const wrongMode = mode.respawns && !m.respawn_ok;
+    const tooMany = here > m.players[1];
+    o.disabled = (wrongMode || tooMany) && o.value !== s.map;
+    o.textContent = `${m.title}  (${m.players[0]}–${m.players[1]})` + (wrongMode ? " · not for this mode" : tooMany ? " · too many here" : "");
   }
   $("map").value = s.map;
   $("map").disabled = !host;
   const mapInfo = Wm.maps.find((m) => m.name === s.map);
-  $("map-desc").textContent = mapInfo ? mapInfo.description : "";
+  $("map-desc").textContent = mapInfo ? `${mapInfo.description} For ${mapInfo.players[0]}–${mapInfo.players[1]} players.` : "";
   $("goal-label").textContent = mode.goal_label;
   const goals = mode.goal_choices.includes(s.first_to) ? mode.goal_choices : [...mode.goal_choices, s.first_to].sort((a, b) => a - b);
   fillSelect($("first-to"), goals.map((n) => [n, String(n)]));
@@ -144,16 +147,18 @@ function renderLobby() {
     li.classList.add("away");
     ul.appendChild(li);
   }
+  // The map says how many can play
   const n = L.seats.length;
-  $("seat-count").textContent = `${n} / ${Wm.max_players}`;
-  $("add-bot").disabled = n >= Wm.max_players;
-  const extra = L.members.filter((m) => m.connected).length - Wm.max_players;
+  const [fewest, most] = mapInfo ? mapInfo.players : [2, Wm.max_players];
+  $("seat-count").textContent = `${n} / ${most}`;
+  $("add-bot").disabled = n >= most;
+  const extra = here - most;
   $("spectators").textContent = extra > 0 ? `${extra} more watching (the match is full).` : "";
-  $("start").disabled = n < 2;
+  $("start").disabled = n < fewest;
+  $("start").title = n < fewest ? `This map needs at least ${fewest} players: add bots` : "";
 
   // Rematch votes on the results screen
   if (L.phase === "results") {
-    const here = L.members.filter((m) => m.connected).length;
     const voted = L.votes.includes(me.token);
     $("vote").textContent = voted ? `Waiting for others… ${L.votes.length}/${here}` : `Play again  ${L.votes.length}/${here}`;
     $("vote").classList.toggle("primary", !voted);

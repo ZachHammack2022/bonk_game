@@ -176,7 +176,7 @@ class Room:
             "patterns": list(PATTERNS),
             "maps": [{"name": n, "title": MAPS[n].title, "description": MAPS[n].description,
                       "first_to": min(MAPS[n].winning_score, 10), "round_time": MAPS[n].round_time,
-                      "respawn_ok": MAPS[n].respawn_ok}
+                      "respawn_ok": MAPS[n].respawn_ok, "players": list(MAPS[n].players)}
                      for n in map_order()],
             "modes": modes.describe_modes(),
             "round_times": list(ROUND_TIMES),
@@ -344,6 +344,10 @@ class Room:
         if "map" in msg:
             if msg["map"] not in MAPS:
                 return "Unknown map."
+            most = MAPS[msg["map"]].players[1]
+            if len(self.connected) > most:
+                return (f"{MAPS[msg['map']].title} is for up to {most} players, "
+                        f"and there are {len(self.connected)} here.")
             if msg["map"] != s["map"] and modes.MODES[s["mode"]].goal_label == "First to":
                 s["first_to"] = default_goal(s["mode"], msg["map"])
             s["map"] = msg["map"]
@@ -385,9 +389,12 @@ class Room:
 
     # --- matches ------------------------------------------------------------
     def seats(self):
-        """Who would play if the match started now: (member tokens, bot kinds)."""
-        humans = [m.token for m in self.connected][:arena.MAX_PLAYERS]
-        bots = self.settings["bots"][:arena.MAX_PLAYERS - len(humans)]
+        """Who would play if the match started now: (member tokens, bot kinds).
+        The map says how many can play; bots past that sit this one out, and
+        so do people (they watch)."""
+        most = MAPS[self.settings["map"]].players[1]
+        humans = [m.token for m in self.connected][:most]
+        bots = self.settings["bots"][:most - len(humans)]
         return humans, bots
 
     def teams_for(self, humans, n_bots):
@@ -449,8 +456,10 @@ class Room:
         if self.match is not None:
             return
         humans, bots = self.seats()
-        if len(humans) + len(bots) < arena.MIN_PLAYERS:
-            await self.error(self.host, "Add a bot or invite someone: a match needs 2 players.")
+        fewest = MAPS[self.settings["map"]].players[0]
+        if len(humans) + len(bots) < fewest:
+            await self.error(self.host, f"Add a bot or invite someone: {MAPS[self.settings['map']].title} "
+                                        f"needs at least {fewest} players.")
             return
         teams = self.teams_for(humans, len(bots))
         colors = self.colors_for(humans, len(bots), teams)

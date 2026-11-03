@@ -61,7 +61,16 @@ Behind a proxy (Fly, Render, nginx), set `BONK_TRUST_PROXY=1` so the limits see 
 `python3 main.py` opens a local window, used for training and testing agents: try a map, and watch trained agents play against each other, the bots, or you. Pick a map, choose 2 to 10 players (you, a bot at Easy, Medium or Hard, or any agents trained for that map) and how many points win. Esc pauses.
 
 ## Maps
-You pick a map when you run `main.py`. Agents are trained separately for each map.
+You pick a map in the lobby (or when you run `main.py`). Agents are trained separately for each map.
+
+Each map says how many players it's for (below), and the lobby holds to it. Bots past a map's limit sit that match out (they're back on a bigger map), and so do people, who watch instead.
+
+| Map | Players |
+|---|---|
+| Classic | 2-8 |
+| Floating Platform, Sliding Platform, Sinking Swing | 2-6 |
+| Ramp Rumble | 2-8 |
+| Grand Stage, Double Decker | 4-10 |
 
 **Classic**: a box with a bouncy floor and ceiling and deadly side walls. "Up" is a thrust, so you can fly. Push someone into a wall to score: the point goes to whoever last hit them (with two players, always the other player), and only the player who died respawns. First to 100 wins.
 
@@ -72,6 +81,10 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 **Sliding Platform**: a platform with an outward-leaning bumper post at each end that slides left and right on a rail. Every hit and every roll shoves it, so you can rock it back and forth to build momentum and fling your opponent. Going heavy shoves it much harder. Jump over a post to leave (or get thrown over one).
 
 **Ramp Rumble**: a halfpipe with springy bumpers overhead, made from a map file (see "Making maps" below). Ride the ramps and bounce in from above.
+
+**Grand Stage**: a wide stage built for a crowd, with a small ledge in the middle and springy bumpers up in the corners.
+
+**Double Decker**: a short upper deck above a long lower one with outward-leaning posts at its ends. Hold the top, or drop down and fight it out below.
 
 **Sinking Swing**: a floor with a hole in the middle, a launch pad at the bottom of the hole, and a swing hanging above it all.
 - After about 5 seconds the floor (with the hole and pad) starts sinking, and eventually drops off the screen.
@@ -95,7 +108,8 @@ Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `ma
     "first_to": 5,
     "round_time": 45,               // seconds before sudden death; 0 = off
     "on_death": "new_round",        // or "respawn" (only the dead player)
-    "jump_speed": 23.5, "max_speed": 28
+    "jump_speed": 23.5, "max_speed": 28,
+    "players": [2, 10]              // fewest and most players it's for
   },
   "spawn": [260, 420, 200, 328],    // [left, right, top, bottom] players spawn in
   "pieces": [ ... ]

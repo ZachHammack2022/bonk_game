@@ -45,6 +45,8 @@ class Map:
     # Can players respawn mid-round (the web version's respawn modes)? Not on
     # maps that change for good during a round, like a floor that sinks away.
     respawn_ok = True
+    # How many players the map is made for (the web lobby holds to it)
+    players = (arena.MIN_PLAYERS, arena.MAX_PLAYERS)
 
     @property
     def obs_size(self):
@@ -111,6 +113,7 @@ class ClassicMap(Map):
     description = "Bouncy floor and ceiling, deadly side walls."
     bot_margin = 60  # the walls kill on touch, so keep well clear
     round_time = 30  # players respawn here, so this is time between points
+    players = (2, 8)
     sudden_death_start = (arena.LEFT, arena.RIGHT)
 
     def __init__(self):
@@ -208,6 +211,7 @@ class PlatformMap(OpenMap):
     THICKNESS = 16
 
     spawn_box = (LEFT, RIGHT, 200, TOP - 2)
+    players = (2, 6)
 
     def __init__(self):
         super().__init__()
@@ -235,6 +239,7 @@ class SliderMap(OpenMap):
     TRAVEL = 140  # how far it can slide either way
 
     spawn_box = (LEFT + 10, RIGHT - 10, 200, TOP - 2)
+    players = (2, 6)
     n_extra_obs = 2  # platform offset and velocity
 
 
@@ -299,6 +304,7 @@ class SwingMap(OpenMap):
 
     spawn_box = (FLOOR_LEFT + 20, FLOOR_RIGHT - 20, 290, FLOOR_Y - 2)
     respawn_ok = False  # the floor is gone by the end of a round
+    players = (2, 6)
     n_extra_obs = 3  # floor depth, swing angle, swing angular velocity
 
     FLOOR_COLOR = theme.PLATFORM

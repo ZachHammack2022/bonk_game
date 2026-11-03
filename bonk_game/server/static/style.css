@@ -191,9 +191,10 @@ body.is-host .guest-only { display: none !important; }
 .swatch.on { outline: 3px solid var(--accent); outline-offset: 1px; }
 .swatch:disabled { opacity: 0.2; }
 
-#emotes { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 6px; }
+.game-bar { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 6px; }
+#emotes { display: flex; gap: 6px; }
 #emotes button { min-height: 40px; width: 44px; padding: 0; font-size: 20px; background: rgba(19, 27, 43, 0.6); border-color: rgba(160, 174, 198, 0.35); }
-body.touch #emotes { bottom: auto; top: 12px; }
+body.touch .game-bar { bottom: auto; top: 12px; }
 
 .awards { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; text-align: left; }
 .awards li { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--panel-light); min-width: 0; }
@@ -205,7 +206,7 @@ body.touch #emotes { bottom: auto; top: 12px; }
 
 .settings-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .settings-row > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.settings-row select { width: 100%; padding-left: 10px; padding-right: 6px; }
+.settings-row select { width: 100%; padding-left: 8px; padding-right: 4px; font-size: 15px; }
 .team-head { font-size: 13px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; padding: 6px 2px 0; }
 
 /* --- settings ------------------------------------------------------------ */
@@ -213,8 +214,7 @@ body.touch #emotes { bottom: auto; top: 12px; }
 .icon-button { width: 44px; padding: 0; font-size: 20px; }
 .link-button { background: none; border-color: transparent; color: var(--dim); font-size: 14px; min-height: 36px; }
 .link-button:hover { color: var(--text); border-color: transparent; }
-.game-gear { position: fixed; left: 12px; top: 12px; min-height: 40px; width: 40px; background: rgba(19, 27, 43, 0.6); border-color: rgba(160, 174, 198, 0.35); }
-body.touch #emotes { left: 60px; }
+.game-gear { min-height: 40px; width: 40px; background: rgba(19, 27, 43, 0.6); border-color: rgba(160, 174, 198, 0.35); }
 .settings-card { max-width: 400px; z-index: 1; }
 .settings-card h3 { margin: 8px 0 0; font-size: 15px; }
 .set-row { display: flex; align-items: center; gap: 10px; }

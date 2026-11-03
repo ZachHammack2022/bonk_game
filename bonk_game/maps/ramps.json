@@ -2,7 +2,7 @@
   "name": "ramps",
   "title": "Ramp Rumble",
   "description": "A halfpipe with springy bumpers overhead. Ride the ramps and bounce in from above.",
-  "rules": {"movement": "jump", "first_to": 5, "round_time": 45},
+  "rules": {"movement": "jump", "first_to": 5, "round_time": 45, "players": [2, 8]},
   "spawn": [260, 420, 200, 328],
   "pieces": [
     {"type": "block", "rect": [244, 330, 436, 346], "friction": 0.04},
