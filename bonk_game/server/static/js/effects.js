@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 const sound = {
   ctx: null,
-  muted: store.get("bonk.muted") === "1",
+  muted: profileStore.get().muted,
   unlock() {
     if (!this.ctx) {
       try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
@@ -16,7 +16,7 @@ const sound = {
   },
   setMuted(m) {
     this.muted = m;
-    store.set("bonk.muted", m ? "1" : "0");
+    profileStore.update((p) => ({ ...p, muted: m }));
   },
   toggle() {
     this.setMuted(!this.muted);

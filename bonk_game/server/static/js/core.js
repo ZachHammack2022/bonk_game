@@ -10,6 +10,7 @@
 //   lobby.js     the lobby and the ball pickers
 //   results.js   the results screen
 //   settings.js  the settings menu
+//   stats.js     your stats: totals, awards and recent matches
 //   input.js     keyboard, touch and emotes
 //   effects.js   sound, particles, the knockout feed, game events
 //   net.js       network timing and predicting your own ball (predict.js)
@@ -58,6 +59,7 @@ const $ = (id) => document.getElementById(id);
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
+  remove(k) { try { localStorage.removeItem(k); } catch (e) { /* private mode */ } },
 };
 function randomToken() {
   const a = new Uint8Array(12);
@@ -98,22 +100,63 @@ function show(screen) {
 // ---------------------------------------------------------------------------
 // App state
 // ---------------------------------------------------------------------------
-// Your profile: name, favourite colour and pattern. Kept in this browser
-// (no sign-up); sent to each room you join.
+// Your profile: name, ball, settings, lifetime stats and recent matches
+// (static/profile.js has the format). Nothing else reads or writes it: for
+// now it's kept in this browser; with accounts (#38) only this changes.
+const profileStore = {
+  KEY: "bonk.profile",
+  current: null,
+  get() {
+    if (!this.current) this.current = this.load();
+    return this.current;
+  },
+  load() {
+    let p = null;
+    try { p = BonkProfile.validate(JSON.parse(store.get(this.KEY, "null"))); } catch (e) { /* unreadable: start again */ }
+    if (p) return p;
+    // First time (or saved before profiles): bring the old separate keys in
+    p = BonkProfile.empty(randomToken());
+    p.name = store.get("bonk.name", "").slice(0, 16);
+    const c = store.get("bonk.color", "");
+    if (c !== "" && Number.isInteger(+c) && +c >= 0 && +c < PALETTE.length) p.color = +c;
+    if (PATTERNS.includes(store.get("bonk.pattern"))) p.pattern = store.get("bonk.pattern");
+    p.muted = store.get("bonk.muted") === "1";
+    try { p.prefs = JSON.parse(store.get("bonk.prefs", "{}")) || {}; } catch (e) { /* defaults */ }
+    this.save(p);
+    for (const k of ["bonk.name", "bonk.color", "bonk.pattern", "bonk.muted", "bonk.prefs"]) store.remove(k);
+    return p;
+  },
+  save(p) {
+    this.current = p;
+    store.set(this.KEY, JSON.stringify(p));
+  },
+  update(fn) { this.save(fn(this.get())); },
+  // One more match (a history entry: profile.js)
+  record(entry) { this.update((p) => BonkProfile.record(p, entry)); },
+  // A profile file from another browser (or an export of this one)
+  add(file) {
+    const other = BonkProfile.validate(file);
+    if (!other) return null;
+    const before = this.get().stats.matches;
+    this.update((p) => BonkProfile.merge(p, other));
+    return this.get().stats.matches - before;
+  },
+};
+
+// You, in rooms: your token (a random id the server knows you by; not part
+// of the profile, so a profile file can't be used to take your seat) and
+// your profile's name and ball
 const me = {
   token: store.get("bonk.token") || randomToken(),
-  name: store.get("bonk.name", ""),
-  color: (() => {
-    const c = Number(store.get("bonk.color", ""));
-    return store.get("bonk.color", "") !== "" && Number.isInteger(c) && c >= 0 && c < PALETTE.length ? c : null;
-  })(),
-  pattern: PATTERNS.includes(store.get("bonk.pattern")) ? store.get("bonk.pattern") : "plain",
+  get name() { return profileStore.get().name; },
+  set name(v) { profileStore.update((p) => ({ ...p, name: v })); },
+  get color() { const c = profileStore.get().color; return c !== null && c < PALETTE.length ? c : null; },
+  set color(v) { profileStore.update((p) => ({ ...p, color: v })); },
+  get pattern() { const p = profileStore.get().pattern; return PATTERNS.includes(p) ? p : "plain"; },
+  set pattern(v) { profileStore.update((p) => ({ ...p, pattern: v })); },
 };
-function saveProfile() {
-  store.set("bonk.color", me.color === null ? "" : String(me.color));
-  store.set("bonk.pattern", me.pattern);
-  renderHomeBall();
-}
+// (me.color = ... and me.pattern = ... save straight away)
+function saveProfile() { renderHomeBall(); }
 store.set("bonk.token", me.token);
 
 const app = {
@@ -143,7 +186,6 @@ const isHost = () => app.lobby && app.lobby.host === me.token;
 $("name").value = me.name;
 $("name").addEventListener("change", () => {
   me.name = $("name").value.trim().slice(0, 16);
-  store.set("bonk.name", me.name);
   send({ type: "name", name: me.name });
 });
 $("create").addEventListener("click", async () => {
@@ -236,6 +278,15 @@ function refreshForNewVersion(text) {
   setTimeout(() => location.reload(), 600);
 }
 
+// Add a finished match to your history, if you played in it
+function recordMatch(msg) {
+  const slots = msg.slots || [];
+  const i = slots.findIndex((s) => s.id === me.token);
+  if (i < 0 || !msg.summaries || !msg.match_id) return;
+  profileStore.record({ id: msg.match_id, at: msg.at, mode: msg.mode, map: msg.map, ...msg.summaries[i],
+                        players: slots.length, people: slots.filter((s) => s.kind === "human").length });
+}
+
 function onMessage(msg) {
   switch (msg.type) {
     case "welcome":
@@ -298,6 +349,7 @@ function onMessage(msg) {
       app.results = msg;
       showResults(msg);
       playtest.finish();
+      recordMatch(msg);
       break;
     case "notice":
       toast(msg.message);

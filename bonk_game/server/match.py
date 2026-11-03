@@ -269,13 +269,39 @@ class Match:
         }
 
     def results(self):
-        return {"type": "results", "mode": self.mode.id, **self.mode.results(),
-                "stats": [dict(st, alive=round(st["alive"] / TICK_HZ, 1),
-                               pickups=self.powerups.collected[i] if self.powerups else 0)
-                          for i, st in enumerate(self.stats)],
-                # In Knockouts, most knockouts is the score already
-                "awards": [a for a in awards(self.stats, self.powerups.collected if self.powerups else None)
-                           if not (self.mode.id == "knockouts" and a["id"] == "kos")]}
+        res = {"type": "results", "mode": self.mode.id, "map": self.map_name, **self.mode.results(),
+               "stats": [dict(st, alive=round(st["alive"] / TICK_HZ, 1),
+                              pickups=self.powerups.collected[i] if self.powerups else 0)
+                         for i, st in enumerate(self.stats)],
+               # In Knockouts, most knockouts is the score already
+               "awards": [a for a in awards(self.stats, self.powerups.collected if self.powerups else None)
+                          if not (self.mode.id == "knockouts" and a["id"] == "kos")]}
+        res["summaries"] = summaries(res, self.mode.teams if self.mode.id == "teams" else None)
+        return res
+
+
+def summaries(res, teams=None):
+    """How each player did, for their match history (profiles.py):
+    [{place, of, won, score, kos, falls, deaths, best_hit, pickups, awards}].
+    place is 1 for the winner, then by score (ties share a place); in Teams
+    it's your team's place, 1 for both in a draw."""
+    scores, winner = res["scores"], res.get("winner")
+    out = []
+    for i, st in enumerate(res["stats"]):
+        if teams is not None:
+            wt = res.get("winner_team")
+            won = wt is not None and teams[i] == wt
+            place, of = (1 if wt is None or won else 2), 2
+        else:
+            won = winner == i
+            ahead = sum(1 for j, s in enumerate(scores) if j != winner and s > scores[i])
+            place = 1 if won else ahead + 1 + (winner is not None)
+            of = len(scores)
+        out.append({"place": place, "of": of, "won": won, "score": scores[i],
+                    "kos": st["kos"], "falls": st["falls"], "deaths": st["deaths"],
+                    "best_hit": round(st["best_hit"], 1), "pickups": st.get("pickups", 0),
+                    "awards": [a["id"] for a in res["awards"] if i in a["slots"]]})
+    return out
 
 
 def theme_color(i):

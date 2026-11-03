@@ -41,6 +41,8 @@ WebSocket protocol (JSON text messages):
     mostly, "d" (just what changed: delta.py), results, error, notice,
     restart. See room.py and match.py. Players' own state messages also
     have "you": [x speed, y speed, standing] for predicting their ball.
+    "results" has "summaries" (how each slot did), "match_id" and "at",
+    which browsers add to their match history (profiles.py).
 
 On SIGTERM the server stops taking connections, lets the matches being
 played finish (up to BONK_DRAIN_SECONDS), then sends every room "restart"
@@ -60,7 +62,7 @@ import traceback
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server import limits, metrics, playtest
+from bonk_game.server import limits, metrics, modes, playtest
 from bonk_game.server.room import RoomFull, RoomManager, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -102,7 +104,13 @@ def render_index(version=VERSION):
     with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
         page = f.read()
     page = re.sub(r'((?:src|href)="/static/[^"?]+)"', rf'\1?v={version}"', page)
-    return page.replace("<head>", f'<head>\n  <meta name="bonk-version" content="{version}">', 1)
+    # Map and mode names, for your match history on the home screen
+    names = json.dumps({"maps": {n: MAPS[n].title for n in MAPS},
+                        "modes": {m["id"]: m["title"] for m in modes.describe_modes()}})
+    names = names.replace("<", "\\u003c")
+    head = (f'<head>\n  <meta name="bonk-version" content="{version}">'
+            f'\n  <script id="bonk-names" type="application/json">{names}</script>')
+    return page.replace("<head>", head, 1)
 
 
 class AgentStore:

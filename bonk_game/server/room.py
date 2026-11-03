@@ -569,6 +569,7 @@ class Room:
         loop = asyncio.get_running_loop()
         stats = metrics.STATS
         began = loop.time()
+        began_at = time.time()
         next_t = began
         why = "finished"
         try:
@@ -590,6 +591,9 @@ class Room:
                     why = "everyone_left"
                     break  # everyone left: stop simulating
             self.results = match.results()
+            # For players' match history (profiles.py): which match, and when
+            self.results["match_id"] = f"{self.code}-{int(began_at * 1000)}"
+            self.results["at"] = int(began_at)
             self.results["slots"] = match.describe()["slots"]
         except asyncio.CancelledError:
             why = "stopped"

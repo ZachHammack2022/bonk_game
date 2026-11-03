@@ -26,7 +26,10 @@
         <input id="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
         <button type="submit">Join</button>
       </form>
-      <button id="open-settings-home" class="link-button">⚙ Settings</button>
+      <div class="home-links">
+        <button id="open-stats" class="link-button">📊 Your stats</button>
+        <button id="open-settings-home" class="link-button">⚙ Settings</button>
+      </div>
     </div>
   </section>
 
@@ -143,6 +146,22 @@
     </div>
   </div>
 
+  <!-- Your stats: from your profile, kept in this browser -->
+  <div id="stats" class="overlay hidden" role="dialog" aria-labelledby="stats-title">
+    <div class="card settings-card stats-card">
+      <h2 id="stats-title">Your stats</h2>
+      <p id="stats-since" class="dim small"></p>
+      <div id="stats-body"></div>
+      <div class="stats-file">
+        <button id="stats-export">Save to a file</button>
+        <button id="stats-import">Add from a file</button>
+        <input id="stats-file" type="file" accept="application/json,.json" hidden>
+      </div>
+      <p class="dim small">Move your stats to another browser, or keep them for when accounts arrive.</p>
+      <button id="stats-close" class="primary">Done</button>
+    </div>
+  </div>
+
   <!-- Settings: kept in this browser -->
   <div id="settings" class="overlay hidden" role="dialog" aria-labelledby="settings-title">
     <div class="card settings-card">
@@ -169,11 +188,13 @@
   <script src="/static/js/report.js"></script>
   <script src="/static/predict.js"></script>
   <script src="/static/netsim.js"></script>
+  <script src="/static/profile.js"></script>
   <script src="/static/delta.js"></script>
   <script src="/static/js/core.js"></script>
   <script src="/static/js/lobby.js"></script>
   <script src="/static/js/results.js"></script>
   <script src="/static/js/settings.js"></script>
+  <script src="/static/js/stats.js"></script>
   <script src="/static/js/input.js"></script>
   <script src="/static/js/effects.js"></script>
   <script src="/static/js/net.js"></script>

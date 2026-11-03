@@ -43,6 +43,7 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "Escape") closeSettings();
     return;
   }
+  if (e.code === "Escape" && !$("stats").classList.contains("hidden")) { $("stats").classList.add("hidden"); return; }
   if (e.code === "Escape" && !e.target.matches("input")) { openSettings(); return; }
   if (e.code === "KeyM" && !e.target.matches("input")) { sound.toggle(); return; }
   const digit = /^Digit([1-4])$/.exec(e.code);
