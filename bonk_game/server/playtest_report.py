@@ -23,6 +23,7 @@ LATE_PER_MIN = 6    # states that came more than 100 ms after the last one
 BIG_PER_MIN = 3     # own-ball corrections of more than 6 px (rubber-banding)
 FPS_LOW = 45
 SLOW_PER_MIN = 30   # frames that took more than 50 ms
+FROZEN_PCT = 3      # % of frames drawn with no newer state (everything stops)
 
 EVENTS = ("playtest", "client_error", "error", "match_ended", "match_started")
 
@@ -101,6 +102,9 @@ def problems(r):
     slow = per_min(r, _g(r, "frames", "slow", 0))
     if slow is not None and slow > SLOW_PER_MIN:
         out.append(f"stutter ({slow:.0f} frames over 50 ms a minute)")
+    frozen = _g(r, "frames", "frozen")
+    if frozen is not None and frozen > FROZEN_PCT:
+        out.append(f"the match froze in {frozen:.0f}% of frames (states came too late)")
     if r.get("reconnects"):
         out.append(f"lost connection {r['reconnects']:.0f}×")
     if r.get("feel") in ("laggy", "unplayable"):
@@ -166,8 +170,8 @@ def summarize(records):
     if reports:
         lines += ["## Reports", "",
                   "| when | who | device | network | ping med / p95 | jitter | late states /min "
-                  "| corrections >6 px /min | worst correction | fps | felt | note |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| corrections >6 px /min | worst correction | fps | frozen | felt | note |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for r in reports:
             kind, browser = device_kind(r.get("device"))
             late = per_min(r, _g(r, "states", "late", 0))
@@ -175,8 +179,8 @@ def summarize(records):
             extra = []
             if r.get("watching"):
                 extra.append("watching")
-            if r.get("lag"):
-                extra.append(f"?lag={r['lag']:.0f}")
+            if r.get("sim") or r.get("lag"):
+                extra.append(r.get("sim") or f"+{r['lag']:.0f} ms simulated")
             if r.get("predict") is False:
                 extra.append("no prediction")
             row = [r.get("t", "")[11:16], r.get("name", "?"),
@@ -186,7 +190,8 @@ def summarize(records):
                    _f(_g(r, "ping", "jitter"), "±{:.0f} ms"),
                    _f(late, "{:.1f}"), _f(big, "{:.1f}"),
                    _f(_g(r, "corrections", "max"), "{:.0f} px"),
-                   _f(_g(r, "frames", "fps")), r.get("feel", "–"), r.get("note", "")]
+                   _f(_g(r, "frames", "fps")), _f(_g(r, "frames", "frozen"), "{:.0f}%"),
+                   r.get("feel", "–"), r.get("note", "")]
             lines.append("| " + " | ".join(_cell(c) for c in row) + " |")
         lines.append("")
 

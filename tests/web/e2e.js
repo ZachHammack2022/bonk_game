@@ -285,6 +285,16 @@ function check(cond, what) {
     await guest.waitForTimeout(1000);
     check((await guest.textContent("#status")).includes("updated"), "but asks instead of reloading again and again");
 
+    // Testing on a pretend slow network (netsim.js)
+    const slow = await open("slow");
+    await slow.goto(url + "?net=far&seed=1");
+    check((await slow.textContent("#netsim")).includes("Simulating far"), "a simulated network says so on screen");
+    await slow.fill("#name", "Eve");
+    await slow.click("#join-form button");
+    await slow.waitForSelector("#lobby:not(.hidden)");
+    await slow.waitForFunction(() => bonkDebug.net.rtt > 170, null, { timeout: 10000 });
+    check(true, `and its ping shows the delay (${Math.round(await slow.evaluate(() => bonkDebug.net.rtt))} ms)`);
+
     check(errors.length === 0, "no page errors" + (errors.length ? ": " + errors.join(" | ") : ""));
   } finally {
     if (browser) await browser.close();

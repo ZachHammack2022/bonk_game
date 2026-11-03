@@ -35,7 +35,7 @@ NUMBERS = {
     "ping": ("n", "min", "med", "p95", "max", "jitter"),
     "states": ("n", "late", "max_gap", "missed"),
     "corrections": ("n", "big", "huge", "max", "avg"),
-    "frames": ("fps", "slow"),
+    "frames": ("fps", "slow", "frozen"),  # frozen: % of frames with nothing new to draw
 }
 DEVICE_TEXT = {"ua": 160, "screen": 20, "net": 12}
 
@@ -70,7 +70,9 @@ def clean_report(msg):
         out["device"] = d
     out["watching"] = msg.get("watching") is True
     out["predict"] = msg.get("predict") is not False
-    out["lag"] = _num(msg.get("lag")) or 0  # ?lag= fake delay, if testing with it
+    out["lag"] = _num(msg.get("lag")) or 0  # a pretend network (netsim.js), if testing with one
+    if _text(msg.get("sim"), 100):
+        out["sim"] = _text(msg.get("sim"), 100)
     if msg.get("feel") in FEELS:
         out["feel"] = msg["feel"]
     note = _text(msg.get("note"), 500)

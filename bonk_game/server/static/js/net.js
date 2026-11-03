@@ -60,7 +60,9 @@ function ownPosition(now, dt) {
   const entry = app.states[app.states.length - 1];
   const S = entry[1];
   if (i < 0 || S.phase !== "play" || !S.players[i][3] || (S.stand_ins || []).includes(i)) {
-    own.tick = null; own.offX = own.offY = 0;
+    // (Forget the last prediction too: when you're back, start afresh
+    // rather than fading in from where you were before)
+    own.tick = null; own.base = null; own.offX = own.offY = 0;
     return null;
   }
   const [x, y] = predictFrom(entry, now);

@@ -290,6 +290,7 @@ function pill(x, y, w, h, alpha = 0.78, border = null) {
 }
 
 // Blend the two states either side of the time we draw at
+let drawFrozen = false;  // this frame had no newer state to move toward (playtest reports)
 function blendedState(now) {
   const S = app.states;
   if (!S.length) return null;
@@ -298,7 +299,7 @@ function blendedState(now) {
   while (i > 0 && S[i - 1][0] > at) i--;
   if (i === 0) return S[0][1];
   const [ta, a] = S[i - 1], [tb, b] = S[i];
-  if (at >= tb) return b;
+  if (at >= tb) { drawFrozen = true; return b; }  // nothing newer yet: the match looks paused
   const t = clamp((at - ta) / Math.max(1, tb - ta), 0, 1);
   const roundReset = (b.events || []).some((e) => e.e === "round");
   if (roundReset || a.players.length !== b.players.length) return b;
@@ -441,8 +442,9 @@ function frame(now) {
   lastFrame = now;
   fx.update(dt);
   if ($("game").classList.contains("hidden") || !app.match) return;
-  playtest.frame(ms);
+  drawFrozen = false;
   let st = blendedState(now);
+  playtest.frame(ms, drawFrozen);
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
   if (!st) { drawBackground(); text("Get ready…", 24, T.dim, W / 2, H / 2); return; }
 

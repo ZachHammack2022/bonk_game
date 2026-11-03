@@ -26,7 +26,7 @@ const playtest = {
     if (!this.on) return;
     this.cur = { began: performance.now(), watching, pings: [], lastState: null, states: 0, late: 0,
                  maxGap: 0, missed: 0, fixes: 0, big: 0, huge: 0, maxFix: 0, sumFix: 0,
-                 frames: 0, frameTime: 0, slow: 0, reconnects: this.reconnects };
+                 frames: 0, frameTime: 0, slow: 0, frozen: 0, reconnects: this.reconnects };
   },
   ping(ms) { if (this.cur) this.cur.pings.push(ms); },
   state(ok) {
@@ -49,11 +49,14 @@ const playtest = {
     if (px > BIG_FIX) c.big++;
     if (px > HUGE_FIX) c.huge++;
   },
-  frame(ms) {
+  // frozen: no state newer than the moment being drawn had arrived, so
+  // everything stood still for that frame (states came late)
+  frame(ms, frozen) {
     const c = this.cur;
     if (!c || document.hidden) return;
     c.frames++; c.frameTime += ms;
     if (ms > 50) c.slow++;
+    if (frozen) c.frozen++;
   },
   reconnect() { this.reconnects++; },
 
@@ -70,13 +73,15 @@ const playtest = {
     this.pending = {
       type: "report",
       seconds: (performance.now() - c.began) / 1000,
-      watching: c.watching, predict: PREDICT, lag: FAKE_LAG,
+      watching: c.watching, predict: PREDICT, lag: NET_SIM ? NET_SIM.lag : 0,
+      sim: NET_SIM ? BonkNetSim.describe(NET_SIM) : "",
       reconnects: this.reconnects - c.reconnects,
       ping: { n: p.length, min: p[0] ?? null, med: q(0.5), p95: q(0.95), max: p[p.length - 1] ?? null,
               jitter: c.pings.length > 1 ? jitter / (c.pings.length - 1) : null },
       states: { n: c.states, late: c.late, max_gap: c.maxGap, missed: c.missed },
       corrections: { n: c.fixes, big: c.big, huge: c.huge, max: c.maxFix, avg: c.fixes ? c.sumFix / c.fixes : 0 },
-      frames: { fps: c.frameTime ? (c.frames * 1000) / c.frameTime : null, slow: c.slow },
+      frames: { fps: c.frameTime ? (c.frames * 1000) / c.frameTime : null, slow: c.slow,
+                frozen: c.frames ? (100 * c.frozen) / c.frames : 0 },
       device: { ua: navigator.userAgent, screen: `${screen.width}x${screen.height}`,
                 net: conn.effectiveType || "", touch: "ontouchstart" in window || navigator.maxTouchPoints > 0,
                 pad: [...(navigator.getGamepads ? navigator.getGamepads() : [])].some(Boolean) },

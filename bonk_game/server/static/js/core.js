@@ -5,6 +5,7 @@
 // The client is a few plain scripts that share one global scope, loaded in
 // order by index.html (no build step):
 //   report.js    playtest reports: ping, late states, rubber-banding, errors
+// (netsim.js, loaded before core.js, pretends the network is worse: ?net=mobile)
 //   core.js      colours, helpers, app state, your profile, home screen, connection
 //   lobby.js     the lobby and the ball pickers
 //   results.js   the results screen
@@ -39,10 +40,12 @@ const TICK_MS = 1000 / 30;
 const INTERP_DELAY = 50;   // ms behind the newest state we draw at
 const MAX_JUMP = 60;       // a bigger move in one tick is a teleport, not blended
 
-// Testing switches: ?lag=150 adds 150 ms of fake round-trip delay;
-// ?predict=0 turns off prediction of your own ball.
+// Testing switches: ?net=mobile (or ?lag=150&jitter=40...) pretends the
+// network is worse than it is (see netsim.js); ?predict=0 turns off
+// prediction of your own ball.
 const params = new URLSearchParams(location.search);
-const FAKE_LAG = Math.max(0, +params.get("lag") || 0);
+const NET_SIM = BonkNetSim.fromParams(params);
+const fakeNet = NET_SIM && BonkNetSim.make(NET_SIM);
 const PREDICT = params.get("predict") !== "0";
 // The client's version (the server puts it in the page). Sent in "hello"; a
 // tab left open across a deploy is told to refresh.
@@ -130,7 +133,7 @@ const app = {
 function send(msg) {
   const ws = app.ws;
   const go = () => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
-  if (FAKE_LAG) setTimeout(go, FAKE_LAG / 2); else go();
+  if (fakeNet) fakeNet.up(go); else go();
 }
 const isHost = () => app.lobby && app.lobby.host === me.token;
 
@@ -207,7 +210,7 @@ function connect() {
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (FAKE_LAG) setTimeout(() => { if (app.ws === ws) onMessage(msg); }, FAKE_LAG / 2);
+    if (fakeNet) fakeNet.down(() => { if (app.ws === ws) onMessage(msg); });
     else onMessage(msg);
   };
   ws.onclose = () => {
