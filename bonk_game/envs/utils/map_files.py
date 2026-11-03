@@ -186,7 +186,7 @@ def _body(spec, where):
 # The map class
 # ---------------------------------------------------------------------------
 _TOP_KEYS = {"name", "title", "description", "rules", "spawn", "pieces"}
-_RULE_KEYS = {"movement", "first_to", "round_time", "jump_speed", "max_speed", "on_death"}
+_RULE_KEYS = {"movement", "first_to", "round_time", "jump_speed", "max_speed", "on_death", "players"}
 
 
 def parse(data, source="map"):
@@ -217,7 +217,15 @@ def parse(data, source="map"):
     if isinstance(first_to, bool) or first_to < 1:
         _fail(f"{where}.rules.first_to", "should be a whole number of at least 1")
 
+    from bonk_game.envs.utils.arena import MAX_PLAYERS, MIN_PLAYERS
+    players = _get(rules, "players", f"{where}.rules", [MIN_PLAYERS, MAX_PLAYERS], list)
+    if (len(players) != 2 or any(isinstance(n, bool) or not isinstance(n, int) for n in players)
+            or not MIN_PLAYERS <= players[0] <= players[1] <= MAX_PLAYERS):
+        _fail(f"{where}.rules.players", f"should be [fewest, most] players, whole numbers from "
+                                        f"{MIN_PLAYERS} to {MAX_PLAYERS}, got {json.dumps(players)}")
+
     attrs = dict(
+        players=tuple(players),
         name=name, title=title, description=description,
         can_fly=movement == "fly",
         winning_score=first_to,

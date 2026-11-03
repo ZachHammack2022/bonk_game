@@ -37,6 +37,10 @@ class player():
         self.can_fly = True
         self.jump_speed = 0
         self.gravity = 1.5  # added to the vertical speed every step
+        # Power-up multipliers on top of the values above (1 = no effect)
+        self.force_mult = 1.0    # push from inputs
+        self.speed_mult = 1.0    # top speed
+        self.gravity_mult = 1.0  # gravity
         self.grounded = False
         self.jump_buffer = 0     # steps left on a remembered "up" press
         self.air_steps = COYOTE_TIME + 1  # steps since last standing on something
@@ -47,15 +51,10 @@ class player():
     def update_velocities(self):
         
         # prepare velocities for normalization
-        self.y_v += self.gravity
-        if self.x_v >self.v_range:
-            self.x_v = self.v_range
-        if self.x_v <-self.v_range:
-            self.x_v = -self.v_range
-        if self.y_v >self.v_range:
-            self.y_v = self.v_range
-        if self.y_v <-self.v_range:
-            self.y_v = -self.v_range
+        self.y_v += self.gravity * self.gravity_mult
+        cap = self.v_range * self.speed_mult
+        self.x_v = max(-cap, min(cap, self.x_v))
+        self.y_v = max(-cap, min(cap, self.y_v))
             
     
     def update_position(self):
@@ -126,7 +125,7 @@ class player():
     
     def move_up(self,force):
         if self.can_fly:
-            self.y_v -= force/self.m
+            self.y_v -= force*self.force_mult/self.m
         else:
             self.jump_buffer = JUMP_BUFFER
             self.try_jump()
@@ -159,13 +158,13 @@ class player():
             self.jump_buffer = max(0, self.jump_buffer - 1)
     
     def move_down(self,force):
-        self.y_v += force/self.m
+        self.y_v += force*self.force_mult/self.m
     
     def move_left(self,force):
-        self.x_v -= force/self.m
+        self.x_v -= force*self.force_mult/self.m
     
     def move_right(self,force):
-        self.x_v += force/self.m
+        self.x_v += force*self.force_mult/self.m
         
     def normalize(self,low,high,val):
         return ((val - low)/(high-low)-0.5)*2

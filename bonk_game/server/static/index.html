@@ -15,12 +15,18 @@
     <div class="card">
       <label for="name">Your name</label>
       <input id="name" maxlength="16" autocomplete="nickname" placeholder="Player">
+      <div class="home-ball">
+        <span id="home-ball"></span>
+        <span id="home-ball-label" class="dim small"></span>
+        <button id="edit-ball">Customize</button>
+      </div>
       <button id="create" class="primary">Create a room</button>
       <div class="or">or join one</div>
       <form id="join-form" class="row">
         <input id="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
         <button type="submit">Join</button>
       </form>
+      <button id="open-settings-home" class="link-button">⚙ Settings</button>
     </div>
   </section>
 
@@ -31,7 +37,10 @@
         <div class="dim small">Room</div>
         <div id="room-code" class="room-code"></div>
       </div>
-      <button id="copy-link">Copy invite link</button>
+      <div class="head-buttons">
+        <button id="open-settings-lobby" class="icon-button" aria-label="Settings" title="Settings">⚙</button>
+        <button id="copy-link">Copy invite link</button>
+      </div>
     </header>
     <div class="lobby-grid">
       <div class="card">
@@ -65,9 +74,11 @@
             <select id="gravity"></select>
           </div>
         </div>
+        <label class="check"><input id="power-ups" type="checkbox"> Power-ups</label>
+        <p class="dim small power-help">⚡ speed · 🎈 float · 🪨 iron · 👊 punch the next ball you bump</p>
         <button id="start" class="primary host-only">Start match</button>
         <p id="waiting" class="dim guest-only">Waiting for the host to start…</p>
-        <p class="dim small">Move with WASD or the arrow keys. Space or Shift goes heavy. 1–4 for emotes. Click your ball to pick a colour.</p>
+        <p id="controls-help" class="dim small"></p>
       </div>
     </div>
   </section>
@@ -75,11 +86,14 @@
   <!-- The match -->
   <section id="game" class="screen hidden">
     <div id="stage"><canvas id="canvas"></canvas></div>
-    <div id="emotes" aria-label="Emotes">
-      <button data-e="0" title="Emote (1)">👋</button>
-      <button data-e="1" title="Emote (2)">😂</button>
-      <button data-e="2" title="Emote (3)">😮</button>
-      <button data-e="3" title="Emote (4)">😤</button>
+    <div class="game-bar">
+      <button id="open-settings-game" class="icon-button game-gear" aria-label="Settings" title="Settings (Esc)">⚙</button>
+      <div id="emotes" aria-label="Emotes">
+        <button data-e="0" title="Emote (1)">👋</button>
+        <button data-e="1" title="Emote (2)">😂</button>
+        <button data-e="2" title="Emote (3)">😮</button>
+        <button data-e="3" title="Emote (4)">😤</button>
+      </div>
     </div>
     <div id="touch" class="hidden">
       <div class="pad-left">
@@ -104,9 +118,51 @@
     </div>
   </section>
 
+  <!-- Your ball: favourite colour and pattern, kept in this browser -->
+  <div id="profile" class="overlay hidden" role="dialog" aria-labelledby="profile-title">
+    <div class="card settings-card">
+      <h2 id="profile-title">Your ball</h2>
+      <div id="profile-preview" class="profile-preview"></div>
+      <label>Favourite colour</label>
+      <div id="profile-colors" class="picker"></div>
+      <p class="dim small">You get it whenever it's free (in Teams, when it's one of your side's colours).</p>
+      <label>Pattern</label>
+      <div id="profile-patterns"></div>
+      <button id="profile-close" class="primary">Done</button>
+    </div>
+  </div>
+
+  <!-- Settings: kept in this browser -->
+  <div id="settings" class="overlay hidden" role="dialog" aria-labelledby="settings-title">
+    <div class="card settings-card">
+      <h2 id="settings-title">Settings</h2>
+      <div class="set-row">
+        <label for="set-volume">Volume</label>
+        <input id="set-volume" type="range" min="0" max="100" step="5">
+        <span id="set-volume-out" class="dim small"></span>
+      </div>
+      <label class="check"><input id="set-mute" type="checkbox"> Mute (M)</label>
+      <label class="check"><input id="set-shake" type="checkbox"> Screen shake</label>
+      <label class="check"><input id="set-ping" type="checkbox"> Show ping</label>
+      <h3>Controls</h3>
+      <ul id="set-keys" class="set-keys"></ul>
+      <p id="set-pad" class="dim small"></p>
+      <button id="set-reset-keys" class="link-button">Reset controls</button>
+      <button id="settings-close" class="primary">Done</button>
+    </div>
+  </div>
+
   <div id="status" class="status hidden"></div>
   <div id="toast" class="toast hidden"></div>
   <script src="/static/predict.js"></script>
-  <script src="/static/client.js"></script>
+  <script src="/static/js/core.js"></script>
+  <script src="/static/js/lobby.js"></script>
+  <script src="/static/js/results.js"></script>
+  <script src="/static/js/settings.js"></script>
+  <script src="/static/js/input.js"></script>
+  <script src="/static/js/effects.js"></script>
+  <script src="/static/js/net.js"></script>
+  <script src="/static/js/draw.js"></script>
+  <script src="/static/js/main.js"></script>
 </body>
 </html>

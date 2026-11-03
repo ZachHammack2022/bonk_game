@@ -14,7 +14,7 @@ from bonk_game.envs.testing_env import TestEnv
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.mechanics import BOUNCE
 from bonk_game.envs.utils.controls import NO_BUTTONS, Buttons
-from bonk_game.server import modes
+from bonk_game.server import modes, powerups
 from bonk_game.server.scene import level_shapes, player_state
 from bonk_game.ui import theme
 from bonk_game.ui.bot import LEVEL_NAMES, Bot
@@ -39,13 +39,14 @@ def is_bot(kind):
 
 class Match:
     def __init__(self, map_name, slots, first_to, agents=None, mode=modes.DEFAULT_MODE,
-                 round_time=None, gravity=1.0):
+                 round_time=None, gravity=1.0, power_ups=False):
         """slots: one dict per player, {"kind": "human" | "bot:<level>" | agent
         name, "name": display name, "color": optional colour index, "team":
         0 or 1 in the teams mode}. agents: name -> trained model, for any
         agent kinds. first_to: the mode's goal (points, lives, minutes or
         seconds; see modes.py). round_time: seconds before sudden death
-        (None: the map's own, 0: off). gravity: a multiplier."""
+        (None: the map's own, 0: off). gravity: a multiplier. power_ups:
+        turn on pickups (see powerups.py)."""
         agents = agents or {}
         self.map_name = map_name
         self.slots = [dict(s) for s in slots]
@@ -58,6 +59,7 @@ class Match:
         options = {"round_time": round_time, **self.mode.env_options()}
         self.env = TestEnv(*kinds, map_name=map_name, colors=self.colors, gravity=gravity, **options)
         self.mode.start(self.env)
+        self.powerups = powerups.PowerUps(self.env) if power_ups else None
         self.controllers = []
         for i, kind in enumerate(kinds):
             if kind == "human":
@@ -149,8 +151,12 @@ class Match:
         pre = {i: (env.players[i].x, env.players[i].y, env.players[i].x_v, env.players[i].y_v)
                for i in living}
         was_sudden = env.timer.sudden_death
+        if self.powerups:
+            self.powerups.apply()
         self.obs, _, info = env.step(self._actions())
         events = self.mode.step(info)
+        if self.powerups:
+            events += self.powerups.step(info)
         self.done = self.mode.done
 
         for i in living:
@@ -209,6 +215,7 @@ class Match:
             "t": round(timer.steps / TICK_HZ, 2),
             "stand_ins": sorted(self.stand_ins),
             **self.mode.extra_state(),
+            **(self.powerups.state() if self.powerups else {}),
         }
 
     def describe(self):
@@ -228,9 +235,11 @@ class Match:
             "height": self.env.map.height,
             "reset_round_on_kill": self.env.rounds,
             "physics": self.physics(),
+            "powerups": powerups.describe() if self.powerups else None,
             "slots": [
                 {"name": s["name"], "kind": s["kind"], "id": s.get("id"),
                  "team": self.env.teams[i] if self.mode.id == "teams" else None,
+                 "pattern": s.get("pattern", "plain"),
                  "color": theme_color(self.colors[i]), "color_name": theme.PLAYER_NAMES[self.colors[i]]}
                 for i, s in enumerate(self.slots)
             ],
@@ -257,9 +266,11 @@ class Match:
 
     def results(self):
         return {"type": "results", "mode": self.mode.id, **self.mode.results(),
-                "stats": [dict(st, alive=round(st["alive"] / TICK_HZ, 1)) for st in self.stats],
+                "stats": [dict(st, alive=round(st["alive"] / TICK_HZ, 1),
+                               pickups=self.powerups.collected[i] if self.powerups else 0)
+                          for i, st in enumerate(self.stats)],
                 # In Knockouts, most knockouts is the score already
-                "awards": [a for a in awards(self.stats)
+                "awards": [a for a in awards(self.stats, self.powerups.collected if self.powerups else None)
                            if not (self.mode.id == "knockouts" and a["id"] == "kos")]}
 
 
@@ -281,7 +292,7 @@ def _leaders(stats, key, best=max):
     return [i for i, v in enumerate(values) if v == top], top
 
 
-def awards(stats):
+def awards(stats, pickups=None):
     """A few fun titles for the results screen. Each is
     {"id", "title", "slots": [winner slots], "value"}; one is left out when
     nobody earned it (no knockouts, no falls) or everyone tied."""
@@ -295,6 +306,9 @@ def awards(stats):
     give("kos", "Most knockouts", "kos")
     give("hit", "Hardest hit", "best_hit")
     give("falls", "Butterfingers", "falls")
+    if pickups is not None:
+        stats = [dict(st, pickups=n) for st, n in zip(stats, pickups)]
+        give("pickups", "Power hungry", "pickups")
     # Survivor: knocked out the fewest times, ties broken by time alive
     order = sorted(range(len(stats)), key=lambda i: (stats[i]["deaths"], -stats[i]["alive"]))
     a, b = stats[order[0]], stats[order[1]] if len(order) > 1 else None

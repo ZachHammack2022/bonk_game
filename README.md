@@ -22,21 +22,26 @@ Open the page, pick a name and **Create a room**. You get a 4-letter room code; 
 
 The respawning modes (Lives, Knockouts and Crown) don't work on Sinking Swing, whose floor is gone by the end of a round.
 
-The host can also set the **round time** (how long before the sudden-death walls close in, or off) and **gravity** (low, normal or high).
+The host can also set the **round time** (how long before the sudden-death walls close in, or off), **gravity** (low, normal or high) and turn on **power-ups**. With power-ups on, a pickup appears every few seconds; touch it for a few seconds of ⚡ speed (push harder, faster top speed), 🎈 float (much less gravity), 🪨 iron (as heavy as a heavy ball the whole time, but you move as if you weren't) or 👊 punch (the next ball you bump goes flying).
 
 A knockout counts for whoever last hit you in the past 3 seconds; if nobody did, you just fell. The feed in the top right shows who knocked out whom, and the results screen hands out awards: most knockouts, hardest hit, butterfingers (most falls with nobody near) and survivor (knocked out the fewest times).
 
 Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
 
-| Move / jump | Go heavy |
-|---|---|
-| W A S D or the arrow keys | Space or Shift |
+| | Move / jump | Go heavy |
+|---|---|---|
+| Keyboard | W A S D or the arrow keys | Space or Shift |
+| Gamepad | left stick or d-pad; A jumps | B, X, a bumper or a trigger |
+
+On a gamepad, Y waves, Start opens settings, and A votes to play again on the results screen. Any controller the browser knows (Xbox, PlayStation, Switch Pro and most others) works; press a button on it once the page is open.
 
 - On phones and tablets there are on-screen buttons. M mutes.
 - Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it with a slow connection, add `?lag=150` to the page address (150 ms of fake delay); `?predict=0` turns prediction off for comparison.
 - If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
 - People who join during a match watch it and play in the next one.
-- Click your ball in the lobby to pick a colour. Press 1-4 (or the buttons in the corner) for emotes during a match.
+- **Your ball:** pick a favourite colour and a pattern (stripes, dots, eyes and more) with **Customize** on the home page, or by clicking your ball in the lobby. They're saved in your browser (no sign-up needed) and come with you into every room; you get your colour whenever it's free.
+- **Settings** (⚙, or Esc): volume, mute, screen shake, show ping, and your keys. The arrow keys and Shift always work as well.
+- Press 1-4 (or the buttons in the corner) for emotes during a match.
 - After a match everyone can vote to play again; the next one starts when everyone has voted (or the host starts it). The host can also remove someone from the room (✕ next to their name); they can't rejoin it.
 - Trained agents can play online too: if the server has stable-baselines3 installed and agents in `./agents`, they show up next to the bots.
 
@@ -59,7 +64,16 @@ Behind a proxy (Fly, Render, nginx), set `BONK_TRUST_PROXY=1` so the limits see 
 `python3 main.py` opens a local window, used for training and testing agents: try a map, and watch trained agents play against each other, the bots, or you. Pick a map, choose 2 to 10 players (you, a bot at Easy, Medium or Hard, or any agents trained for that map) and how many points win. Esc pauses.
 
 ## Maps
-You pick a map when you run `main.py`. Agents are trained separately for each map.
+You pick a map in the lobby (or when you run `main.py`). Agents are trained separately for each map.
+
+Each map says how many players it's for (below), and the lobby holds to it. Bots past a map's limit sit that match out (they're back on a bigger map), and so do people, who watch instead.
+
+| Map | Players |
+|---|---|
+| Classic | 2-8 |
+| Floating Platform, Sliding Platform, Sinking Swing | 2-6 |
+| Ramp Rumble | 2-8 |
+| Grand Stage, Double Decker | 4-10 |
 
 **Classic**: a box with a bouncy floor and ceiling and deadly side walls. "Up" is a thrust, so you can fly. Push someone into a wall to score: the point goes to whoever last hit them (with two players, always the other player), and only the player who died respawns. First to 100 wins.
 
@@ -70,6 +84,10 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 **Sliding Platform**: a platform with an outward-leaning bumper post at each end that slides left and right on a rail. Every hit and every roll shoves it, so you can rock it back and forth to build momentum and fling your opponent. Going heavy shoves it much harder. Jump over a post to leave (or get thrown over one).
 
 **Ramp Rumble**: a halfpipe with springy bumpers overhead, made from a map file (see "Making maps" below). Ride the ramps and bounce in from above.
+
+**Grand Stage**: a wide stage built for a crowd, with a small ledge in the middle and springy bumpers up in the corners.
+
+**Double Decker**: a short upper deck above a long lower one with outward-leaning posts at its ends. Hold the top, or drop down and fight it out below.
 
 **Sinking Swing**: a floor with a hole in the middle, a launch pad at the bottom of the hole, and a swing hanging above it all.
 - After about 5 seconds the floor (with the hole and pad) starts sinking, and eventually drops off the screen.
@@ -93,7 +111,8 @@ Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `ma
     "first_to": 5,
     "round_time": 45,               // seconds before sudden death; 0 = off
     "on_death": "new_round",        // or "respawn" (only the dead player)
-    "jump_speed": 23.5, "max_speed": 28
+    "jump_speed": 23.5, "max_speed": 28,
+    "players": [2, 10]              // fewest and most players it's for
   },
   "spawn": [260, 420, 200, 328],    // [left, right, top, bottom] players spawn in
   "pieces": [ ... ]
@@ -166,4 +185,4 @@ node tests/web/e2e.js
 - `bonk_game/envs/training_env.py`: the gym env agents train on
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
 - `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), running a match (`match.py`), the game modes (`modes.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)

@@ -128,7 +128,8 @@ def test_room_host_settings_and_permissions():
         await room.handle("a", {"type": "settings", "map": "swing", "first_to": 3,
                                 "bots": ["bot:easy", "bot:hard"]})
         assert room.settings == {"map": "swing", "first_to": 3, "bots": ["bot:easy", "bot:hard"],
-                                 "mode": "ffa", "round_time": None, "gravity": "normal"}
+                                 "mode": "ffa", "round_time": None, "gravity": "normal",
+                                 "power_ups": False}
         await room.handle("a", {"type": "settings", "bots": ["nope"]})
         assert "Unknown bot" in a.last("error")["message"]
         await room.handle("a", {"type": "settings", "bots": ["bot:easy"] * 20})
@@ -207,10 +208,14 @@ def test_full_match_over_websockets(monkeypatch):
         await client.start_server()
         try:
             assert (await (await client.get("/healthz")).text()) == "ok"
-            page = await client.get("/r/ABCD")
-            assert "bonk" in await page.text()
-            js = await client.get("/static/client.js")
-            assert js.status == 200
+            page = await (await client.get("/r/ABCD")).text()
+            assert "bonk" in page
+            # Every script the page loads is served
+            import re
+            scripts = re.findall(r'<script src="([^"]+)"', page)
+            assert len(scripts) > 5
+            for src in scripts:
+                assert (await client.get(src)).status == 200, src
 
             code = (await (await client.post("/api/rooms")).json())["room"]
             info = await (await client.get(f"/api/rooms/{code}")).json()

@@ -1,0 +1,13 @@
+{
+  "name": "grand",
+  "title": "Grand Stage",
+  "description": "A wide stage for a crowd, with a ledge in the middle and springy bumpers up in the corners.",
+  "rules": {"movement": "jump", "first_to": 5, "round_time": 60, "players": [4, 10]},
+  "spawn": [100, 580, 190, 258],
+  "pieces": [
+    {"type": "block", "rect": [90, 370, 590, 386], "friction": 0.04},
+    {"type": "block", "rect": [290, 262, 390, 274], "friction": 0.04},
+    {"type": "bumper", "center": [140, 150], "radius": 14, "launch": 12},
+    {"type": "bumper", "center": [540, 150], "radius": 14, "launch": 12}
+  ]
+}

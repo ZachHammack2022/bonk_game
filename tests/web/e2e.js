@@ -61,17 +61,35 @@ function check(cond, what) {
       return page;
     };
 
-    // Host makes a room
+    // Host sets up their ball and controls, then makes a room
     const host = await open("host");
     await host.goto(base + "/");
     await host.fill("#name", "Ann");
+    await host.click("#edit-ball");
+    await host.click("#profile-colors [title=Purple]");
+    await host.click("#profile-patterns [data-pattern=stripes]");
+    await host.click("#profile-close");
+    check((await host.textContent("#home-ball-label")).includes("Purple"), "you can pick a favourite colour and pattern");
+    await host.keyboard.press("Escape");
+    await host.waitForSelector("#settings:not(.hidden)");
+    await host.click("#set-keys [data-action=heavy]");
+    await host.keyboard.press("KeyH");
+    await host.keyboard.press("Escape");
+    check(await host.evaluate(() => JSON.parse(localStorage.getItem("bonk.prefs")).keys.heavy === "KeyH"), "keys can be rebound in settings");
     await host.click("#create");
     await host.waitForSelector("#lobby:not(.hidden)");
     const url = host.url();
     check(/\/r\/[A-Z]{4}$/.test(url), "creating a room opens its link");
+    await host.waitForFunction(() => bonkDebug.app.lobby && bonkDebug.app.lobby.seats[0].color === 3 && bonkDebug.app.lobby.seats[0].pattern === "stripes");
+    check(true, "your ball's colour and pattern come with you into the room");
 
     // A friend opens the link: asked for a name, then joins
     const guest = await open("guest");
+    // A pretend controller the test can press (navigator.getGamepads)
+    await guest.addInitScript(() => {
+      window.__pads = [];
+      navigator.getGamepads = () => window.__pads;
+    });
     await guest.goto(url);
     await guest.fill("#name", "Bob");
     await guest.click("#join-form button");
@@ -107,6 +125,17 @@ function check(cond, what) {
     await host.waitForTimeout(150);
     await shot(guest, "match");
     await guest.keyboard.up("ArrowRight");
+
+    // A controller: push the stick left, then let go
+    await guest.bringToFront();
+    await guest.evaluate(() => {
+      const idle = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
+      window.__pads = [{ id: "Test pad", buttons: idle, axes: [-1, 0, 0, 0] }];
+    });
+    await guest.waitForFunction(() => bonkDebug.net.inputs.at(-1).b.join("") === "01000");
+    await guest.evaluate(() => { window.__pads[0].axes = [0, 0, 0, 0]; });
+    await guest.waitForFunction(() => bonkDebug.net.inputs.at(-1).b.join("") === "00000");
+    check(true, "a gamepad's stick moves your ball");
     check(await guest.evaluate(() => bonkDebug.app.match.slots[1].color_name) === "Green", "the match uses the picked colour");
 
     // The guest reloads mid-match and gets their seat back
@@ -128,10 +157,18 @@ function check(cond, what) {
     await guest.waitForSelector("#results:not(.hidden)");
     await host.click("#vote");
     await guest.waitForFunction(() => /1\/2/.test(document.querySelector("#vote").textContent));
-    await guest.click("#vote");
+    // The guest votes with the controller's A button. (Gamepads are read
+    // each animation frame, which only runs in the tab in front.)
+    await guest.bringToFront();
+    await guest.evaluate(() => {
+      const buttons = Array.from({ length: 17 }, (_, i) => ({ pressed: i === 0, value: i === 0 ? 1 : 0 }));
+      window.__pads = [{ id: "Test pad", buttons, axes: [0, 0, 0, 0] }];
+    });
+    await guest.waitForFunction(() => bonkDebug.app.lobby.votes.length === 2 || bonkDebug.app.match && !bonkDebug.app.results);
+    await guest.evaluate(() => { window.__pads = []; });
     await host.waitForSelector("#results.hidden", { state: "attached" });
     await host.waitForFunction(() => bonkDebug.app.match && !bonkDebug.app.results);
-    check(true, "a rematch starts once everyone votes");
+    check(true, "a rematch starts once everyone votes (the guest with a controller)");
     await host.waitForSelector("#results:not(.hidden)", { timeout: 120000 });
     await host.click("#to-lobby");
     await host.waitForSelector("#lobby:not(.hidden)");
@@ -152,6 +189,9 @@ function check(cond, what) {
     await host.selectOption("#gravity", "low");
     await guest.waitForFunction(() => document.querySelector("#gravity").value === "low");
     check(true, "gravity reaches the guest");
+    await host.check("#power-ups");
+    await guest.waitForFunction(() => document.querySelector("#power-ups").checked);
+    check(await guest.isDisabled("#power-ups"), "power-ups can be turned on (by the host only)");
     await shot(host, "lobby-crown");
 
     // A phone joins by typing the code

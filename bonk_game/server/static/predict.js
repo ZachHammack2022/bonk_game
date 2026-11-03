@@ -12,9 +12,9 @@
 // coyote time as bonk_game/envs/utils/player.py), and landing on, bouncing
 // off and sliding on flat platform tops. It skips other players, slopes,
 // bumpers and moving parts; when those matter the server's next position
-// corrects it, and client.js smooths the correction out.
+// corrects it, and js/net.js smooths the correction out.
 //
-// Used by client.js in the browser and by tests in Node.
+// Used by js/net.js in the browser and by tests in Node.
 (function (root) {
   "use strict";
 
@@ -108,7 +108,9 @@
     s.x += s.vx;
     s.y += s.vy;
     if (phys.clamp_bottom != null) s.y = Math.min(phys.clamp_bottom - r, s.y);
-    if (s.m > phys.min_m) s.m = Math.max(s.m - phys.mass_decay, phys.min_m);
+    // pin_heavy: the Iron power-up keeps you at full weight
+    if (phys.pin_heavy) s.m = phys.max_m;
+    else if (s.m > phys.min_m) s.m = Math.max(s.m - phys.mass_decay, phys.min_m);
     return s;
   }
 

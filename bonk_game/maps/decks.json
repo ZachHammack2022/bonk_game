@@ -1,0 +1,13 @@
+{
+  "name": "decks",
+  "title": "Double Decker",
+  "description": "Two decks, one above the other. Hold the top, or drop down and fight it out below.",
+  "rules": {"movement": "jump", "first_to": 5, "round_time": 60, "players": [4, 10]},
+  "spawn": [80, 600, 170, 279],
+  "pieces": [
+    {"type": "block", "rect": [70, 400, 610, 416], "friction": 0.04},
+    {"type": "post", "foot": [76, 403], "size": [10, 40], "lean": -18, "bounce": 0.6, "friction": 0},
+    {"type": "post", "foot": [604, 403], "size": [10, 40], "lean": 18, "bounce": 0.6, "friction": 0},
+    {"type": "block", "rect": [220, 285, 460, 299], "friction": 0.04}
+  ]
+}

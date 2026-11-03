@@ -174,9 +174,17 @@ class TestEnv():
             for i in dead:
                 # Respawn away from everyone else
                 arena.respawn_apart(self.players[i], [p for j, p in enumerate(self.players) if j != i])
+                self._inside_walls(self.players[i])
                 self.last_hit[i] = None
         self._collide_players()
         return deaths, points, False
+
+    def _inside_walls(self, p):
+        """During sudden death, respawn between the closing walls, not past
+        them (where you'd die again straight away)."""
+        w = self.timer.walls()
+        if w is not None and w[1] - w[0] > 2 * p.r + 2:
+            p.x = min(max(p.x, w[0] + p.r + 1), w[1] - p.r - 1)
 
     def _collide_players(self):
         living = [i for i, p in enumerate(self.players) if p.alive]
