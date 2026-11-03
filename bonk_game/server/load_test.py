@@ -4,7 +4,7 @@ can't keep up.
 
     python -m bonk_game.server.load_test [--seconds 10] [--rooms 1,5,10,20,40]
                                          [--map grand] [--players bots|people]
-                                         [--sockets]
+                                         [--sockets] [--full]
 
 Each room is a real Room running a real match, with 10 members who are
 sent every message (counted, then thrown away). --players bots: bots play
@@ -13,8 +13,15 @@ every ball (the worst case: bots cost CPU that people don't).
 
 --sockets: the members are real WebSocket connections to a real server
 (the browsers are a second process, so their CPU isn't counted). Slower to
-set up, and the honest number: sending to sockets costs as much as the
-game. Without it, messages are only counted, not sent.
+set up, and the honest number: sending to sockets, compression included,
+costs as much as the game. Without it, messages are only counted, not sent.
+
+"JSON" is the size of the messages; "wire" (--sockets) is what the
+WebSocket frames came to after compression (permessage-deflate, which
+browsers ask for and so does this test). TCP/IP headers add about 50 bytes
+per message on top.
+
+--full: send the whole state every tick, as before delta.py, to compare.
 
 The server is one Python process, so it uses one CPU core; the numbers
 are per core.
@@ -28,7 +35,7 @@ import subprocess
 import sys
 import time
 
-from bonk_game.server import limits, metrics, room as room_mod
+from bonk_game.server import delta, limits, metrics, room as room_mod
 from bonk_game.server.room import RoomManager
 
 PEOPLE = 10
@@ -70,7 +77,8 @@ async def browsers(url, codes):
         for attempt in range(20):
             try:
                 async with gate:
-                    ws = await session.ws_connect(f"{url}/ws/{code}", max_msg_size=0)
+                    # compress=15: ask for permessage-deflate, as browsers do
+                    ws = await session.ws_connect(f"{url}/ws/{code}", max_msg_size=0, compress=15)
                 break
             except aiohttp.ClientError:
                 await asyncio.sleep(0.2 * (attempt + 1))
@@ -137,6 +145,7 @@ async def run_level(n_rooms, seconds, map_name, players, sockets=False, seed=0):
     ticks0, late0 = stats.ticks_total, stats.late_ticks
     sent = lambda: stats.bytes_sent if sockets else sum(c.bytes for c in counters)
     bytes0 = sent()
+    wire0 = stats.wire_bytes if sockets else None
     stats.ticks.clear()
     cpu0, t0 = cpu_seconds(), time.monotonic()
     loop = asyncio.get_running_loop()
@@ -152,6 +161,7 @@ async def run_level(n_rooms, seconds, map_name, players, sockets=False, seed=0):
     wall = time.monotonic() - t0
     cpu = cpu_seconds() - cpu0
     bytes1 = sent()
+    wire1 = stats.wire_bytes if sockets else None
     stop.set()
     await watcher
     for p in people:
@@ -175,6 +185,8 @@ async def run_level(n_rooms, seconds, map_name, players, sockets=False, seed=0):
         "late": stats.late_ticks - late0,
         "loop_lag_ms_p99": 1000 * lag[int(len(lag) * 0.99)] if lag else 0.0,
         "kb_per_s_room": (bytes1 - bytes0) / wall / n_rooms / 1000,
+        "wire_kb_per_s_room": (None if wire0 is None or wire1 is None
+                               else (wire1 - wire0) / wall / n_rooms / 1000),
     }
 
 
@@ -183,12 +195,16 @@ def keeps_up(r):
     return r["ticks_per_s"] >= TICK_HZ * 0.97 and r["loop_lag_ms_p99"] < 1000 / TICK_HZ and not r["late"]
 
 
+def _rate(kb):
+    return "-" if kb is None else f"{kb:.1f} KB/s ({kb * 8 / 1000:.2f} Mbit/s)"
+
+
 def table(results):
     head = ("| rooms | CPU (1 core) | tick avg | tick p99 | ticks/s per room | event-loop lag p99 "
-            "| sent per room | keeps up |\n|---|---|---|---|---|---|---|---|")
+            "| JSON per room | wire per room | keeps up |\n|---|---|---|---|---|---|---|---|---|")
     rows = [f"| {r['rooms']} | {r['cpu_pct']:.0f}% | {r['tick_ms_avg']:.2f} ms | {r['tick_ms_p99']:.2f} ms "
-            f"| {r['ticks_per_s']:.1f} | {r['loop_lag_ms_p99']:.1f} ms | {r['kb_per_s_room']:.0f} KB/s "
-            f"({r['kb_per_s_room'] * 8 / 1000:.2f} Mbit/s) | {'yes' if keeps_up(r) else 'no'} |"
+            f"| {r['ticks_per_s']:.1f} | {r['loop_lag_ms_p99']:.1f} ms | {_rate(r['kb_per_s_room'])} "
+            f"| {_rate(r['wire_kb_per_s_room'])} | {'yes' if keeps_up(r) else 'no'} |"
             for r in results]
     return "\n".join([head] + rows)
 
@@ -200,32 +216,40 @@ def main(argv=None):
     p.add_argument("--map", default="grand", help="a map for 10 players (grand, decks)")
     p.add_argument("--players", choices=("bots", "people"), default="bots")
     p.add_argument("--sockets", action="store_true", help="send over real WebSockets")
+    p.add_argument("--full", action="store_true", help="send whole states, not changes")
     p.add_argument("--browsers", nargs="+", help=argparse.SUPPRESS)  # (the --sockets helper)
     args = p.parse_args(argv)
     if args.browsers:
         asyncio.run(browsers(args.browsers[0], args.browsers[1:]))
         return
+    if args.full:
+        delta.KEYFRAME_EVERY = 1
     results = []
     for n in (int(x) for x in args.rooms.split(",")):
         r = asyncio.run(run_level(n, args.seconds, args.map, args.players, args.sockets))
         results.append(r)
+        wire = r["wire_kb_per_s_room"]
         print(f"{n:4d} rooms: CPU {r['cpu_pct']:5.1f}%  tick {r['tick_ms_avg']:.2f}/{r['tick_ms_p99']:.2f} ms  "
               f"{r['ticks_per_s']:.1f} ticks/s  lag p99 {r['loop_lag_ms_p99']:.1f} ms  "
-              f"{r['kb_per_s_room']:.0f} KB/s per room  {'ok' if keeps_up(r) else 'BEHIND'}", flush=True)
+              f"JSON {r['kb_per_s_room']:.1f} KB/s"
+              + ("" if wire is None else f", wire {wire:.1f} KB/s") + " per room  "
+              f"{'ok' if keeps_up(r) else 'BEHIND'}", flush=True)
         if not keeps_up(r):
             break
     print()
     how = "over WebSockets" if args.sockets else "counted, not sent"
-    print(f"{PEOPLE} per room on {args.map}, {args.players} playing, messages {how}, "
+    what = "whole states" if args.full else "changes (delta.py)"
+    print(f"{PEOPLE} per room on {args.map}, {args.players} playing, {what} {how}, "
           f"{args.seconds:g} s per level:")
     print()
     print(table(results))
     ok = [r for r in results if keeps_up(r) and r["cpu_pct"] < 70]
     if ok:
         best = ok[-1]
+        rate = best["wire_kb_per_s_room"] or best["kb_per_s_room"]
         print(f"\nOne core comfortably runs {best['rooms']} rooms of {PEOPLE} "
               f"(CPU {best['cpu_pct']:.0f}%), sending about "
-              f"{best['kb_per_s_room'] * best['rooms'] * 8 / 1000:.1f} Mbit/s.")
+              f"{rate * best['rooms'] * 8 / 1000:.1f} Mbit/s.")
 
 
 if __name__ == "__main__":

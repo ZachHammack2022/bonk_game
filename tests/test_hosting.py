@@ -150,7 +150,7 @@ def test_metrics_report_live_numbers(monkeypatch):
         await ws.send_json({"type": "start"})
         states = 0
         while states < 60:
-            if (await ws.receive_json())["type"] == "state":
+            if (await ws.receive_json())["type"] in ("state", "d"):
                 states += 1
         snap = await (await client.get("/metrics?format=json")).json()
         assert snap["rooms"] >= 1 and snap["members_connected"] >= 1

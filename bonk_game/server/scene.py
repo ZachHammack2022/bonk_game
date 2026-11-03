@@ -8,8 +8,12 @@ draws the same thing as the desktop game.
 Shapes (all in world coordinates, 680 x 480, y down):
     {"t": "edges"}                                   red glow on deadly screen edges
     {"t": "rect", "r": [x1, y1, x2, y2], "c": "#rrggbb", "k": kind}
-    {"t": "poly", "p": [[x, y] x4], "f": [[x, y] x4], "c": ..., "k": kind}
-                                                     rotated slab: outline and face
+    {"t": "poly", "p": [[x, y] x4], "l": lip, "c": ..., "k": kind}
+                                                     rotated slab: its corners, and
+                                                     the lip under its face (the
+                                                     face is the slab minus the
+                                                     lip at the bottom: the
+                                                     client works it out)
     {"t": "ball", "x", "y", "r", "c", "k"}           round bumper
     {"t": "line", "a": [x, y], "b": [x, y], "c", "w"}
     {"t": "pivot", "x", "y"}                         the swing's pivot
@@ -23,23 +27,17 @@ def hex_color(c):
     return "#%02x%02x%02x" % tuple(int(v) for v in c[:3])
 
 
-def _r(v):
-    return round(float(v), 1)
+def num(v, places=1):
+    """A rounded number, written as short as JSON allows (12 not 12.0)."""
+    r = round(float(v), places)
+    return int(r) if r == int(r) else r
+
+
+_r = num
 
 
 def _pts(points):
     return [[_r(x), _r(y)] for x, y in points]
-
-
-def oriented_face(block, lip):
-    """Corners of an OrientedBlock's face: the block minus `lip` at the bottom.
-    (Same as bonk_game.ui.painter.oriented_face, without needing pygame.)"""
-    hw, hh = block.w / 2, block.h / 2
-    pts = []
-    for x, y in ((-hw, -hh), (hw, -hh), (hw, hh - lip), (-hw, hh - lip)):
-        wx, wy = block.to_world(x, y)
-        pts.append((block.cx + wx, block.cy + wy))
-    return pts
 
 
 class ShapeRecorder:
@@ -67,8 +65,7 @@ class ShapeRecorder:
                                 "r": _r(block.radius), "c": hex_color(color), "k": kind})
         elif hasattr(block, "angle"):
             self.shapes.append({"t": "poly", "p": _pts(block.corners()),
-                                "f": _pts(oriented_face(block, min(3, block.h / 3))),
-                                "c": hex_color(color), "k": kind})
+                                "l": _r(min(3, block.h / 3)), "c": hex_color(color), "k": kind})
         else:
             self.block(block.x1, block.y1, block.x2, block.y2, color, kind,
                        bounce=block.restitution, friction=block.friction)
@@ -96,12 +93,17 @@ def level_shapes(game_map):
 
 
 def player_state(p):
-    """[x, y, how heavy 0-1, alive, x speed, y speed, standing on something]
-    for one player. The speeds and standing flag are for the client's
-    prediction of its own ball (predict.js)."""
+    """[x, y, how heavy 0-1, alive] for one player: what everyone sees.
+    Positions to 0.1 px: finer than anyone can see."""
     heavy = 0.0
     if p.max_m > p.min_m:
         heavy = max(0.0, min(1.0, (p.m - p.min_m) / (p.max_m - p.min_m)))
-    return [_r(p.x), _r(p.y), round(heavy, 3), 1 if p.alive else 0,
-            round(float(p.x_v), 2), round(float(p.y_v), 2), 1 if p.grounded else 0]
+    return [num(p.x), num(p.y), num(heavy, 2), 1 if p.alive else 0]
+
+
+def player_motion(p):
+    """[x speed, y speed, standing on something]: only for the player's own
+    browser, which predicts its ball (predict.js). Speeds to 0.1 px a tick
+    (the prediction's error from that is well under a pixel)."""
+    return [num(p.x_v), num(p.y_v), 1 if p.grounded else 0]
 

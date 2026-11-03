@@ -119,6 +119,7 @@ const app = {
   lobby: null,
   match: null,       // the "match" message: slots, map, first_to
   states: [],        // recent [receivedAt, state]
+  last: null,        // the newest full state (deltas build on it: delta.js)
   results: null,
   retry: 0,
   fatal: false,
@@ -254,6 +255,7 @@ function onMessage(msg) {
     case "match":
       app.match = msg;
       app.states = [];
+      app.last = null;
       app.results = null;
       fx.reset();
       $("results").classList.add("hidden");
@@ -268,10 +270,16 @@ function onMessage(msg) {
       break;
     }
     case "state":
-      app.states.push([performance.now(), msg]);
+    case "d": {
+      // Mostly deltas: just what changed since the last tick
+      const S = msg.type === "state" ? msg : BonkDelta.apply(app.last, msg);
+      if (!S) break;  // missed the state it builds on: wait for the next full one
+      app.last = S;
+      app.states.push([performance.now(), S]);
       if (app.states.length > 8) app.states.shift();
-      for (const ev of msg.events || []) onEvent(ev, msg);
+      for (const ev of S.events || []) onEvent(ev, S);
       break;
+    }
     case "emote":
       fx.emotes.push({ slot: msg.slot, id: msg.id, at: performance.now() });
       break;

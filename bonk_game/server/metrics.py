@@ -43,13 +43,26 @@ class Stats:
         self.ticks = collections.deque(maxlen=self.TICK_SAMPLES)  # seconds per tick
         self.ticks_total = 0
         self.late_ticks = 0            # a room fell behind 30 ticks a second
-        self.bytes_sent = 0
+        self.bytes_sent = 0            # JSON text sent over WebSockets
+        self.wire_bytes = 0            # what that came to on the wire (compressed frames)
         self.messages_sent = 0
         self.matches_started = 0
         self.matches_finished = 0
         self.rooms_created = 0
         self.connections = 0           # open WebSockets
         self.refused_old_clients = 0   # tabs told to refresh
+
+    def count_wire(self, transport):
+        """Count what a WebSocket's frames take on the wire (after
+        permessage-deflate). aiohttp writes every frame with transport.write."""
+        write = getattr(transport, "write", None)
+        if write is None:
+            return
+
+        def counted(data):
+            self.wire_bytes += len(data)
+            write(data)
+        transport.write = counted
 
     def tick(self, seconds):
         self.ticks.append(seconds)
@@ -85,6 +98,7 @@ class Stats:
             "ticks_total": self.ticks_total,
             "late_ticks_total": self.late_ticks,
             "bytes_sent_total": self.bytes_sent,
+            "wire_bytes_sent_total": self.wire_bytes,
             "messages_sent_total": self.messages_sent,
             "rooms_created_total": self.rooms_created,
             "matches_started_total": self.matches_started,

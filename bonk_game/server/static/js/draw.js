@@ -110,7 +110,18 @@ function drawRect(s) {
   if (w > 2 * rad + 2 && h > 4) line([x + rad, y + 1], [x + w - rad - 1, y + 1], lighten(s.c, 0.4), 1.5);
 }
 
-function drawPoly(s) {
+// A slab's face: its corners, with the bottom two moved up by the lip
+// (same as oriented_face in bonk_game/server/scene.py)
+function polyFace(p, lip) {
+  const toward = (a, b) => {
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return [a[0] + (b[0] - a[0]) * lip / d, a[1] + (b[1] - a[1]) * lip / d];
+  };
+  return [p[0], p[1], toward(p[2], p[1]), toward(p[3], p[0])];
+}
+
+function drawPoly(shape) {
+  const s = { ...shape, f: polyFace(shape.p, shape.l) };
   poly(s.p.map(([x, y]) => [x, y + 4]), "rgba(0,0,0,0.235)");
   poly(s.p, darken(s.c, 0.28));
   poly(s.f, s.c);
@@ -311,7 +322,7 @@ function blendShape(a, b, t) {
     }
     case "poly":
       if (a.p.length !== b.p.length) return b;
-      return { ...b, p: b.p.map((q, k) => pt(a.p[k], q)), f: b.f.map((q, k) => pt(a.f[k], q)) };
+      return { ...b, p: b.p.map((q, k) => pt(a.p[k], q)) };
     case "ball": { const [x, y] = pt([a.x, a.y], [b.x, b.y]); return { ...b, x, y }; }
     case "line": return { ...b, a: pt(a.a, b.a), b: pt(a.b, b.b) };
     case "rail": return { ...b, x1: lerp(a.x1, b.x1, t), x2: lerp(a.x2, b.x2, t) };
