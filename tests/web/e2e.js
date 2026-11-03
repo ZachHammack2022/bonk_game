@@ -119,6 +119,10 @@ function check(cond, what) {
     const winner = await host.textContent("#winner");
     check(/wins?!|Draw!/.test(winner), `results show a winner (${winner.trim()})`);
     await shot(host, "results");
+    const res = await host.evaluate(() => bonkDebug.app.results);
+    check(res.stats.length === res.slots.length && Array.isArray(res.awards), "results come with stats and awards");
+    const shown = await host.$$eval("#awards li", (els) => els.length);
+    check(shown === res.awards.length, `the awards are on the results screen (${shown})`);
 
     // Everyone votes for a rematch
     await guest.waitForSelector("#results:not(.hidden)");

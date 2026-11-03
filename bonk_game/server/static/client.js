@@ -440,9 +440,54 @@ function showResults(msg) {
     li.append(ball, name, score);
     ol.appendChild(li);
   }
+  renderAwards(msg, slots);
   $("results").classList.remove("hidden");
   $("emotes").classList.add("hidden");
   if (w !== null && w !== undefined) fx.confetti(slots[w] ? slots[w].color : T.accent);
+}
+
+const AWARD_ICONS = { kos: "💥", hit: "🔨", falls: "🧈", survivor: "🛡️" };
+
+function awardDetail(a) {
+  switch (a.id) {
+    case "kos": return `${a.value} knockout${a.value === 1 ? "" : "s"}`;
+    case "hit": return `power ${Math.round(a.value)}`;
+    case "falls": return `fell ${a.value} time${a.value === 1 ? "" : "s"}`;
+    case "survivor": return a.value ? `out only ${a.value} time${a.value === 1 ? "" : "s"}` : "never knocked out";
+  }
+  return "";
+}
+
+function renderAwards(msg, slots) {
+  const ul = $("awards");
+  ul.innerHTML = "";
+  for (const a of msg.awards || []) {
+    const li = document.createElement("li");
+    li.dataset.award = a.id;
+    const icon = document.createElement("span");
+    icon.className = "icon";
+    icon.textContent = AWARD_ICONS[a.id] || "🏅";
+    const body = document.createElement("span");
+    body.className = "body";
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = a.title;
+    const who = document.createElement("span");
+    who.className = "who";
+    for (const [k, i] of a.slots.entries()) {
+      const s = slots[i] || { name: "?", color: T.faint };
+      if (k) who.append(" & ");
+      const name = document.createElement("b");
+      name.style.color = s.color;
+      name.textContent = s.id === me.token ? "You" : s.name;
+      who.append(name);
+    }
+    who.append(" · " + awardDetail(a));
+    body.append(title, who);
+    li.append(icon, body);
+    ul.appendChild(li);
+  }
+  ul.classList.toggle("hidden", !ul.children.length);
 }
 
 // ---------------------------------------------------------------------------
@@ -562,8 +607,8 @@ window.addEventListener("keydown", () => sound.unlock());
 // Effects: particles, rings, screen shake, banners
 // ---------------------------------------------------------------------------
 const fx = {
-  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [],
-  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; },
+  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [], feed: [],
+  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; this.feed = []; },
   burst(x, y, color, n = 26, speed = 7, size = 4.5, life = 0.7, gravity = true) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.9);
@@ -597,6 +642,39 @@ const fx = {
   },
 };
 
+// Knockout feed, top right: "Ann 💥 Bob", "Bob fell", newest at the bottom
+const FEED_LINES = 4, FEED_TIME = 5000;
+
+function drawFeed(now) {
+  fx.feed = fx.feed.filter((f) => now - f.at < FEED_TIME);
+  const slots = app.match.slots;
+  let y = 54;
+  ctx.font = "700 12px ui-rounded, system-ui, sans-serif";
+  for (const f of fx.feed) {
+    const alpha = clamp((FEED_TIME - (now - f.at)) / 600, 0, 1);
+    // Pieces drawn right to left: [text, colour, ball colour or null]
+    const victim = slots[f.victim];
+    const parts = [];
+    if (f.by !== null && slots[f.by]) {
+      parts.push([slotName(f.by), T.text, slots[f.by].color], ["💥", T.text, null], [slotName(f.victim), T.text, victim.color]);
+    } else {
+      parts.push([slotName(f.victim), T.text, victim.color], [f.wall ? "got squished" : "fell", T.dim, null]);
+    }
+    const widths = parts.map(([str, , ball]) => ctx.measureText(str).width + (ball ? 14 : 0));
+    const w = widths.reduce((a, b) => a + b, 0) + 6 * (parts.length - 1) + 20;
+    ctx.globalAlpha = alpha;
+    pill(W - 10 - w, y - 10, w, 20, 0.6);
+    let x = W - 10 - w + 10;
+    parts.forEach(([str, color, ball], k) => {
+      if (ball) { circle(x + 5, y, 5, ball); x += 14; }
+      text(str, 12, color, x, y, { align: "left", weight: 700, shadow: false, alpha });
+      x += widths[k] - (ball ? 14 : 0) + 6;
+    });
+    ctx.globalAlpha = 1;
+    y += 24;
+  }
+}
+
 function slotName(i) {
   const s = app.match && app.match.slots[i];
   if (!s) return "?";
@@ -619,6 +697,8 @@ function onEvent(ev, state) {
       fx.burst(x, y, T.text, 10, 5, 3);
       fx.kick(10);
       sound.play("death");
+      fx.feed.push({ victim: ev.i, by: ev.by ?? null, wall: !!ev.wall, at: performance.now() });
+      if (fx.feed.length > FEED_LINES) fx.feed.shift();
       if (app.match && !app.match.reset_round_on_kill) {
         const p = state.players[ev.i];
         fx.ring(p[0], p[1], c);
@@ -1026,6 +1106,8 @@ function drawHud(st, now) {
     const age = (now - note.at) / 1000;
     if (age < 1.6) text(note.text, 18, note.color, W / 2, 124, { alpha: clamp((1.6 - age) * 3, 0, 1) });
   }
+
+  drawFeed(now);
 
   if (net.rtt !== null) {
     text(`${Math.round(net.rtt)} ms`, 10, T.faint, W - 8, H - 10, { align: "right", weight: 600, shadow: false });

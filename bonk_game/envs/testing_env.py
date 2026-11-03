@@ -58,6 +58,7 @@ class TestEnv():
         self.players = list(self.map.make_players(self.n, colors))
         self.scores = [0] * self.n
         self.last_hit = [None] * self.n  # (index of who hit them, step) per player
+        self.kos = []  # this step's deaths: (victim, who knocked them out or None, walls?)
         self.steps = 0
 
         self.renderer = arena.Renderer(render_mode, self.metadata["render_fps"],
@@ -97,11 +98,18 @@ class TestEnv():
             views += [own[i], own[self.nearest_opponent(i)], extra]
         return np.concatenate(views, axis=0)
 
-    def _credit(self, victim):
-        """Who scores for `victim` dying on a respawn map (or None)."""
+    def knocked_out_by(self, victim):
+        """Who last hit `victim` in the past few seconds (or None)."""
         hit = self.last_hit[victim]
         if hit is not None and self.steps - hit[1] <= self.HIT_CREDIT_STEPS:
             return hit[0]
+        return None
+
+    def _credit(self, victim):
+        """Who scores for `victim` dying on a respawn map (or None)."""
+        by = self.knocked_out_by(victim)
+        if by is not None:
+            return by
         if self.n == 2:
             return 1 - victim
         return None
@@ -114,9 +122,10 @@ class TestEnv():
         of players who scored.
         """
         living = [i for i, p in enumerate(self.players) if p.alive]
-        dead = [i for i in living
-                if self.map.collide(self.players[i]) or self.timer.kills(self.players[i])]
+        walled = [i for i in living if self.timer.kills(self.players[i])]
+        dead = [i for i in living if self.map.collide(self.players[i]) or i in walled]
         deaths = [(i, self.players[i].x, self.players[i].y) for i in dead]
+        self.kos = [(i, self.knocked_out_by(i), i in walled) for i in dead]
         points = []
 
         if self.map.reset_round_on_kill:
@@ -179,7 +188,9 @@ class TestEnv():
         presses anything.
 
         Returns (obs, terminated, info). info has "deaths", "points" and
-        "round_over" as returned by check_collisions().
+        "round_over" as returned by check_collisions(), and "kos": for each
+        death, (victim, who knocked them out or None, killed by the
+        sudden-death walls?).
         """
         actions = [None] * self.n if actions is None else list(actions)
         if len(actions) != self.n:
@@ -202,7 +213,7 @@ class TestEnv():
             self._render_frame()
             terminated = terminated or self.quit_requested
 
-        info = {"deaths": deaths, "points": points, "round_over": round_over}
+        info = {"deaths": deaths, "points": points, "round_over": round_over, "kos": self.kos}
         return self._get_obs(), terminated, info
 
     def render(self):
