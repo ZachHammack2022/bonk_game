@@ -28,7 +28,7 @@ def _targets(env):
         if hasattr(body, "theta"):
             out.append((body, "theta"))
     for b in blocks:
-        out += [(b, a) for a in ("x1", "y1", "x2", "y2")]
+        out += [(b, a) for a in b.motion_attrs]
     return out
 
 
