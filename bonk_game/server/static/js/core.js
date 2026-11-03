@@ -43,6 +43,9 @@ const MAX_JUMP = 60;       // a bigger move in one tick is a teleport, not blend
 const params = new URLSearchParams(location.search);
 const FAKE_LAG = Math.max(0, +params.get("lag") || 0);
 const PREDICT = params.get("predict") !== "0";
+// The client's version (the server puts it in the page). Sent in "hello"; a
+// tab left open across a deploy is told to refresh.
+const CLIENT_VERSION = (document.querySelector('meta[name="bonk-version"]') || {}).content || "dev";
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -119,6 +122,7 @@ const app = {
   results: null,
   retry: 0,
   fatal: false,
+  restoring: null,   // the host's settings, to put back after a server restart
 };
 
 function send(msg) {
@@ -194,7 +198,10 @@ function connect() {
   app.ws = ws;
   status(app.retry ? "Reconnecting…" : "Connecting…");
   ws.onopen = () => {
-    ws.send(JSON.stringify({ type: "hello", name: me.name, token: me.token }));
+    // reopen: after a dropped connection the server may have restarted and
+    // forgotten the room; ask it to make the room again with the same code
+    ws.send(JSON.stringify({ type: "hello", name: me.name, token: me.token, version: CLIENT_VERSION,
+                             reopen: app.retry > 0, host: app.restoring !== null }));
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
@@ -204,9 +211,23 @@ function connect() {
   ws.onclose = () => {
     if (app.ws !== ws || app.fatal) return;
     app.retry = Math.min(app.retry + 1, 5);
-    status("Connection lost. Reconnecting…");
+    status(app.restoring !== null || $("status").textContent.includes("restarting")
+      ? "The server is restarting. Reconnecting…" : "Connection lost. Reconnecting…");
     setTimeout(connect, 500 * 2 ** app.retry);
   };
+}
+
+// A new client is out: load it. (Unless we only just did, which would mean
+// something is serving an old page; then say so instead of looping.)
+function refreshForNewVersion(text) {
+  app.fatal = true;
+  if (app.ws) app.ws.close();
+  let last = 0;
+  try { last = +sessionStorage.getItem("bonk.refreshed") || 0; } catch (e) { /* private mode */ }
+  if (Date.now() - last < 30000) { status(text); return; }
+  try { sessionStorage.setItem("bonk.refreshed", String(Date.now())); } catch (e) { /* private mode */ }
+  status("A new version is out. Loading it…");
+  setTimeout(() => location.reload(), 600);
 }
 
 function onMessage(msg) {
@@ -224,6 +245,10 @@ function onMessage(msg) {
       app.lobby = msg;
       document.body.classList.toggle("is-host", isHost());
       renderLobby();
+      if (app.restoring && msg.phase === "lobby") {
+        if (isHost()) send({ type: "settings", ...app.restoring });
+        app.restoring = null;
+      }
       if (msg.phase === "lobby") { app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
       break;
     case "match":
@@ -255,7 +280,16 @@ function onMessage(msg) {
       app.results = msg;
       showResults(msg);
       break;
+    case "notice":
+      toast(msg.message);
+      break;
+    case "restart":
+      // The server is going down for an update; we'll reconnect to the new one
+      if (isHost() && app.lobby) app.restoring = { ...app.lobby.settings };
+      status(msg.message);
+      break;
     case "error":
+      if (msg.refresh) { refreshForNewVersion(msg.message); break; }
       toast(msg.message, true);
       if (msg.fatal) {
         app.fatal = true;
