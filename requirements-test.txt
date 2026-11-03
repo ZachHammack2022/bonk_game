@@ -1,0 +1,5 @@
+# What the test suite needs. (requirements.txt is the full training stack.)
+pytest
+numpy
+pygame
+gym
