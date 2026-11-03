@@ -50,7 +50,7 @@ Run it on any host that supports WebSockets. The `Dockerfile` builds the server 
 
 **Updating it.** Stop the server with SIGTERM (what Docker, Fly and most hosts send). It stops taking new connections, lets the matches being played finish (up to `BONK_DRAIN_SECONDS`, 120 by default; give your host a stop timeout a bit longer than that), tells everyone it's restarting, and exits. Open tabs reconnect to the new server and get their room back: same code, same host, same settings. Every client file's URL carries a hash of the client (`?v=...`), so browsers cache them for good but load the new ones after a deploy. A tab still running the old client is told to refresh, and does.
 
-**Watching it.** The server logs one JSON object per line (room created/closed, match started/ended, errors with a traceback). `GET /metrics` reports rooms, people, matches running, tick time (average and p99), bytes sent and more, in Prometheus' format (`/metrics?format=json` for JSON). Set `BONK_METRICS_TOKEN` to require `Authorization: Bearer <token>` for it.
+**Watching it.** The server logs one JSON object per line (room created/closed, match started/ended, errors with a traceback). `GET /metrics` reports rooms, people, matches running, tick time (average and p99), bytes sent (as JSON, and on the wire after compression) and more, in Prometheus' format (`/metrics?format=json` for JSON). Set `BONK_METRICS_TOKEN` to require `Authorization: Bearer <token>` for it.
 
 The server limits how much any one visitor can use. Each limit can be changed with an environment variable:
 
@@ -61,26 +61,27 @@ The server limits how much any one visitor can use. Each limit can be changed wi
 | `BONK_MAX_MEMBERS` | 16 | people in a room, players and watchers |
 | `BONK_CONNECTIONS_PER_IP` | 20 | open connections per IP |
 | `BONK_MESSAGES_PER_SECOND` / `BONK_MESSAGE_BURST` | 60 / 120 | messages per connection; a connection that keeps going over is closed |
+| `BONK_WS_COMPRESS` | 1 | compress WebSocket messages (see below) |
 
 Behind a proxy (Fly, Render, nginx), set `BONK_TRUST_PROXY=1` so the limits see each visitor's real IP rather than the proxy's.
 
 ### How big a server?
-`python -m bonk_game.server.load_test --sockets` runs more and more rooms of 10 at once over real WebSockets until the server can't keep up, and prints what it used. On a 4-core cloud VM (one core is used: the server is one process), with bots playing all 10 balls on Grand Stage:
+`python -m bonk_game.server.load_test --sockets` runs more and more rooms of 10 at once over real WebSockets until the server can't keep up, and prints what it used. The "browsers" ask for compression, as real ones do. Below: a 4-core cloud VM (the server is one process, so it uses one core), bots playing all 10 balls on Grand Stage.
 
-| rooms of 10 | CPU (1 core) | tick avg / p99 | ticks per second | sent per room | keeps up |
-|---|---|---|---|---|---|
-| 1 | 3% | 0.43 / 0.95 ms | 30.1 | 2.1 Mbit/s | yes |
-| 10 | 19% | 0.38 / 0.79 ms | 30.0 | 2.1 Mbit/s | yes |
-| 20 | 39% | 0.35 / 0.76 ms | 30.1 | 2.1 Mbit/s | yes |
-| 30 | 62% | 0.34 / 0.76 ms | 30.0 | 2.1 Mbit/s | yes |
-| 40 | 76% | 0.32 / 0.80 ms | 30.1 | 2.1 Mbit/s | yes |
-| 50 | 84% | 0.33 / 0.76 ms | 30.1 | 2.1 Mbit/s | yes, barely (event loop up to 33 ms late) |
+| rooms of 10 | CPU (1 core) | tick avg / p99 | ticks per second | JSON per room | on the wire per room | keeps up |
+|---|---|---|---|---|---|---|
+| 1 | 4% | 0.53 / 1.06 ms | 30.1 | 51 KB/s | 20 KB/s (0.16 Mbit/s) | yes |
+| 10 | 33% | 0.44 / 1.07 ms | 30.0 | 55 KB/s | 22 KB/s (0.17 Mbit/s) | yes |
+| 20 | 58% | 0.38 / 0.86 ms | 30.1 | 55 KB/s | 22 KB/s (0.17 Mbit/s) | yes |
+| 30 | 82% | 0.32 / 0.78 ms | 30.1 | 55 KB/s | 21 KB/s (0.17 Mbit/s) | yes, barely (event loop up to 37 ms late) |
+| 40 | 89% | 0.25 / 0.64 ms | 28.4 | 54 KB/s | 21 KB/s (0.17 Mbit/s) | no |
 
-With people instead of bots (`--players people`) it's a little cheaper: 50 rooms at 76%.
+Sending the whole state every tick instead (`--full`, how it worked before) takes about 214 KB/s of JSON per room, which compresses to 25 KB/s on the wire. With people instead of bots (`--players people`), 30 rooms use 70% of the core.
 
 What that means:
-- **CPU is cheap.** A room of 10 uses about 2% of a core, so one small shared-CPU machine (1 vCPU, which is slower than this one; plan on half) comfortably runs 10-15 full rooms, 100-150 people. Private rooms with friends are mostly 2-6 people, which costs less.
-- **Bandwidth is what costs.** Every player gets the whole state 30 times a second, about 26 KB/s (210 kbit/s) each, so a full room sends 2 Mbit/s and a 6-person hour is about 0.6 GB. Watch the host's included egress; making these messages smaller is the next step on the roadmap.
+- **CPU is what runs out first.** A room of 10 uses about 3% of a core. About a quarter of that is compressing messages, once for each connection. A small shared-CPU machine (1 vCPU, slower than this one: plan on half) runs about 10 full rooms, 100 people. Private rooms with friends are mostly 2-6 people, which costs less.
+- **Bandwidth is cheap.** A player gets about 2 KB/s (17 kbit/s), so a full room sends 0.17 Mbit/s, and a 6-person hour is about 45 MB.
+- `BONK_WS_COMPRESS=0` turns compression off: about 25% less CPU, but nearly 3 times the bandwidth (0.47 Mbit/s per full room).
 
 ## The desktop game (for training)
 `python3 main.py` opens a local window, used for training and testing agents: try a map, and watch trained agents play against each other, the bots, or you. Pick a map, choose 2 to 10 players (you, a bot at Easy, Medium or Hard, or any agents trained for that map) and how many points win. Esc pauses.
@@ -207,4 +208,4 @@ node tests/web/e2e.js
 - `bonk_game/envs/training_env.py`: the gym env agents train on
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
 - `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)
