@@ -1,7 +1,4 @@
 absl-py==1.4.0
-ale-py==0.7.4
-AutoROM==0.4.2
-AutoROM.accept-rom-license==0.5.0
 cachetools==5.2.1
 certifi==2022.12.7
 charset-normalizer==2.1.1
@@ -19,7 +16,6 @@ idna==3.4
 importlib-metadata==4.13.0
 importlib-resources==5.10.2
 kiwisolver==1.4.4
-libtorrent==2.0.7
 Markdown==3.4.1
 MarkupSafe==2.1.1
 matplotlib==3.6.2

@@ -1,63 +1,48 @@
-import bonk_game
-import gym
-from stable_baselines3 import PPO,A2C,DQN
-from sb3_contrib import ARS
-from stable_baselines3.common.env_util import make_vec_env
 import os
-from bonk_game.envs.testing_env import TestEnv
-from bonk_game.envs.match_env import MatchEnv
-from bonk_game.envs.utils.testing import load_agents
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import random
 
+from bonk_game.envs.match_env import MatchEnv
+from bonk_game.envs.utils.testing import load_agents, model_classes
 
-def run_tournament(participants,steps = 5000):
-    while len(participants) >1:
-        winners = {}
-        for _ in range(len(participants)//2):
-            if len(participants)==1:
-                break
-            # Choose and remove first agent from participants
-            key1 = random.choice(list(participants.keys()))
-            a1 = participants.pop(key1)
-            
-            # Choose and remove second agent from participants
-            key2 = random.choice(list(participants.keys()))
-            a2 = participants.pop(key2) 
-            match = MatchEnv(a1,a2,)
-            scores = match.simulate(steps)
-            print(f"{key1} vs {key2}")
-            print(f"{scores[0]}:{scores[1]}")
-            if scores[0] >= scores[1]:
-                winners.update({key1:a1}) 
-            else:
-                winners.update({key2:a2})
-        # Winners move onto the next round
-        participants = winners.copy()
-    return winners
-    
-    
-models = {
-    "bad": PPO,
-    "ppo": PPO,
-    "a2c": A2C,
-    "dqn": DQN,
-    "ars": ARS,
-}
 
-# Create parallel environments
-env = make_vec_env("bonk_game/bonk-v0", n_envs=4)
-agents = load_agents(models)
-num_agents = len(agents)
-assert num_agents > 1
+def play_match(key1, a1, key2, a2, steps):
+    """Return the winning key. Ties are settled by a coin flip."""
+    s1, s2 = MatchEnv(a1, a2).simulate(steps)
+    print(f"{key1} vs {key2}: {s1}:{s2}")
+    if s1 == s2:
+        return random.choice([key1, key2])
+    return key1 if s1 > s2 else key2
 
-participants = agents.copy()
-winner = run_tournament(participants,steps = 100000)
-alg = winner.keys()
-print(f"The winner of the tournament is the {list(alg)[0]} agent!")
-         
-    
-    
-    
 
-            
-            
+def run_tournament(participants, steps=5000):
+    """Single-elimination bracket. Returns the name of the winner.
+
+    With an odd number of players, one random player gets a bye into the
+    next round instead of being knocked out without playing.
+    """
+    remaining = list(participants)
+    round_num = 1
+    while len(remaining) > 1:
+        print(f"--- Round {round_num} ---")
+        random.shuffle(remaining)
+        next_round = []
+        if len(remaining) % 2 == 1:
+            bye = remaining.pop()
+            print(f"{bye} gets a bye")
+            next_round.append(bye)
+        for key1, key2 in zip(remaining[::2], remaining[1::2]):
+            next_round.append(play_match(key1, participants[key1],
+                                         key2, participants[key2], steps))
+        remaining = next_round
+        round_num += 1
+    return remaining[0]
+
+
+if __name__ == "__main__":
+    agents = load_agents(model_classes())
+    if len(agents) < 2:
+        raise SystemExit("Need at least two trained agents. Run `python3 main.py` first.")
+
+    winner = run_tournament(agents, steps=100000)
+    print(f"The winner of the tournament is the {winner} agent!")
