@@ -1,3 +1,5 @@
+[![tests](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml/badge.svg)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml)
+
 This is a working version of bonk.io, a popular online physics-based platform game. This was created using pygame, mostly from scratch aside from the collision functions. This environment supports single agent RL using OpenAI gym and Stable Baselines 3.
 
 Currently, only one bonk.io env exists, but multiple envs could easily be created. There are options for multiplayer, AI agent vs user, and AI vs AI (same or different training algorithms). Tournaments are supported for AI agents only. User cannot interact in tournament yet.
@@ -55,10 +57,10 @@ A weak PPO "bad" agent is trained first. The PPO, A2C, DQN and ARS agents are th
 On maps with extra moving parts, agents also see a few map values: for Sinking Swing, how far the floor has sunk and the swing's angle and speed.
 
 ## Tests
-The physics tests only need numpy, pygame and pytest:
+The tests only need a few packages, and run on every push and pull request via GitHub Actions:
 
 ```
-pip install pytest
+pip install -r requirements-test.txt
 python -m pytest
 ```
 
