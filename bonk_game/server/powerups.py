@@ -39,7 +39,6 @@ class PowerUps:
         self.rng = rng or random.Random()
         self.pickups = []                 # [x, y, kind]
         self.effects = [None] * env.n     # per player: [kind, ticks left] or None
-        self.base = [(p.v_range, p.gravity) for p in env.players]
         self.collected = [0] * env.n      # pickups each player grabbed (for awards)
         self.reset_round()
 
@@ -51,12 +50,12 @@ class PowerUps:
 
     # --- each tick ------------------------------------------------------------
     def apply(self):
-        """Set every ball's physics for its current effect. Run before each step."""
-        for p, eff, (v_range, gravity) in zip(self.env.players, self.effects, self.base):
+        """Set every ball's effect multipliers. Run before each step."""
+        for p, eff in zip(self.env.players, self.effects):
             k = KINDS[eff[0]] if eff else None
             p.force_mult = k["force"] if k else 1.0
-            p.v_range = v_range * (k["max_speed"] if k else 1.0)
-            p.gravity = gravity * (k["gravity"] if k else 1.0)
+            p.speed_mult = k["max_speed"] if k else 1.0
+            p.gravity_mult = k["gravity"] if k else 1.0
             if k and k.get("pin_heavy"):
                 p.m = p.max_m
                 p.force_mult *= p.max_m / p.min_m  # heavy, but moves as if it weren't
@@ -81,7 +80,8 @@ class PowerUps:
         # Punch: the next bump sends the other player flying
         for i, eff in enumerate(self.effects):
             hit = env.last_hit[i]
-            if eff and eff[0] == "punch" and hit is not None and hit[1] == env.steps:
+            if (eff and eff[0] == "punch" and hit is not None and hit[1] == env.steps
+                    and env.teams[hit[0]] != env.teams[i]):  # not on a teammate
                 me, them = env.players[i], env.players[hit[0]]
                 d = math.hypot(them.x - me.x, them.y - me.y) or 1
                 them.x_v = (them.x - me.x) / d * PUNCH_SPEED

@@ -83,7 +83,10 @@ function show(screen) {
 const me = {
   token: store.get("bonk.token") || randomToken(),
   name: store.get("bonk.name", ""),
-  color: store.get("bonk.color", "") === "" ? null : +store.get("bonk.color"),
+  color: (() => {
+    const c = Number(store.get("bonk.color", ""));
+    return store.get("bonk.color", "") !== "" && Number.isInteger(c) && c >= 0 && c < PALETTE.length ? c : null;
+  })(),
   pattern: PATTERNS.includes(store.get("bonk.pattern")) ? store.get("bonk.pattern") : "plain",
 };
 function saveProfile() {
@@ -828,8 +831,8 @@ window.addEventListener("keydown", (e) => {
   sendInput();
 });
 window.addEventListener("keyup", (e) => {
-  if (!(e.code in KEYMAP)) return;
-  held.keys.delete(e.code);
+  // Always let go, even of a key that was rebound while it was held
+  if (!held.keys.delete(e.code)) return;
   sendInput();
 });
 window.addEventListener("blur", () => { held.keys.clear(); held.touch.fill(0); sendInput(); });
@@ -953,8 +956,6 @@ function drawFeed(now) {
     if (f.power !== undefined) {
       const k = app.match.powerups && app.match.powerups[f.power];
       parts.push([slotName(f.who), T.text, slots[f.who].color], [`${POWER_ICONS[f.power]} ${k ? k.title : f.power}`, POWER_COLORS[f.power], null]);
-    } else if (f.crown !== undefined) {
-      parts.push([slotName(f.crown), T.text, slots[f.crown].color], ["👑", T.text, null]);
     } else if (f.by !== null && slots[f.by]) {
       parts.push([slotName(f.by), T.text, slots[f.by].color], ["💥", T.text, null], [slotName(f.victim), T.text, victim.color]);
     } else {
@@ -1004,9 +1005,11 @@ function onEvent(ev, state) {
       sound.play("death");
       fx.feed.push({ victim: ev.i, by: ev.by ?? null, wall: !!ev.wall, at: performance.now() });
       if (fx.feed.length > FEED_LINES) fx.feed.shift();
+      const eliminated = (state.events || []).some((e) => e.e === "eliminated" && e.i === ev.i);
       if (app.match && !app.match.reset_round_on_kill) {
+        // Where they respawn (unless that was their last life)
         const p = state.players[ev.i];
-        fx.ring(p[0], p[1], c);
+        if (!eliminated) fx.ring(p[0], p[1], c);
       } else if (app.match && !(state.events || []).some((e) => e.e === "round")) {
         // Knocked out but the round goes on
         const name = slotName(ev.i);
@@ -1042,8 +1045,6 @@ function onEvent(ev, state) {
       // Only call it out when it's about you; the feed shows the rest
       if (name === "You") fx.tell("You've got the crown!", c);
       else if (isMe(ev.from)) fx.tell(`${name} stole your crown!`, c);
-      fx.feed.push({ crown: ev.i, at: performance.now() });
-      if (fx.feed.length > FEED_LINES) fx.feed.shift();
       sound.play("point");
       break;
     }
@@ -1521,23 +1522,13 @@ function drawHud(st, now) {
   });
   }
 
-  // Timer (Knockouts: the match clock)
-  if (st.clock !== undefined) {
-    const left = Math.ceil(st.clock);
-    const label = st.overtime ? "OVERTIME" : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
-    const color = st.overtime ? T.accent : left <= 10 ? T.accent : T.dim;
-    ctx.font = `800 13px system-ui`;
-    const w = ctx.measureText(label).width + 28;
-    pill(W / 2 - w / 2, H - 36, w, 24);
-    text(label, 13, color, W / 2, H - 24, { shadow: false });
-  } else if (st.timer !== null && st.timer !== undefined) {
-    let label, color;
-    if (st.walls) { label = "SUDDEN DEATH"; color = T.danger; }
-    else {
-      const left = Math.ceil(st.timer);
-      label = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
-      color = left <= 10 ? T.accent : T.dim;
-    }
+  // Clock: the round timer, or the match clock in Knockouts
+  const clock = (secs) => { const left = Math.ceil(secs); return [`${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, left <= 10 ? T.accent : T.dim]; };
+  let clockLabel = null;
+  if (st.clock !== undefined) clockLabel = st.overtime ? ["OVERTIME", T.accent] : clock(st.clock);
+  else if (st.timer !== null && st.timer !== undefined) clockLabel = st.walls ? ["SUDDEN DEATH", T.danger] : clock(st.timer);
+  if (clockLabel) {
+    const [label, color] = clockLabel;
     ctx.font = `800 13px system-ui`;
     const w = ctx.measureText(label).width + 28;
     pill(W / 2 - w / 2, H - 36, w, 24);

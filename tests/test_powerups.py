@@ -58,13 +58,20 @@ def test_speed_pushes_harder():
     a.move_right(2)
     b.move_right(2)
     assert a.x_v == pytest.approx(b.x_v * pu.KINDS["speed"]["force"])
-    assert a.v_range > b.v_range
+    a.x_v = b.x_v = 100
+    a.update_velocities()
+    b.update_velocities()
+    assert a.x_v > b.x_v  # higher top speed
 
 
 def test_float_and_iron():
     env, ups = setup()
     give(env, ups, 0, "float")
-    assert env.players[0].gravity < env.players[1].gravity
+    a, b = env.players
+    a.y_v = b.y_v = 0
+    a.update_velocities()
+    b.update_velocities()
+    assert 0 < a.y_v < b.y_v
     give(env, ups, 1, "iron")
     p = env.players[1]
     assert p.m == p.max_m
@@ -96,7 +103,7 @@ def test_effects_run_out_and_end_on_a_knockout():
     ups.step({**NOTHING, "kos": [(1, None, False)]})
     assert ups.effects[1] is None
     ups.apply()
-    assert env.players[1].gravity == pytest.approx(1.5)
+    assert env.players[1].gravity_mult == 1.0
 
 
 def test_a_new_round_clears_everything():
@@ -130,3 +137,21 @@ def test_off_by_default():
     assert m.describe()["powerups"] is None
     # Humans' buttons still work as before
     m.set_input(0, Buttons(right=True))
+
+
+def test_punch_spares_teammates():
+    env = TestEnv(None, None, None, map_name="classic", teams=[0, 0, 1])
+    env.reset()
+    ups = pu.PowerUps(env, random.Random(0))
+    give(env, ups, 0, "punch")
+    env.steps += 1
+    env.last_hit[0] = (1, env.steps)
+    assert ups.step(NOTHING) == [] and ups.effects[0][0] == "punch"
+
+
+def test_power_ups_dont_change_the_physics_sent_to_browsers():
+    m = Match("platform", [{"kind": "bot:medium", "name": f"b{i}"} for i in range(2)], 2, power_ups=True)
+    before = m.physics()
+    give(m.env, m.powerups, 0, "float")
+    give(m.env, m.powerups, 0, "speed")
+    assert m.physics() == before

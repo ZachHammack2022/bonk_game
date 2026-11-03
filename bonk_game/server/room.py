@@ -292,7 +292,7 @@ class Room:
 
     def pick_team(self, token, team):
         """Someone picks a side in the teams mode (0 or 1), or None for "either"."""
-        if team is not None and team not in (0, 1):
+        if team is not None and (type(team) is not int or team not in (0, 1)):
             return "Unknown team."
         self.members[token].team = team
         return None
@@ -360,11 +360,14 @@ class Room:
                 return "First to should be a number."
             s["first_to"] = max(FIRST_TO_RANGE[0], min(FIRST_TO_RANGE[1], ft))
         if "round_time" in msg:
-            if msg["round_time"] not in ROUND_TIMES:
+            rt = msg["round_time"]
+            if (rt is not None and type(rt) is not int) or rt not in ROUND_TIMES:
                 return "Unknown round time."
             s["round_time"] = msg["round_time"]
         if "power_ups" in msg:
-            s["power_ups"] = bool(msg["power_ups"])
+            if not isinstance(msg["power_ups"], bool):
+                return "Power-ups should be on or off."
+            s["power_ups"] = msg["power_ups"]
         if "gravity" in msg:
             if msg["gravity"] not in GRAVITY:
                 return "Unknown gravity."

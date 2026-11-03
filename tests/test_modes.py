@@ -229,3 +229,28 @@ def test_a_full_team_sends_newcomers_to_the_other():
         teams = [s["team"] for s in room.lineup()]
         assert teams.count(1) == modes.TEAM_SIZE and teams.count(0) == 2
     run(go())
+
+
+def test_respawning_during_sudden_death_lands_between_the_walls():
+    env = TestEnv(None, None, None, map_name="platform", respawn=True, round_time=1)
+    env.reset()
+    env.timer_resets_on_death = False
+    env.timer.steps = env.timer.limit + 120  # walls well on their way in
+    left, right = env.timer.walls()
+    for _ in range(20):
+        p = env.players[0]
+        p.alive = 1
+        p.x, p.y = env.map.width / 2, env.map.height + 200  # falls out
+        env.check_collisions()
+        assert left < p.x < right
+
+
+def test_settings_reject_booleans_posing_as_numbers():
+    async def go():
+        room, sent = await _room("a")
+        await room.handle("a", {"type": "settings", "round_time": False})
+        await room.handle("a", {"type": "settings", "power_ups": "false"})
+        await room.handle("a", {"type": "team", "team": True})
+        assert room.settings["round_time"] is None and room.settings["power_ups"] is False
+        assert room.members["a"].team is None
+    run(go())
