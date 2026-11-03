@@ -5,7 +5,7 @@ This is a working version of bonk.io, a popular online physics-based platform ga
 Currently, only one bonk.io env exists, but multiple envs could easily be created. There are options for multiplayer, AI agent vs user, and AI vs AI (same or different training algorithms). Tournaments are supported for AI agents only. User cannot interact in tournament yet.
 
 ## How it plays
-Run `python3 main.py` to open the game. Pick a map, choose who's playing (a human, the built-in Bot, or any AI agents you've trained for that map), and pick how many points win.
+Run `python3 main.py` to open the game. Pick a map, choose who's playing (a human, the built-in bot at Easy, Medium or Hard, or any AI agents you've trained for that map), and pick how many points win.
 
 Two balls fight to knock each other out. Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
 
@@ -85,7 +85,7 @@ For things a file can't describe (like Sinking Swing's sinking floor), subclass 
 6. Run "pip install -e ." to make the gym environment
 7. Run "defaults write org.python.python ApplePersistenceIgnoreState NO" if on macOS.
 8. Run "python3 main.py" to play. You can play against a friend or the built-in Bot straight away.
-9. To play against AI agents, train them for a map with "python3 main.py --train <map>" (maps: classic, platform, slider, swing). It takes 10-15 minutes per map. They then show up as players in the game. For a quick try, add "--steps 20000" (the agents will be weak). Agents train against a mix of opponents: the built-in bot, the map's "bad" agent and snapshots of themselves (self-play). Add "--opponents bad" to train only against the bad agent, as older versions did.
+9. To play against AI agents, train them for a map with "python3 main.py --train <map>" (maps: classic, platform, slider, swing, ramps, plus any map files you add). It takes 10-15 minutes per map. They then show up as players in the game. For a quick try, add "--steps 20000" (the agents will be weak). Agents train against a mix of opponents: the built-in bot at all three difficulties, the map's "bad" agent and snapshots of themselves (self-play). Add "--opponents bad" to train only against the bad agent, as older versions did.
 10. Once you have trained agents, you can run a tournament: "python3 tournament.py --map <map>". This puts your trained agents against one another to find the winner!
 
 The old text menus are still available with "python3 main.py --terminal".

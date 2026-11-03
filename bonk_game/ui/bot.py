@@ -4,6 +4,8 @@ It doesn't learn anything. It tries to get on the "inside" of its opponent
 (between them and the middle of the map) and shove outward, goes heavy just
 before impact, jumps after opponents who are above it, and heads for the
 swing when the floor starts sinking.
+
+It comes in three difficulty levels (LEVELS).
 """
 import math
 import random
@@ -20,13 +22,44 @@ def action_for(dx, dy, heavy):
     return _LOOKUP[(dx, dy, int(heavy))]
 
 
+# What changes between difficulty levels:
+#   reaction:  chance per step of re-thinking (otherwise repeats its last move)
+#   aim_error: random error (px) in where it lines up to push you
+#   heavy_chance, heavy_closing: chance it goes heavy when it should, and
+#              how fast it must be closing in on you to bother
+#   caution:   how wide a margin it keeps from deadly edges, and how early
+#              it brakes
+#   hop:       chance per step of a surprise hop when close
+#   defend:    goes heavy to meet a heavy opponent's charge
+# Tuned so each level beats the one below it about 70-80% of the time
+# (see tests/test_bot_levels.py and the PR for #11).
+LEVELS = {
+    "easy": dict(reaction=0.5, aim_error=30, heavy_chance=0.3, heavy_closing=4.0,
+                 caution=0.55, hop=0.01, defend=False),
+    "medium": dict(reaction=0.7, aim_error=14, heavy_chance=0.55, heavy_closing=3.0,
+                   caution=0.8, hop=0.04, defend=False),
+    # The original bot, plus bracing for heavy hits
+    "hard": dict(reaction=0.85, aim_error=0, heavy_chance=1.0, heavy_closing=2.5,
+                 caution=1.0, hop=0.04, defend=True),
+}
+LEVEL_NAMES = tuple(LEVELS)
+
+
 class Bot:
     """Drop-in for a trained agent: has predict(obs) -> (action, state)."""
 
-    def __init__(self, env, index, reaction=0.85):
+    def __init__(self, env, index, level="medium", reaction=None):
+        """level: "easy", "medium" or "hard" (see LEVELS)."""
+        if level not in LEVELS:
+            raise ValueError(f"Unknown bot level {level!r}. Choose from: {', '.join(LEVELS)}")
         self.env = env
         self.index = index
-        self.reaction = reaction  # chance per step of re-thinking
+        self.level = level
+        for k, v in LEVELS[level].items():
+            setattr(self, k, v)
+        if reaction is not None:
+            self.reaction = reaction
+        self.aim = 0.0  # current aiming error, changes now and then
         self.last = 0
 
     @property
@@ -64,9 +97,12 @@ class Bot:
             return self.go_to_swing(m)
 
         # Aim for the side of the opponent closer to the middle, then push out
-        side = 1 if them.x < centre else -1
-        target_x = them.x + side * (me.r + them.r) * 0.6
-        margin = max(me.r, m.bot_margin)
+        them_x = them.x
+        side = 1 if them_x < centre else -1
+        if self.aim_error and random.random() < 0.05:
+            self.aim = random.uniform(-self.aim_error, self.aim_error)
+        target_x = them_x + side * (me.r + them.r) * 0.6 + self.aim
+        margin = max(me.r, m.bot_margin * self.caution)
         target_x = min(max(target_x, lo + margin), hi - margin)
         dx = target_x - me.x
         if abs(dx) < 4:
@@ -76,7 +112,7 @@ class Bot:
         # Don't run off the edge chasing: brake if we couldn't stop in time.
         # Braking is weaker while heavy (force / mass).
         decel = FORCE / me.m
-        stop = me.x + math.copysign(me.x_v ** 2 / (2 * decel), me.x_v) + me.x_v * 2
+        stop = me.x + math.copysign(me.x_v ** 2 / (2 * decel), me.x_v) * self.caution + me.x_v * 2
         braking = False
         if me.x_v > 0 and stop > hi - margin + me.r:
             xdir, braking = -1, True
@@ -91,7 +127,7 @@ class Bot:
                 (them.y < me.y - 50 and abs(them.x - me.x) < 140)
                 # Now and then hop in close, to hit from above or pop them
                 # over an obstacle
-                or (abs(them.x - me.x) < 90 and random.random() < 0.04)):
+                or (abs(them.x - me.x) < 90 and random.random() < self.hop)):
             ydir = -1
         elif not me.grounded and (me.x < lo or me.x > hi):
             # Off the edge: jump is gone, steer back hard
@@ -101,7 +137,14 @@ class Bot:
         closing = ((them.x - me.x) * (me.x_v - them.x_v) + (them.y - me.y) * (me.y_v - them.y_v)) / max(dist, 1)
         # Being heavy makes braking 5x weaker, so stay light near deadly edges
         near_edge = min(me.x - lo, hi - me.x) < margin + 90
-        heavy = dist < 75 and closing > 2.5 and not braking and not (near_edge and m.bot_margin > 20)
+        heavy = (dist < 75 and closing > self.heavy_closing and not braking
+                 and not (near_edge and m.bot_margin > 20))
+        them_heavy = them.m > them.min_m + 1
+        if self.defend and them_heavy and dist < 90 and closing > 1 and not braking:
+            # They're coming in heavy: meet them heavy so we don't get bowled over
+            heavy = True
+        if heavy and self.heavy_chance < 1 and random.random() > self.heavy_chance:
+            heavy = False
         return action_for(xdir, ydir, heavy)
 
     def go_to_swing(self, m):
