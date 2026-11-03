@@ -117,6 +117,7 @@ def test_a_new_round_clears_everything():
 @pytest.mark.parametrize("mode", ["ffa", "knockouts"])
 def test_a_match_with_power_ups(mode):
     np.random.seed(5)
+    random.seed(5)  # the bots' choices too, so the match is always the same
     m = Match("platform", [{"kind": "bot:medium", "name": f"b{i}"} for i in range(4)],
               2 if mode == "ffa" else 1, mode=mode, power_ups=True)
     seen = set()
