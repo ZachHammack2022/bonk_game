@@ -7,35 +7,22 @@ import numpy as np
 class player():
     
     def __init__(self,radius,left,right,top,bottom,color) -> None:
-        """ Initializes player object with no acceleration, velocity in position
-
-            Args:
-            x (double): x_coordinate
-            y (double): y_coordinate
-        """
-        start_width = (right-left-21)
-        start_height = (bottom-top-21)
+        """Create a player that spawns at a random spot inside the given bounds."""
         # store env bounds
         self.left = left
         self.right = right
         self.top = top
         self.bottom = bottom
         # store player characteristics
-        self.alive = 1.0
         self.color = color
-        self.x = left+ 21+ np.random.random()*start_width
-        self.y = top+ 21+ np.random.random()*start_height
         self.r = radius
-        self.x_v = 0
-        self.y_v = 0
-        self.v_range = 20 # -15 or +15
-        self.m = 1
+        self.v_range = 20 # velocities are clamped to [-v_range, v_range]
         self.max_m = 5
         self.min_m = 1
         self.score = 0
-        self._obs = np.array([self.normalize(left,right,self.x),self.normalize(top,bottom,self.y),self.x_v,self.y_v,self.alive,self.m])
-    
-        
+        self.reset()
+        self.normalize_obs()
+
     def update_velocities(self):
         
         # prepare velocities for normalization
@@ -57,11 +44,12 @@ class player():
         self.y = min(self.bottom-self.r,self.y)
     
     def update_mass(self):
-        if self.m > 1:
-            self.m = max(self.m-0.1,1)
+        if self.m > self.min_m:
+            self.m = max(self.m-0.1,self.min_m)
     
     def make_heavy(self):
-        if self.m == 1:
+        # Can only go heavy again once the previous heavy has fully worn off
+        if self.m == self.min_m:
             self.m = self.max_m
         
     
@@ -73,7 +61,8 @@ class player():
         y_v = self.normalize(-self.v_range,self.v_range,self.y_v)
         m = self.normalize(self.min_m,self.max_m,self.m)
         
-        self._obs = np.array([x,y,x_v,y_v,self.alive,m])
+        # Clip so a player knocked briefly past a wall still fits the obs space
+        self._obs = np.clip(np.array([x,y,x_v,y_v,self.alive,m]),-1,1)
             
     def update(self)-> None:
         """_Update velocity and position values
@@ -89,23 +78,18 @@ class player():
 
     
     def reset(self)->None:
-        """Changes x or y vel to opposite direction
+        """Respawn at a random spot inside the arena with no velocity."""
+        start_width = (self.right-self.left-2*self.r-2)
+        start_height = (self.bottom-self.top-2*self.r-2)
 
-        Args:
-            bounce (_type_): _description_
-            vert (_type_): _description_
-        """
-        start_width = (self.right-self.left-21)
-        start_height = (self.bottom-self.top-21)
-        
         self.alive = 1.0
-        self.x = self.left+ 21+ np.random.random()*start_width
-        self.y = self.top+ 21+ np.random.random()*start_height
+        self.x = self.left+ self.r+1+ np.random.random()*start_width
+        self.y = self.top+ self.r+1+ np.random.random()*start_height
         self.x_v = 0
         self.y_v = 0
-        self.m = 1
-        
-    
+        self.y_a = 0
+        self.m = self.min_m
+
     def get_obs(self):
         self.normalize_obs()
         return self._obs

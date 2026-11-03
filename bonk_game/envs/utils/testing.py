@@ -1,42 +1,45 @@
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 from bonk_game.envs.testing_env import TestEnv
-import gym
-from stable_baselines3 import PPO,A2C,DQN
-from sb3_contrib import ARS
-import numpy as np
 
-# pass in a dict to load models with the correct functions
+AGENT_DIR = "./agents"
+
+
+def model_classes():
+    """Name -> stable-baselines class used to load each saved agent."""
+    from stable_baselines3 import PPO, A2C, DQN
+    from sb3_contrib import ARS
+    return {
+        "bad": PPO,
+        "ppo": PPO,
+        "a2c": A2C,
+        "dqn": DQN,
+        "ars": ARS,
+    }
+
+
 def load_agents(models):
+    """Load every agent in `models` that has a saved file in ./agents."""
     loaded_agents = {}
-    for key in models:
-        path = f"./agents/{key}.zip"
-        if (os.path.exists(path)):
-            file_name = f"./agents/{key}"
-            model = models[key]
-            agent = model.load(file_name)
-            loaded_agents[key] = agent
+    for key, model in models.items():
+        file_name = f"{AGENT_DIR}/{key}"
+        if os.path.exists(f"{file_name}.zip"):
+            loaded_agents[key] = model.load(file_name)
     return loaded_agents
 
-#template: model2 = PPO.load("c.zip")
-def create_env(model1,model2,render_mode):
-    
-    env = TestEnv(model1,model2,render_mode)
-    
+
+def create_env(model1, model2, render_mode):
     # User input will not work with no display initialized
-    if model1 == "user" and model2 == "user":
-        assert env.render_mode == "human"
-        
-    return env
-    
+    if model1 == "user" or model2 == "user":
+        assert render_mode == "human", "keyboard players need a window"
+    return TestEnv(model1, model2, render_mode)
 
 
-def run_test(model1,model2,env,steps):
-        
+def run_test(model1, model2, env, steps):
     obs = env.reset()
-    for i in range(steps):
+    for _ in range(steps):
         if model1 == "user" and model2 == "user":
-            actions = ""
+            actions = None
         elif model1 == "user":
             actions, _states = model2.predict(obs[12:])
         elif model2 == "user":
@@ -44,103 +47,74 @@ def run_test(model1,model2,env,steps):
         else:
             action1, _states = model1.predict(obs[:12])
             action2, _states = model2.predict(obs[12:])
-            actions = [action1,action2]
+            actions = [action1, action2]
         obs, done, info = env.step(actions)
         if done:
             break
+    s1, s2 = env.scores
+    print(f"Final score - red: {s1}, blue: {s2}")
     env.close()
-        
-        
-def make_statement(agents,num):
-    
-    keys = ({
-        "first": "wasd",
-        "second": "the arrowpad"
-    })
-    
-    # Prepare statement
-    names = list(agents.keys())
-    count = len(names)
+
+
+CONTROLS = {
+    "first": "wasd + caps lock to go heavy",
+    "second": "the arrow keys + space to go heavy",
+}
+
+
+def make_statement(choices, num):
     statement = f"Your choices for the {num} agent:\n"
-    for i,name in enumerate(names):
-        statement += f"{i}: {name}\n"
-    statement += f"{count}: user input (controlled with {keys[num]})\n"
-    statement += f"Please enter the integer for your selected algorithm: "
+    for i, name in enumerate(choices):
+        if name == "user":
+            statement += f"{i}: user input (controlled with {CONTROLS[num]})\n"
+        else:
+            statement += f"{i}: {name}\n"
+    statement += "Please enter the integer for your selected algorithm: "
     return statement
 
-def create_list(r1, r2):
-    return [item for item in range(r1, r2+1)]
 
-def pick_agent(agents,num):
-    pick = -1
-    options = set(create_list(0,len(agents)))
-    
-    while pick not in options:
-        # pick first agent
-        statement = make_statement(agents,num)
-        pick = int(input(statement))
+def read_int(prompt, valid=None, minimum=None):
+    """Keep asking until the user enters an acceptable integer."""
+    while True:
+        try:
+            value = int(input(prompt))
+        except ValueError:
+            print("Please enter a whole number.")
+            continue
+        if valid is not None and value not in valid:
+            print("That's not one of the options.")
+            continue
+        if minimum is not None and value < minimum:
+            print(f"Please enter a number of at least {minimum}.")
+            continue
+        return value
+
+
+def pick_agent(choices, num):
+    """Ask the user to pick from `choices` and return the chosen name."""
+    pick = read_int(make_statement(choices, num), valid=range(len(choices)))
     print("-----------------")
-    return pick
+    return choices[pick]
+
 
 def get_steps():
-    while True:
-        steps = int(input("Enter an integer for how many steps (30 per second) you would like to simulate: "))
-        if steps>= 0:
-            return steps
+    return read_int(
+        "Enter an integer for how many steps (30 per second) you would like to simulate: ",
+        minimum=0,
+    )
+
 
 def test():
-    
-    models = ({
-        "bad": PPO,
-        "ppo": PPO,
-        "a2c": A2C,
-        "dqn": DQN,
-        "ars": ARS,
-    })
-    
-    inputs = ({
-        0: "bad",
-        1: "ppo",
-        2: "a2c",
-        3: "dqn",
-        4: "ars",
-        5: "user"
-    })
-    
-    
-    # load agents
-    agents = load_agents(models)
-    
-    # get a number form the user
-    input1 = pick_agent(agents,"first")
-    input2 = pick_agent(agents,"second")
-    
-    # get model string name from dict
-    pick1 = inputs[input1]
-    pick2 = inputs[input2]
-    
-    
-    agent1 = "user"
-    agent2 = "user"
-    # get model from string name
-    if pick1 != "user":
-        agent1 = agents[pick1]
-    if pick2 != "user":
-        agent2 = agents[pick2]
+    agents = load_agents(model_classes())
+    # Menu numbers come from this list, so they always match what is printed
+    choices = list(agents.keys()) + ["user"]
+
+    pick1 = pick_agent(choices, "first")
+    pick2 = pick_agent(choices, "second")
+
+    agent1 = "user" if pick1 == "user" else agents[pick1]
+    agent2 = "user" if pick2 == "user" else agents[pick2]
 
     steps = get_steps()
-    
-    # Create test environment
-    env = create_env(agent1,agent2,render_mode="human")
-        
-    
-    run_test(agent1,agent2,env,steps = steps)
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    env = create_env(agent1, agent2, render_mode="human")
+    run_test(agent1, agent2, env, steps=steps)
