@@ -1,5 +1,6 @@
 // Browser test for the web version: two players, a full match, a reload
-// mid-match, results, back to the lobby, and a phone joining by code.
+// mid-match, results, back to the lobby, a phone joining by code, and the
+// server restarting for an update.
 //
 //   pip install -r requirements-server.txt
 //   npm install --no-save playwright && npx playwright install chromium
@@ -42,8 +43,10 @@ function check(cond, what) {
 (async () => {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
-  const server = spawn(PY, ["-m", "bonk_game.server", "--host", "127.0.0.1", "--port", String(port)],
+  const startServer = () => spawn(PY, ["-m", "bonk_game.server", "--host", "127.0.0.1", "--port", String(port)],
     { cwd: ROOT, env: { ...process.env, PYTHONPATH: ROOT }, stdio: ["ignore", "inherit", "inherit"] });
+  let server = startServer();
+  let restarting = false;  // (the browser logs failed reconnects while the server is down)
   const errors = [];
   let browser;
   const shot = async (page, name) => {
@@ -57,7 +60,11 @@ function check(cond, what) {
     const open = async (name, opts = { viewport: { width: 1000, height: 720 } }) => {
       const page = await (await browser.newContext(opts)).newPage();
       page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
-      page.on("console", (m) => { if (m.type() === "error") errors.push(`${name}: ${m.text()}`); });
+      page.on("console", (m) => {
+        if (m.type() !== "error") return;
+        if (restarting && /WebSocket|ERR_CONNECTION_REFUSED/.test(m.text())) return;
+        errors.push(`${name}: ${m.text()}`);
+      });
       return page;
     };
 
@@ -225,6 +232,36 @@ function check(cond, what) {
     await lost.click("#join-form button");
     await lost.waitForSelector("#toast:not(.hidden)");
     check((await lost.textContent("#toast")).includes("doesn't exist"), "a bad code says so");
+
+    // The server restarts for an update: open tabs are told, reconnect to the
+    // new server and get their room back, with the same host and settings
+    const settings = await host.evaluate(() => bonkDebug.app.lobby.settings);
+    const hostToken = await host.evaluate(() => bonkDebug.app.welcome.you);
+    restarting = true;
+    const exited = new Promise((r) => server.once("exit", r));
+    server.kill("SIGTERM");
+    await host.waitForFunction(() => /restarting/.test(document.querySelector("#status").textContent));
+    check(true, "open tabs are told the server is restarting");
+    check((await exited) === 0 || server.exitCode === 0, "the server shuts down cleanly");
+    server = startServer();
+    await waitForServer(base, server);
+    await host.waitForFunction(() => document.querySelector("#status").classList.contains("hidden"), null, { timeout: 30000 });
+    await guest.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 2, null, { timeout: 30000 });
+    await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 3);
+    const after = await host.evaluate(() => bonkDebug.app.lobby);
+    check(after.room === url.split("/r/")[1] && after.host === hostToken, "after a restart the room comes back, with the same host");
+    check(JSON.stringify(after.settings) === JSON.stringify(settings), "and the same settings");
+    restarting = false;
+
+    // A tab from before a deploy is told to load the new version (once)
+    const reloaded = guest.waitForEvent("load");
+    await guest.evaluate(() => onMessage({ type: "error", message: "The game has been updated.", fatal: true, refresh: true }));
+    await reloaded;
+    await guest.waitForSelector("#lobby:not(.hidden)");
+    check(true, "an out-of-date tab reloads itself");
+    await guest.evaluate(() => onMessage({ type: "error", message: "The game has been updated.", fatal: true, refresh: true }));
+    await guest.waitForTimeout(1000);
+    check((await guest.textContent("#status")).includes("updated"), "but asks instead of reloading again and again");
 
     check(errors.length === 0, "no page errors" + (errors.length ? ": " + errors.join(" | ") : ""));
   } finally {

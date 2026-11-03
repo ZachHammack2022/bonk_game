@@ -15,6 +15,7 @@ from bonk_game.server.room import LEAVE_GRACE, Room, RoomManager
 from bonk_game.server.scene import level_shapes
 
 aiohttp = pytest.importorskip("aiohttp")
+from bonk_game.server.web import VERSION  # noqa: E402
 
 SHAPE_TYPES = {"edges", "rect", "poly", "ball", "line", "pivot", "rail"}
 
@@ -223,7 +224,7 @@ def test_full_match_over_websockets(monkeypatch):
             assert (await client.get("/api/rooms/ZZZZ")).status == 404
 
             ws = await client.ws_connect(f"/ws/{code}")
-            await ws.send_json({"type": "hello", "name": "Ann", "token": "tok-a"})
+            await ws.send_json({"type": "hello", "version": VERSION, "name": "Ann", "token": "tok-a"})
             assert (await ws.receive_json())["type"] == "welcome"
             assert (await ws.receive_json())["type"] == "lobby"
 
@@ -244,6 +245,7 @@ def test_full_match_over_websockets(monkeypatch):
             await ws.close()
 
             bad = await client.ws_connect("/ws/ZZZZ")
+            await bad.send_json({"type": "hello", "version": VERSION, "name": "Dan", "token": "d"})
             err = await bad.receive_json()
             assert err["type"] == "error" and err["fatal"]
         finally:
@@ -329,7 +331,7 @@ def test_connections_per_ip_are_capped(monkeypatch):
             socks = []
             for i in range(2):
                 ws = await client.ws_connect(f"/ws/{code}")
-                await ws.send_json({"type": "hello", "name": f"p{i}", "token": f"t{i}"})
+                await ws.send_json({"type": "hello", "version": VERSION, "name": f"p{i}", "token": f"t{i}"})
                 assert (await ws.receive_json())["type"] == "welcome"
                 socks.append(ws)
             extra = await client.ws_connect(f"/ws/{code}")
@@ -338,7 +340,7 @@ def test_connections_per_ip_are_capped(monkeypatch):
             await socks[0].close()
             await asyncio.sleep(0.05)
             again = await client.ws_connect(f"/ws/{code}")  # a slot freed up
-            await again.send_json({"type": "hello", "name": "p9", "token": "t9"})
+            await again.send_json({"type": "hello", "version": VERSION, "name": "p9", "token": "t9"})
             assert (await again.receive_json())["type"] == "welcome"
         finally:
             await client.close()
@@ -352,7 +354,7 @@ def test_flooding_messages_gets_you_disconnected(monkeypatch):
         try:
             code = (await (await client.post("/api/rooms")).json())["room"]
             ws = await client.ws_connect(f"/ws/{code}")
-            await ws.send_json({"type": "hello", "name": "Ann", "token": "t"})
+            await ws.send_json({"type": "hello", "version": VERSION, "name": "Ann", "token": "t"})
             for _ in range(100):
                 await ws.send_json({"type": "input", "b": [0, 0, 0, 0, 0]})
             msgs = []

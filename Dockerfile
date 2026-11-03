@@ -10,4 +10,6 @@ RUN pip install --no-cache-dir -r requirements-server.txt
 COPY bonk_game ./bonk_game
 ENV PYTHONPATH=/app PYTHONUNBUFFERED=1 PORT=8000
 EXPOSE 8000
+# On SIGTERM the server finishes running matches (up to BONK_DRAIN_SECONDS)
+# before exiting; give the container a stop timeout a bit longer than that.
 CMD ["python", "-m", "bonk_game.server"]

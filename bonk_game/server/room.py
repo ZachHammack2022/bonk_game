@@ -15,19 +15,21 @@ function that takes a message dict.
 """
 import asyncio
 import json
+import logging
 import random
 import time
+import traceback
 
 from bonk_game.envs.utils import arena
-from bonk_game.server import limits
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import modes
+from bonk_game.server import limits, metrics, modes
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
 ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"  # no I or O
 ROOM_CODE_LEN = 4
 LEAVE_GRACE = 30.0       # seconds a disconnected member keeps their place
+REOPEN_GRACE = 30.0      # after a restart, seconds the old host has to claim the room back
 EMPTY_ROOM_TTL = 600.0   # seconds an empty room is kept around
 NAME_LEN = 16
 FIRST_TO_RANGE = (1, 100)
@@ -83,6 +85,8 @@ class Room:
         self.task = None
         self.banned = set()        # tokens the host removed
         self.votes = set()         # tokens that want a rematch (on the results screen)
+        self.closing = False       # the server is restarting: no new matches
+        self.reopened_at = None    # made again after a server restart (see web.py)
         self.created = time.monotonic()
         self.empty_since = time.monotonic()
 
@@ -91,8 +95,10 @@ class Room:
     def connected(self):
         return [m for m in self.members.values() if m.connected]
 
-    async def join(self, token, name, send):
-        """Add (or reconnect) a member. Returns the Member."""
+    async def join(self, token, name, send, was_host=False):
+        """Add (or reconnect) a member. Returns the Member. was_host: they
+        were the host before a server restart, and get it back if they come
+        back soon after (whoever reconnects first doesn't keep it)."""
         if token in self.banned:
             raise RoomFull("The host removed you from this room.")
         m = self.members.get(token)
@@ -107,6 +113,10 @@ class Room:
                 m.name = clean_name(name)
         if self.host is None or self.host not in self.members:
             self.host = token
+        if (was_host and self.reopened_at is not None
+                and time.monotonic() - self.reopened_at < REOPEN_GRACE):
+            self.host = token
+            self.reopened_at = None  # only once
         self.empty_since = None
         await m.send(self.welcome(token))
         if self.match is not None and token in self.match_tokens:
@@ -455,6 +465,9 @@ class Room:
     async def start(self):
         if self.match is not None:
             return
+        if self.closing:
+            await self.error(self.host, "The server is restarting. Start again in a moment.")
+            return
         humans, bots = self.seats()
         fewest = MAPS[self.settings["map"]].players[0]
         if len(humans) + len(bots) < fewest:
@@ -491,33 +504,59 @@ class Room:
         self.votes.clear()
         await self.broadcast(self.match.describe())
         await self.broadcast_lobby()
+        metrics.STATS.matches_started += 1
+        metrics.event("match_started", room=self.code, map=s["map"], mode=s["mode"],
+                      people=len(humans), bots=len(bots), power_ups=s["power_ups"])
         self.task = asyncio.ensure_future(self.run_match())
 
     async def run_match(self):
         """Step the match 30 times a second and send everyone the state."""
         match = self.match
         loop = asyncio.get_running_loop()
-        next_t = loop.time()
+        stats = metrics.STATS
+        began = loop.time()
+        next_t = began
+        why = "finished"
         try:
             while not match.finished:
+                t0 = time.perf_counter()
                 events = match.tick()
                 state = match.snapshot()
                 state["events"] = events
-                await self.broadcast(state)
+                text = json.dumps(state, separators=(",", ":"))
+                stats.tick(time.perf_counter() - t0)
+                await self.broadcast(text)
                 next_t += 1 / TICK_HZ
                 delay = next_t - loop.time()
                 if delay < -0.25:
+                    stats.late_ticks += 1
                     next_t = loop.time()  # fell far behind: don't try to catch up
                 await asyncio.sleep(max(0.0, delay))
                 if not self.connected:
+                    why = "everyone_left"
                     break  # everyone left: stop simulating
             self.results = match.results()
             self.results["slots"] = match.describe()["slots"]
+        except asyncio.CancelledError:
+            why = "stopped"
+            raise
+        except Exception as e:
+            why = "error"
+            self.results = None
+            metrics.event("error", logging.ERROR, room=self.code, where="match", error=repr(e),
+                          trace=traceback.format_exc())
         finally:
             self.match = None
             self.match_tokens = []
             self.task = None
-        await self.broadcast(self.results)
+            stats.matches_finished += 1
+            metrics.event("match_ended", room=self.code, why=why, ticks=match.env.steps,
+                          seconds=round(loop.time() - began, 1),
+                          scores=match.mode.scores())
+        if self.results is not None:
+            await self.broadcast(self.results)
+        else:
+            await self.broadcast({"type": "error", "message": "Something went wrong in that match. Sorry!"})
         await self.broadcast_lobby()
 
     async def stop(self):
@@ -543,21 +582,60 @@ def map_order():
     return [n for n in first if n in MAPS] + sorted(n for n in MAPS if n not in first)
 
 
+def valid_code(code):
+    return (isinstance(code, str) and len(code) == ROOM_CODE_LEN
+            and all(c in ROOM_ALPHABET for c in code))
+
+
 class RoomManager:
     def __init__(self, agents=None, rng=None):
         self.rooms = {}
         self.agents = agents
         self.rng = rng or random.Random()
+        self.draining = False      # shutting down: no new rooms or matches
 
-    def create(self):
-        if len(self.rooms) >= limits.MAX_ROOMS:
+    def create(self, code=None):
+        """A new room with a random code, or with `code` (people coming back
+        to their room after a server restart)."""
+        if self.draining or len(self.rooms) >= limits.MAX_ROOMS:
             raise ServerFull()
-        for _ in range(1000):
-            code = "".join(self.rng.choice(ROOM_ALPHABET) for _ in range(ROOM_CODE_LEN))
-            if code not in self.rooms:
-                self.rooms[code] = Room(code, self.agents)
-                return self.rooms[code]
-        raise RuntimeError("no free room codes")
+        if code is None:
+            for _ in range(1000):
+                code = "".join(self.rng.choice(ROOM_ALPHABET) for _ in range(ROOM_CODE_LEN))
+                if code not in self.rooms:
+                    break
+            else:
+                raise RuntimeError("no free room codes")
+        elif not valid_code(code) or code in self.rooms:
+            raise ValueError(f"bad room code {code!r}")
+        self.rooms[code] = Room(code, self.agents)
+        metrics.STATS.rooms_created += 1
+        metrics.event("room_created", room=code, rooms=len(self.rooms))
+        return self.rooms[code]
+
+    async def drain(self, timeout, poll=0.25):
+        """Get ready to shut down: no new rooms or matches, tell everyone, and
+        wait (up to `timeout` seconds) for the matches being played to end.
+        Then tell every room the server is restarting."""
+        self.draining = True
+        rooms = list(self.rooms.values())
+        playing = sum(1 for r in rooms if r.match is not None)
+        metrics.event("draining", rooms=len(rooms), matches_running=playing, timeout=timeout)
+        for r in rooms:
+            r.closing = True
+            if r.match is not None:
+                await r.broadcast({"type": "notice", "message":
+                                   "The server is restarting after this match."})
+        loop = asyncio.get_running_loop()
+        end = loop.time() + timeout
+        while loop.time() < end and any(r.match is not None for r in self.rooms.values()):
+            await asyncio.sleep(poll)
+        cut = [r.code for r in self.rooms.values() if r.match is not None]
+        for r in list(self.rooms.values()):
+            await r.stop()
+            await r.broadcast({"type": "restart",
+                               "message": "The server is restarting. Back in a moment…"})
+        metrics.event("drained", cut_short=cut)
 
     def get(self, code):
         return self.rooms.get((code or "").upper())
@@ -570,3 +648,5 @@ class RoomManager:
             if room.expired(now):
                 await room.stop()
                 del self.rooms[code]
+                metrics.event("room_closed", room=code, rooms=len(self.rooms),
+                              minutes=round((now - room.created) / 60, 1))
