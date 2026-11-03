@@ -119,6 +119,10 @@ function check(cond, what) {
     const winner = await host.textContent("#winner");
     check(/wins?!|Draw!/.test(winner), `results show a winner (${winner.trim()})`);
     await shot(host, "results");
+    const res = await host.evaluate(() => bonkDebug.app.results);
+    check(res.stats.length === res.slots.length && Array.isArray(res.awards), "results come with stats and awards");
+    const shown = await host.$$eval("#awards li", (els) => els.length);
+    check(shown === res.awards.length, `the awards are on the results screen (${shown})`);
 
     // Everyone votes for a rematch
     await guest.waitForSelector("#results:not(.hidden)");
@@ -133,6 +137,22 @@ function check(cond, what) {
     await host.waitForSelector("#lobby:not(.hidden)");
     await guest.waitForSelector("#lobby:not(.hidden)");
     check(true, "back to the lobby together");
+
+    // Teams: the guest sees the sides and switches
+    await host.selectOption("#mode", "teams");
+    await guest.waitForFunction(() => document.querySelectorAll("#seats .team-head").length === 2);
+    check(await guest.isVisible("#switch-team"), "teams show up in the lobby, with a switch button");
+    const before = await guest.evaluate(() => bonkDebug.app.lobby.seats.find((s) => s.name === "Bob").team);
+    await guest.click("#switch-team");
+    await host.waitForFunction((t) => bonkDebug.app.lobby.seats.find((s) => s.name === "Bob").team === 1 - t, before);
+    check(true, "switching team shows up for everyone");
+    await host.selectOption("#mode", "crown");
+    await guest.waitForFunction(() => document.querySelector("#goal-label").textContent.startsWith("Hold"));
+    check(await guest.isHidden("#round-time-box"), "the goal and settings follow the mode");
+    await host.selectOption("#gravity", "low");
+    await guest.waitForFunction(() => document.querySelector("#gravity").value === "low");
+    check(true, "gravity reaches the guest");
+    await shot(host, "lobby-crown");
 
     // A phone joins by typing the code
     const phone = await open("phone", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });

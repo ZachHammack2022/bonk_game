@@ -14,6 +14,7 @@ from bonk_game.envs.testing_env import TestEnv
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.mechanics import BOUNCE
 from bonk_game.envs.utils.controls import NO_BUTTONS, Buttons
+from bonk_game.server import modes
 from bonk_game.server.scene import level_shapes, player_state
 from bonk_game.ui import theme
 from bonk_game.ui.bot import LEVEL_NAMES, Bot
@@ -25,7 +26,6 @@ OVER_PAUSE = 1.4      # seconds showing the final point before results
 
 BOT_KINDS = tuple(f"bot:{level}" for level in LEVEL_NAMES)
 STAND_IN = "bot:medium"  # plays for a human who drops out mid-match
-GRAVITY = 1.5      # player.update_velocities
 MASS_DECAY = 0.1   # player.update_mass
 
 
@@ -38,17 +38,26 @@ def is_bot(kind):
 
 
 class Match:
-    def __init__(self, map_name, slots, first_to, agents=None):
+    def __init__(self, map_name, slots, first_to, agents=None, mode=modes.DEFAULT_MODE,
+                 round_time=None, gravity=1.0):
         """slots: one dict per player, {"kind": "human" | "bot:<level>" | agent
-        name, "name": display name, "color": optional colour index}. agents:
-        name -> trained model, for any agent kinds."""
+        name, "name": display name, "color": optional colour index, "team":
+        0 or 1 in the teams mode}. agents: name -> trained model, for any
+        agent kinds. first_to: the mode's goal (points, lives, minutes or
+        seconds; see modes.py). round_time: seconds before sudden death
+        (None: the map's own, 0: off). gravity: a multiplier."""
         agents = agents or {}
         self.map_name = map_name
         self.slots = [dict(s) for s in slots]
         self.first_to = first_to
+        self.gravity = gravity
         kinds = [s["kind"] for s in self.slots]
         self.colors = [s.get("color", i) for i, s in enumerate(self.slots)]
-        self.env = TestEnv(*kinds, winning_score=first_to, map_name=map_name, colors=self.colors)
+        teams = [s.get("team", k % 2) for k, s in enumerate(self.slots)]
+        self.mode = modes.make_mode(mode, len(kinds), first_to, teams)
+        options = {"round_time": round_time, **self.mode.env_options()}
+        self.env = TestEnv(*kinds, map_name=map_name, colors=self.colors, gravity=gravity, **options)
+        self.mode.start(self.env)
         self.controllers = []
         for i, kind in enumerate(kinds):
             if kind == "human":
@@ -63,6 +72,7 @@ class Match:
         self.done = False       # someone reached first_to
         self.finished = False   # done and the final pause is over
         self.tick_count = 0
+        self.stats = [new_stats() for _ in kinds]
         self.set_phase("countdown", 3)
 
     @property
@@ -135,24 +145,37 @@ class Match:
 
     def _step_physics(self):
         env = self.env
-        living = [p for p in env.players if p.alive]
-        pre = {id(p): (p.x, p.y, p.x_v, p.y_v) for p in living}
+        living = [i for i, p in enumerate(env.players) if p.alive]
+        pre = {i: (env.players[i].x, env.players[i].y, env.players[i].x_v, env.players[i].y_v)
+               for i in living}
         was_sudden = env.timer.sudden_death
-        self.obs, self.done, info = env.step(self._actions())
+        self.obs, _, info = env.step(self._actions())
+        events = self.mode.step(info)
+        self.done = self.mode.done
 
-        events = []
+        for i in living:
+            self.stats[i]["alive"] += 1
         if env.timer.sudden_death and not was_sudden:
             events.append({"e": "sudden"})
+        kos = {victim: (by, wall) for victim, by, wall in info["kos"]}
         for i, x, y in info["deaths"]:
-            events.append({"e": "death", "i": i, "x": round(x, 1), "y": round(y, 1)})
-        for i in info["points"]:
-            events.append({"e": "score", "i": i})
+            by, wall = kos.get(i, (None, False))
+            self.stats[i]["deaths"] += 1
+            if by is not None:
+                self.stats[by]["kos"] += 1
+            elif not wall:
+                self.stats[i]["falls"] += 1
+            events.append({"e": "death", "i": i, "x": round(x, 1), "y": round(y, 1),
+                           "by": by, "wall": wall})
         if info["round_over"]:
             events.append({"e": "round"})
         if not info["deaths"]:
-            hit = _hardest_hit(living, pre)
-            if hit:
-                events.append(hit)
+            hits = _hits(env.players, living, pre)
+            for h in hits:
+                st = self.stats[h["by"]]
+                st["best_hit"] = max(st["best_hit"], h["s"])
+            if hits:
+                events.append(max(hits, key=lambda h: h["s"]))
 
         if self.done:
             self.set_phase("over")
@@ -179,12 +202,13 @@ class Match:
             "count": self.countdown_number(),
             "count_len": self.countdown_len,
             "players": [player_state(p) for p in env.players],
-            "scores": list(env.scores),
+            "scores": self.mode.scores(),
             "level": level_shapes(env.map),
             "timer": None if not timer.enabled else round(timer.remaining, 1),
             "walls": None if timer.walls() is None else [round(w, 1) for w in timer.walls()],
             "t": round(timer.steps / TICK_HZ, 2),
             "stand_ins": sorted(self.stand_ins),
+            **self.mode.extra_state(),
         }
 
     def describe(self):
@@ -194,13 +218,19 @@ class Match:
             "map": self.map_name,
             "title": self.env.map.title,
             "first_to": self.first_to,
+            "mode": self.mode.id,
+            "mode_title": self.mode.title,
+            "goal": self.mode.goal_text(),
+            "team_names": list(modes.TEAM_NAMES) if self.mode.id == "teams" else None,
+            "team_colors": list(modes.TEAM_HEX) if self.mode.id == "teams" else None,
             "radius": self.env.players[0].r,
             "width": self.env.map.width,
             "height": self.env.map.height,
-            "reset_round_on_kill": self.env.map.reset_round_on_kill,
+            "reset_round_on_kill": self.env.rounds,
             "physics": self.physics(),
             "slots": [
                 {"name": s["name"], "kind": s["kind"], "id": s.get("id"),
+                 "team": self.env.teams[i] if self.mode.id == "teams" else None,
                  "color": theme_color(self.colors[i]), "color_name": theme.PLAYER_NAMES[self.colors[i]]}
                 for i, s in enumerate(self.slots)
             ],
@@ -211,7 +241,7 @@ class Match:
         p = self.env.players[0]
         return {
             "force": arena.FORCE,
-            "gravity": GRAVITY,
+            "gravity": p.gravity,
             "max_speed": p.v_range,
             "can_fly": p.can_fly,
             "jump_speed": p.jump_speed,
@@ -226,27 +256,74 @@ class Match:
         }
 
     def results(self):
-        scores = list(self.env.scores)
-        best = max(scores)
-        winner = scores.index(best) if scores.count(best) == 1 else None
-        return {"type": "results", "scores": scores, "winner": winner}
+        return {"type": "results", "mode": self.mode.id, **self.mode.results(),
+                "stats": [dict(st, alive=round(st["alive"] / TICK_HZ, 1)) for st in self.stats],
+                # In Knockouts, most knockouts is the score already
+                "awards": [a for a in awards(self.stats)
+                           if not (self.mode.id == "knockouts" and a["id"] == "kos")]}
 
 
 def theme_color(i):
     return "#%02x%02x%02x" % theme.PLAYER_COLORS[i]
 
 
-def _hardest_hit(living, pre):
-    best = None
-    for k, p in enumerate(living):
-        for q in living[k + 1:]:
-            if math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r + 1.5:
+def new_stats():
+    """What happened to one player during a match (for the awards)."""
+    # kos: knockouts they made; falls: times they fell out with nobody near;
+    # deaths: times they were knocked out or fell; alive: ticks spent alive
+    # while playing; best_hit: fastest collision they made (px per tick)
+    return {"kos": 0, "falls": 0, "deaths": 0, "alive": 0, "best_hit": 0.0}
+
+
+def _leaders(stats, key, best=max):
+    values = [st[key] for st in stats]
+    top = best(values)
+    return [i for i, v in enumerate(values) if v == top], top
+
+
+def awards(stats):
+    """A few fun titles for the results screen. Each is
+    {"id", "title", "slots": [winner slots], "value"}; one is left out when
+    nobody earned it (no knockouts, no falls) or everyone tied."""
+    out = []
+
+    def give(id_, title, key, best=max, keep=lambda v: v > 0):
+        slots, value = _leaders(stats, key, best)
+        if keep(value) and len(slots) < len(stats):
+            out.append({"id": id_, "title": title, "slots": slots, "value": value})
+
+    give("kos", "Most knockouts", "kos")
+    give("hit", "Hardest hit", "best_hit")
+    give("falls", "Butterfingers", "falls")
+    # Survivor: knocked out the fewest times, ties broken by time alive
+    order = sorted(range(len(stats)), key=lambda i: (stats[i]["deaths"], -stats[i]["alive"]))
+    a, b = stats[order[0]], stats[order[1]] if len(order) > 1 else None
+    if b is not None and (a["deaths"], a["alive"]) != (b["deaths"], b["alive"]):
+        out.append({"id": "survivor", "title": "Survivor", "slots": [order[0]],
+                    "value": a["deaths"]})
+    for award in out:
+        if award["id"] == "hit":
+            award["value"] = round(award["value"], 1)
+    return out
+
+
+def _hits(players, living, pre):
+    """Players who bumped into each other this step, hard enough to count:
+    [{"e": "hit", x, y, "s": closing speed, "by": the faster one}]."""
+    out = []
+    for k, i in enumerate(living):
+        for j in living[k + 1:]:
+            p, q = players[i], players[j]
+            if not (p.alive and q.alive) or math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r + 1.5:
                 continue
-            x1, y1, vx1, vy1 = pre[id(p)]
-            x2, y2, vx2, vy2 = pre[id(q)]
-            dd = math.hypot(x2 - x1, y2 - y1) or 1
-            closing = ((vx1 - vx2) * (x2 - x1) + (vy1 - vy2) * (y2 - y1)) / dd
-            if closing > 5 and (best is None or closing > best["s"]):
-                best = {"e": "hit", "x": round((p.x + q.x) / 2, 1), "y": round((p.y + q.y) / 2, 1),
-                        "s": round(closing, 1)}
-    return best
+            x1, y1, vx1, vy1 = pre[i]
+            x2, y2, vx2, vy2 = pre[j]
+            dx, dy = x2 - x1, y2 - y1
+            dd = math.hypot(dx, dy) or 1
+            towards_q = (vx1 * dx + vy1 * dy) / dd   # i's speed towards j
+            towards_p = -(vx2 * dx + vy2 * dy) / dd  # j's speed towards i
+            closing = towards_q + towards_p
+            if closing > 5:
+                out.append({"e": "hit", "x": round((p.x + q.x) / 2, 1), "y": round((p.y + q.y) / 2, 1),
+                            "s": round(closing, 1), "by": i if towards_q >= towards_p else j})
+    return out

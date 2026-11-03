@@ -243,15 +243,25 @@ function fillMapOptions() {
     o.textContent = m.title;
     sel.appendChild(o);
   }
-  const ft = $("first-to");
-  ft.innerHTML = "";
-  for (const n of [1, 2, 3, 5, 7, 10, 15, 25, 50, 100]) {
+  fillSelect($("mode"), app.welcome.modes.map((m) => [m.id, m.title]));
+  fillSelect($("gravity"), app.welcome.gravities.map((g) => [g, g[0].toUpperCase() + g.slice(1)]));
+}
+
+function fillSelect(sel, pairs) {
+  const key = JSON.stringify(pairs);
+  if (sel.dataset.key === key) return;
+  sel.dataset.key = key;
+  sel.innerHTML = "";
+  for (const [value, label] of pairs) {
     const o = document.createElement("option");
-    o.value = n;
-    o.textContent = n;
-    ft.appendChild(o);
+    o.value = value;
+    o.textContent = label;
+    sel.appendChild(o);
   }
 }
+
+const roundTimeLabel = (t, map) => (t === null ? `Map's (${map ? map.round_time || "off" : "?"}${map && map.round_time ? " s" : ""})` : t === 0 ? "Off" : `${t} s`);
+const modeInfo = (id) => app.welcome.modes.find((m) => m.id === id);
 
 function botLabel(kind) {
   if (kind.startsWith("bot:")) return kind.slice(4)[0].toUpperCase() + kind.slice(5) + " bot";
@@ -267,23 +277,50 @@ function renderLobby() {
   const host = isHost();
   const s = L.settings;
 
-  // Maps / first-to
+  // Mode, map and the other settings
+  const mode = modeInfo(s.mode);
+  $("mode").value = s.mode;
+  $("mode").disabled = !host;
+  $("mode-desc").textContent = mode.description;
+  for (const o of $("map").options) {
+    const m = Wm.maps.find((x) => x.name === o.value);
+    o.disabled = mode.respawns && !m.respawn_ok;
+    o.textContent = m.title + (o.disabled ? " (not for this mode)" : "");
+  }
   $("map").value = s.map;
   $("map").disabled = !host;
   const mapInfo = Wm.maps.find((m) => m.name === s.map);
   $("map-desc").textContent = mapInfo ? mapInfo.description : "";
-  if (![...$("first-to").options].some((o) => +o.value === s.first_to)) {
-    const o = document.createElement("option");
-    o.value = s.first_to; o.textContent = s.first_to;
-    $("first-to").appendChild(o);
-  }
+  $("goal-label").textContent = mode.goal_label;
+  const goals = mode.goal_choices.includes(s.first_to) ? mode.goal_choices : [...mode.goal_choices, s.first_to].sort((a, b) => a - b);
+  fillSelect($("first-to"), goals.map((n) => [n, String(n)]));
   $("first-to").value = s.first_to;
   $("first-to").disabled = !host;
+  $("round-time-box").classList.toggle("hidden", !mode.round_time);
+  fillSelect($("round-time"), Wm.round_times.map((t) => [JSON.stringify(t), roundTimeLabel(t, mapInfo)]));
+  $("round-time").value = JSON.stringify(s.round_time);
+  $("round-time").disabled = !host;
+  $("gravity").value = s.gravity;
+  $("gravity").disabled = !host;
+  const teams = s.mode === "teams";
+  const mine = L.seats.find((x) => x.id === me.token);
+  $("switch-team").classList.toggle("hidden", !teams || !mine);
+  if (teams && mine) $("switch-team").textContent = `Switch to ${Wm.team_names[1 - mine.team]}`;
 
   // Seats, in match order, as the server says they'd be right now
   const ul = $("seats");
   ul.innerHTML = "";
-  for (const seatInfo of L.seats) {
+  const order = teams ? [...L.seats].sort((a, b) => a.team - b.team) : L.seats;
+  let lastTeam = null;
+  for (const seatInfo of order) {
+    if (teams && seatInfo.team !== lastTeam) {
+      lastTeam = seatInfo.team;
+      const head = document.createElement("li");
+      head.className = "team-head";
+      head.style.color = Wm.team_colors[lastTeam];
+      head.textContent = Wm.team_names[lastTeam];
+      ul.appendChild(head);
+    }
     if (seatInfo.kind === "human") {
       const you = seatInfo.id === me.token;
       const li = seat(seatInfo.color, seatInfo.name + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you);
@@ -365,13 +402,16 @@ function colorPicker(current) {
   const li = document.createElement("li");
   li.className = "picker";
   const taken = new Set(app.lobby.seats.filter((x) => x.kind === "human" && x.id !== me.token).map((x) => x.color));
+  // In teams, each side has its own colours
+  const mine = app.lobby.seats.find((x) => x.id === me.token);
+  const allowed = mine && mine.team !== null && mine.team !== undefined ? new Set(app.welcome.team_palettes[mine.team]) : null;
   app.welcome.colors.forEach((c, i) => {
     const b = document.createElement("button");
     b.className = "swatch" + (i === current ? " on" : "");
     b.style.background = c;
     b.title = app.welcome.color_names[i];
     b.setAttribute("aria-label", app.welcome.color_names[i]);
-    b.disabled = taken.has(i);
+    b.disabled = taken.has(i) || (allowed !== null && !allowed.has(i));
     b.addEventListener("click", () => { picker.open = false; send({ type: "color", color: i }); });
     li.appendChild(b);
   });
@@ -396,6 +436,13 @@ function seat(color, label, tag, you) {
 
 $("map").addEventListener("change", () => send({ type: "settings", map: $("map").value }));
 $("first-to").addEventListener("change", () => send({ type: "settings", first_to: +$("first-to").value }));
+$("mode").addEventListener("change", () => send({ type: "settings", mode: $("mode").value }));
+$("round-time").addEventListener("change", () => send({ type: "settings", round_time: JSON.parse($("round-time").value) }));
+$("gravity").addEventListener("change", () => send({ type: "settings", gravity: $("gravity").value }));
+$("switch-team").addEventListener("click", () => {
+  const mine = app.lobby.seats.find((x) => x.id === me.token);
+  if (mine) send({ type: "team", team: 1 - mine.team });
+});
 $("add-bot").addEventListener("click", () => send({ type: "settings", bots: [...app.lobby.settings.bots, "bot:medium"] }));
 $("start").addEventListener("click", () => send({ type: "start" }));
 $("again").addEventListener("click", () => send({ type: "start" }));
@@ -415,7 +462,16 @@ function showResults(msg) {
   const slots = msg.slots || (app.match && app.match.slots) || [];
   const w = msg.winner;
   const el = $("winner");
-  if (w === null || w === undefined) {
+  const M = app.match || {};
+  const teamWin = msg.winner_team;
+  if (msg.team_scores) {
+    const mine = slots.find((x) => x.id === me.token);
+    if (teamWin === null || teamWin === undefined) { el.textContent = "Draw!"; el.style.color = T.text; }
+    else {
+      el.textContent = mine && mine.team === teamWin ? "Your team wins!" : `${M.team_names[teamWin]} wins!`;
+      el.style.color = M.team_colors[teamWin];
+    }
+  } else if (w === null || w === undefined) {
     el.textContent = "Draw!";
     el.style.color = T.text;
   } else {
@@ -426,7 +482,21 @@ function showResults(msg) {
   const ol = $("standings");
   ol.innerHTML = "";
   const order = msg.scores.map((sc, i) => i).sort((a, b) => msg.scores[b] - msg.scores[a]);
-  for (const i of order) {
+  const unit = { lives: (v) => `♥${v}`, crown: (v) => `${v} s` }[msg.mode] || String;
+  if (msg.team_scores) {
+    for (const t of [0, 1].sort((a, b) => msg.team_scores[b] - msg.team_scores[a])) {
+      const li = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = M.team_names[t] + ": " + slots.filter((s) => s.team === t).map((s) => s.id === me.token ? "You" : s.name).join(", ");
+      name.style.color = M.team_colors[t];
+      const score = document.createElement("span");
+      score.className = "score";
+      score.textContent = msg.team_scores[t];
+      li.append(name, score);
+      ol.appendChild(li);
+    }
+  }
+  for (const i of msg.team_scores ? [] : order) {
     const s = slots[i] || { name: "?", color: T.faint };
     const li = document.createElement("li");
     const ball = document.createElement("span");
@@ -436,13 +506,59 @@ function showResults(msg) {
     name.textContent = s.id === me.token ? `${s.name} (you)` : s.name;
     const score = document.createElement("span");
     score.className = "score";
-    score.textContent = msg.scores[i];
+    score.textContent = unit(msg.scores[i]);
     li.append(ball, name, score);
     ol.appendChild(li);
   }
+  renderAwards(msg, slots);
   $("results").classList.remove("hidden");
   $("emotes").classList.add("hidden");
   if (w !== null && w !== undefined) fx.confetti(slots[w] ? slots[w].color : T.accent);
+  else if (teamWin !== null && teamWin !== undefined && M.team_colors) fx.confetti(M.team_colors[teamWin]);
+}
+
+const AWARD_ICONS = { kos: "💥", hit: "🔨", falls: "🧈", survivor: "🛡️" };
+
+function awardDetail(a) {
+  switch (a.id) {
+    case "kos": return `${a.value} knockout${a.value === 1 ? "" : "s"}`;
+    case "hit": return `power ${Math.round(a.value)}`;
+    case "falls": return `fell ${a.value} time${a.value === 1 ? "" : "s"}`;
+    case "survivor": return a.value ? `out ${a.value === 1 ? "once" : a.value + " times"}` : "never out";
+  }
+  return "";
+}
+
+function renderAwards(msg, slots) {
+  const ul = $("awards");
+  ul.innerHTML = "";
+  for (const a of msg.awards || []) {
+    const li = document.createElement("li");
+    li.dataset.award = a.id;
+    const icon = document.createElement("span");
+    icon.className = "icon";
+    icon.textContent = AWARD_ICONS[a.id] || "🏅";
+    const body = document.createElement("span");
+    body.className = "body";
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = a.title;
+    const who = document.createElement("span");
+    who.className = "who";
+    for (const [k, i] of a.slots.entries()) {
+      const s = slots[i] || { name: "?", color: T.faint };
+      if (k) who.append(" & ");
+      const name = document.createElement("b");
+      name.style.color = s.color;
+      name.textContent = s.id === me.token ? "You" : s.name;
+      who.append(name);
+    }
+    who.append(" · " + awardDetail(a));
+    body.append(title, who);
+    li.append(icon, body);
+    ul.appendChild(li);
+  }
+  ul.classList.toggle("hidden", !ul.children.length);
 }
 
 // ---------------------------------------------------------------------------
@@ -562,8 +678,8 @@ window.addEventListener("keydown", () => sound.unlock());
 // Effects: particles, rings, screen shake, banners
 // ---------------------------------------------------------------------------
 const fx = {
-  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [],
-  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; },
+  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [], feed: [],
+  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; this.feed = []; },
   burst(x, y, color, n = 26, speed = 7, size = 4.5, life = 0.7, gravity = true) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.9);
@@ -597,6 +713,46 @@ const fx = {
   },
 };
 
+// Knockout feed, top right: "Ann 💥 Bob", "Bob fell", newest at the bottom
+const FEED_LINES = 4, FEED_TIME = 5000;
+
+function drawFeed(now) {
+  fx.feed = fx.feed.filter((f) => now - f.at < FEED_TIME);
+  const slots = app.match.slots;
+  let y = 54;
+  ctx.font = "700 12px ui-rounded, system-ui, sans-serif";
+  for (const f of fx.feed) {
+    const alpha = clamp((FEED_TIME - (now - f.at)) / 600, 0, 1);
+    // Pieces drawn right to left: [text, colour, ball colour or null]
+    const victim = slots[f.victim];
+    const parts = [];
+    if (f.crown !== undefined) {
+      parts.push([slotName(f.crown), T.text, slots[f.crown].color], ["👑", T.text, null]);
+    } else if (f.by !== null && slots[f.by]) {
+      parts.push([slotName(f.by), T.text, slots[f.by].color], ["💥", T.text, null], [slotName(f.victim), T.text, victim.color]);
+    } else {
+      parts.push([slotName(f.victim), T.text, victim.color], [f.wall ? "got squished" : "fell", T.dim, null]);
+    }
+    const widths = parts.map(([str, , ball]) => ctx.measureText(str).width + (ball ? 14 : 0));
+    const w = widths.reduce((a, b) => a + b, 0) + 6 * (parts.length - 1) + 20;
+    ctx.globalAlpha = alpha;
+    pill(W - 10 - w, y - 10, w, 20, 0.6);
+    let x = W - 10 - w + 10;
+    parts.forEach(([str, color, ball], k) => {
+      if (ball) { circle(x + 5, y, 5, ball); x += 14; }
+      text(str, 12, color, x, y, { align: "left", weight: 700, shadow: false, alpha });
+      x += widths[k] - (ball ? 14 : 0) + 6;
+    });
+    ctx.globalAlpha = 1;
+    y += 24;
+  }
+}
+
+function isMe(i) {
+  const s = app.match && app.match.slots[i];
+  return !!s && s.id === me.token;
+}
+
 function slotName(i) {
   const s = app.match && app.match.slots[i];
   if (!s) return "?";
@@ -619,6 +775,8 @@ function onEvent(ev, state) {
       fx.burst(x, y, T.text, 10, 5, 3);
       fx.kick(10);
       sound.play("death");
+      fx.feed.push({ victim: ev.i, by: ev.by ?? null, wall: !!ev.wall, at: performance.now() });
+      if (fx.feed.length > FEED_LINES) fx.feed.shift();
       if (app.match && !app.match.reset_round_on_kill) {
         const p = state.players[ev.i];
         fx.ring(p[0], p[1], c);
@@ -630,13 +788,39 @@ function onEvent(ev, state) {
       break;
     }
     case "score": {
-      const c = slots[ev.i] ? slots[ev.i].color : T.text;
       sound.play("point");
+      const M = app.match;
+      if (ev.team !== undefined) {
+        const mine = M.slots.find((x) => x.id === me.token);
+        const ours = mine && mine.team === ev.team;
+        fx.say(`${M.team_names[ev.team]} scores!`, M.team_colors[ev.team]);
+        if (mine) fx.tell(ours ? "Nice!" : "Ouch", ours ? T.accent : T.dim);
+        break;
+      }
+      const c = slots[ev.i] ? slots[ev.i].color : T.text;
       const name = slotName(ev.i);
-      if (app.match && app.match.reset_round_on_kill) fx.say(name === "You" ? "You score!" : `${name} scores!`, c);
+      if (M && M.reset_round_on_kill) fx.say(name === "You" ? "You score!" : `${name} scores!`, c);
       else fx.say(`+1 ${name}`, c);
       break;
     }
+    case "eliminated": {
+      const c = slots[ev.i] ? slots[ev.i].color : T.text;
+      const name = slotName(ev.i);
+      fx.tell(name === "You" ? "You're out of lives!" : `${name} is out of lives`, c);
+      break;
+    }
+    case "crown": {
+      const c = slots[ev.i] ? slots[ev.i].color : T.text;
+      const name = slotName(ev.i);
+      // Only call it out when it's about you; the feed shows the rest
+      if (name === "You") fx.tell("You've got the crown!", c);
+      else if (isMe(ev.from)) fx.tell(`${name} stole your crown!`, c);
+      fx.feed.push({ crown: ev.i, at: performance.now() });
+      if (fx.feed.length > FEED_LINES) fx.feed.shift();
+      sound.play("point");
+      break;
+    }
+    case "overtime": fx.say("Overtime!", T.accent); fx.tell("Next knockout wins", T.text); sound.play("go"); break;
     case "sudden": fx.say("Sudden death!", T.danger); fx.kick(6); sound.play("go"); break;
     case "hit":
       fx.burst(ev.x, ev.y, T.text, Math.round(4 + ev.s), ev.s * 0.5, 3, 0.35);
@@ -963,14 +1147,41 @@ function blendShape(a, b, t) {
   }
 }
 
+// Teams: one chip per team with its members' balls
+function drawTeamScores(st) {
+  const M = app.match;
+  const chipW = 190, gap = 10, x0 = W / 2 - chipW - gap / 2;
+  const mine = M.slots.find((x) => x.id === me.token);
+  [0, 1].forEach((t) => {
+    const x = x0 + t * (chipW + gap);
+    pill(x, 8, chipW, 30, 0.78, mine && mine.team === t ? T.accent : M.team_colors[t]);
+    text(M.team_names[t], 12, M.team_colors[t], x + 14, 23, { align: "left", shadow: false });
+    const members = M.slots.map((s, i) => [s, i]).filter(([s]) => s.team === t);
+    members.forEach(([s, i], k) => circle(x + 92 + k * 13, 23, 5, st.players[i][3] ? s.color : darken(s.color, 0.55)));
+    text(String(st.team_scores[t]), 16, T.text, x + chipW - 16, 23, { shadow: false });
+  });
+}
+
+function drawCrown(x, y, r) {
+  const w = r * 1.1, h = r * 0.6, base = y - r * 0.72;
+  const pts = [[x - w / 2, base], [x - w / 2, base - h], [x - w / 4, base - h * 0.45], [x, base - h * 1.1],
+    [x + w / 4, base - h * 0.45], [x + w / 2, base - h], [x + w / 2, base]];
+  poly(pts, "#ffd166");
+  ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath();
+  ctx.strokeStyle = "#a0803a"; ctx.lineWidth = 1.5; ctx.stroke();
+  circle(x, base - h * 0.35, 2, "#ef5350");
+}
+
 function drawHud(st, now) {
   const M = app.match, n = st.players.length;
+  if (st.team_scores) drawTeamScores(st);
   // Scoreboard: a chip per player
+  else {
   const chipW = Math.min(n <= 4 ? 120 : 62, (W - 20) / n - 4);
   const x0 = W / 2 - (n * (chipW + 4) - 4) / 2;
   st.players.forEach((p, i) => {
     const slot = M.slots[i];
-    const out = M.reset_round_on_kill && !p[3];
+    const out = !p[3];
     const x = x0 + i * (chipW + 4);
     pill(x, 8, chipW, 30, out ? 0.45 : 0.78, slot.id === me.token ? T.accent : null);
     circle(x + 15, 23, 8, out ? darken(slot.color, 0.55) : slot.color);
@@ -981,11 +1192,22 @@ function drawHud(st, now) {
       text(name, 12, out ? T.faint : T.text, x + 28, 23, { align: "left", shadow: false });
       ctx.restore();
     }
-    text(String(st.scores[i]), 16, out ? T.faint : T.text, x + chipW - 16, 23, { shadow: false });
+    const score = M.mode === "lives" ? `♥${st.scores[i]}` : String(st.scores[i]);
+    text(score, M.mode === "lives" ? 14 : 16, out ? T.faint : M.mode === "lives" ? "#ff8a8a" : T.text, x + chipW - (M.mode === "lives" ? 19 : 16), 23, { shadow: false });
+    if (st.crown === i) drawCrown(x + 15, 23, 8);
   });
+  }
 
-  // Timer
-  if (st.timer !== null && st.timer !== undefined) {
+  // Timer (Knockouts: the match clock)
+  if (st.clock !== undefined) {
+    const left = Math.ceil(st.clock);
+    const label = st.overtime ? "OVERTIME" : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    const color = st.overtime ? T.accent : left <= 10 ? T.accent : T.dim;
+    ctx.font = `800 13px system-ui`;
+    const w = ctx.measureText(label).width + 28;
+    pill(W / 2 - w / 2, H - 36, w, 24);
+    text(label, 13, color, W / 2, H - 24, { shadow: false });
+  } else if (st.timer !== null && st.timer !== undefined) {
     let label, color;
     if (st.walls) { label = "SUDDEN DEATH"; color = T.danger; }
     else {
@@ -1027,12 +1249,14 @@ function drawHud(st, now) {
     if (age < 1.6) text(note.text, 18, note.color, W / 2, 124, { alpha: clamp((1.6 - age) * 3, 0, 1) });
   }
 
+  drawFeed(now);
+
   if (net.rtt !== null) {
     text(`${Math.round(net.rtt)} ms`, 10, T.faint, W - 8, H - 10, { align: "right", weight: 600, shadow: false });
   }
 
   if (st.phase === "countdown" && st.count_len === 3 && st.tick < 60) {
-    text(`${M.title}  ·  first to ${M.first_to}`, 12, T.dim, W / 2, 56, { weight: 600, shadow: false });
+    text(`${M.mode_title}  ·  ${M.title}  ·  ${M.goal}`, 12, T.dim, W / 2, 56, { weight: 600, shadow: false });
   }
 }
 
@@ -1084,7 +1308,8 @@ function frame(now) {
   st.players.forEach((p, i) => {
     if (!p[3]) return;
     const slot = app.match.slots[i];
-    if (slot.id === me.token) drawYouMarker(p[0], p[1], R, slot.color);
+    if (st.crown === i) drawCrown(p[0], p[1], R);
+    if (slot.id === me.token) drawYouMarker(p[0], p[1] - (st.crown === i ? 8 : 0), R, slot.color);
     else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 10, "rgba(241,245,249,0.75)", p[0], p[1] - R - 9, { weight: 700 });
     drawOffscreen(p[0], p[1], R, slot.color);
   });

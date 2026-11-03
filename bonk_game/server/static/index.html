@@ -37,6 +37,7 @@
       <div class="card">
         <h2>Players <span id="seat-count" class="dim"></span></h2>
         <ul id="seats" class="seats"></ul>
+        <button id="switch-team" class="hidden">Switch team</button>
         <div id="bot-controls" class="host-only">
           <button id="add-bot">+ Add bot</button>
         </div>
@@ -44,11 +45,26 @@
       </div>
       <div class="card">
         <h2>Match</h2>
+        <label for="mode">Mode</label>
+        <select id="mode"></select>
+        <p id="mode-desc" class="dim small"></p>
         <label for="map">Map</label>
         <select id="map"></select>
         <p id="map-desc" class="dim small"></p>
-        <label for="first-to">First to</label>
-        <select id="first-to"></select>
+        <div class="settings-row">
+          <div>
+            <label id="goal-label" for="first-to">First to</label>
+            <select id="first-to"></select>
+          </div>
+          <div id="round-time-box">
+            <label for="round-time">Round time</label>
+            <select id="round-time"></select>
+          </div>
+          <div>
+            <label for="gravity">Gravity</label>
+            <select id="gravity"></select>
+          </div>
+        </div>
         <button id="start" class="primary host-only">Start match</button>
         <p id="waiting" class="dim guest-only">Waiting for the host to start…</p>
         <p class="dim small">Move with WASD or the arrow keys. Space or Shift goes heavy. 1–4 for emotes. Click your ball to pick a colour.</p>
@@ -79,6 +95,7 @@
       <div class="card results-card">
         <div id="winner"></div>
         <ol id="standings"></ol>
+        <ul id="awards" class="awards hidden"></ul>
         <button id="vote" class="primary">Play again</button>
         <button id="again" class="host-only">Start now</button>
         <button id="to-lobby" class="host-only">Back to lobby</button>
