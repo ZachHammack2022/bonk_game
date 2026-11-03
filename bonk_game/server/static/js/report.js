@@ -26,7 +26,7 @@ const playtest = {
     if (!this.on) return;
     this.cur = { began: performance.now(), watching, pings: [], lastState: null, states: 0, late: 0,
                  maxGap: 0, missed: 0, fixes: 0, big: 0, huge: 0, maxFix: 0, sumFix: 0,
-                 frames: 0, frameTime: 0, slow: 0, frozen: 0, reconnects: this.reconnects };
+                 frames: 0, frameTime: 0, slow: 0, frozen: 0, guessed: 0, delay: 0, delays: 0, reconnects: this.reconnects };
   },
   ping(ms) { if (this.cur) this.cur.pings.push(ms); },
   state(ok) {
@@ -49,14 +49,18 @@ const playtest = {
     if (px > BIG_FIX) c.big++;
     if (px > HUGE_FIX) c.huge++;
   },
-  // frozen: no state newer than the moment being drawn had arrived, so
-  // everything stood still for that frame (states came late)
-  frame(ms, frozen) {
+  // frozen: the next state was so late that everything stood still for
+  // that frame; guessed: it was late, so the frame carried on along the
+  // way things were moving (draw.js); delay: how far behind the match was
+  // drawn (clock.js)
+  frame(ms, frozen, guessed, delay) {
     const c = this.cur;
     if (!c || document.hidden) return;
     c.frames++; c.frameTime += ms;
     if (ms > 50) c.slow++;
     if (frozen) c.frozen++;
+    if (guessed) c.guessed++;
+    if (delay !== null && delay !== undefined) { c.delay += delay; c.delays++; }
   },
   reconnect() { this.reconnects++; },
 
@@ -81,7 +85,9 @@ const playtest = {
       states: { n: c.states, late: c.late, max_gap: c.maxGap, missed: c.missed },
       corrections: { n: c.fixes, big: c.big, huge: c.huge, max: c.maxFix, avg: c.fixes ? c.sumFix / c.fixes : 0 },
       frames: { fps: c.frameTime ? (c.frames * 1000) / c.frameTime : null, slow: c.slow,
-                frozen: c.frames ? (100 * c.frozen) / c.frames : 0 },
+                frozen: c.frames ? (100 * c.frozen) / c.frames : 0,
+                guessed: c.frames ? (100 * c.guessed) / c.frames : 0,
+                delay: c.delays ? c.delay / c.delays : null },
       device: { ua: navigator.userAgent, screen: `${screen.width}x${screen.height}`,
                 net: conn.effectiveType || "", touch: "ontouchstart" in window || navigator.maxTouchPoints > 0,
                 pad: [...(navigator.getGamepads ? navigator.getGamepads() : [])].some(Boolean) },

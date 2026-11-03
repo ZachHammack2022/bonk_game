@@ -289,24 +289,35 @@ function pill(x, y, w, h, alpha = 0.78, border = null) {
   if (border) { ctx.strokeStyle = border; ctx.lineWidth = 2; roundRect(x, y, w, h, h / 2); ctx.stroke(); }
 }
 
-// Blend the two states either side of the time we draw at
-let drawFrozen = false;  // this frame had no newer state to move toward (playtest reports)
+// Blend the two states either side of the moment we draw (clock.js says
+// which). If the next state is late, carry on along the way things were
+// moving for up to BonkClock.GUESS_MS, rather than stopping.
+let drawFrozen = false;   // this frame had nothing newer and was past guessing: everything stood still
+let drawGuessed = false;  // this frame was extrapolated past the newest state
 function blendedState(now) {
   const S = app.states;
   if (!S.length) return null;
-  const at = now - INTERP_DELAY;
-  let i = S.length - 1;
-  while (i > 0 && S[i - 1][0] > at) i--;
-  if (i === 0) return S[0][1];
-  const [ta, a] = S[i - 1], [tb, b] = S[i];
-  if (at >= tb) { drawFrozen = true; return b; }  // nothing newer yet: the match looks paused
-  const t = clamp((at - ta) / Math.max(1, tb - ta), 0, 1);
+  const at = replayer.active ? replayer.drawTick() : playClock.tick(now);
+  const n = S.length;
+  if (at === null || n === 1) return S[n - 1][1];
+  let i = n - 1;
+  while (i > 1 && S[i - 1][1].tick > at) i--;
+  const a = S[i - 1][1], b = S[i][1];
+  if (at <= a.tick) return a;  // (older than we kept: just after a new match or a seek)
+  const span = Math.max(1, b.tick - a.tick);
+  let t = (at - a.tick) / span;
+  if (t > 1) {
+    // Past the newest state: guess, but not for long, and not across a reset
+    if (replayer.active) return b;
+    t = Math.min(t, 1 + BonkClock.GUESS_MS / (TICK_MS * span));
+    if (playClock.paused) drawFrozen = true; else drawGuessed = true;
+  }
   const roundReset = (b.events || []).some((e) => e.e === "round");
   if (roundReset || a.players.length !== b.players.length) return b;
   const players = b.players.map((p, k) => {
     const q = a.players[k];
     if (!q[3] || !p[3] || Math.abs(p[0] - q[0]) > MAX_JUMP || Math.abs(p[1] - q[1]) > MAX_JUMP) return p;
-    return [lerp(q[0], p[0], t), lerp(q[1], p[1], t), lerp(q[2], p[2], t), p[3]];
+    return [lerp(q[0], p[0], t), lerp(q[1], p[1], t), lerp(q[2], p[2], Math.min(t, 1)), p[3]];
   });
   const level = b.level.map((s, k) => blendShape(a.level[k], s, t));
   return { ...b, players, level };
@@ -443,9 +454,9 @@ function frame(now) {
   fx.update(dt);
   replayer.frame(now);
   if ($("game").classList.contains("hidden") || !app.match) return;
-  drawFrozen = false;
+  drawFrozen = drawGuessed = false;
   let st = blendedState(now);
-  playtest.frame(ms, drawFrozen);
+  playtest.frame(ms, drawFrozen, drawGuessed, replayer.active ? null : playClock.delay(now));
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
   if (!st) { drawBackground(); text("Get ready…", 24, T.dim, W / 2, H / 2); return; }
 

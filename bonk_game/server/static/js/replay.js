@@ -52,8 +52,15 @@ const replayer = {
     this.i = k;
     this.clock = k * TICK_MS;
     const S = this.states[Math.max(0, k - 1)];
-    app.states = S ? [[performance.now() - INTERP_DELAY, S]] : [];
+    app.states = S ? [[performance.now(), S]] : [];
     app.last = S || null;
+  },
+
+  // The moment to draw (in ticks, like the live clock.js): a tick behind
+  // the newest state shown, so there's always one to blend toward
+  drawTick() {
+    const first = this.states[0];
+    return first ? first.tick + this.clock / TICK_MS - 1 : null;
   },
 
   // Each animation frame (draw.js), before drawing
@@ -64,9 +71,8 @@ const replayer = {
     if (this.playing) this.clock += dt * this.speed;
     while (this.i < this.states.length && this.i * TICK_MS <= this.clock) {
       const S = this.states[this.i];
-      // When it would have arrived, at this speed (so blending works as usual)
-      app.states.push([now - (this.clock - this.i * TICK_MS) / this.speed, S]);
-      if (app.states.length > 8) app.states.shift();
+      app.states.push([now, S]);
+      if (app.states.length > STATES_KEPT) app.states.shift();
       app.last = S;
       for (const ev of S.events || []) if (this.events(ev)) onEvent(ev, S);
       this.i++;

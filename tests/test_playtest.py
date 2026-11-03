@@ -58,6 +58,13 @@ def test_reports_keep_only_what_they_should():
     assert "feel" not in playtest.clean_report({"feel": "great"})
 
 
+def test_reports_keep_how_far_behind_the_match_was_drawn():
+    r = playtest.clean_report(report(frames={"fps": 60, "slow": 1, "frozen": 0.4, "guessed": 1.25, "delay": 107.33}))
+    assert r["frames"] == {"fps": 60, "slow": 1, "frozen": 0.4, "guessed": 1.2, "delay": 107.3}
+    md = playtest_report.summarize([{**r, "event": "playtest", "t": "2026-11-03T12:00:00", "name": "A"}])
+    assert "drawn behind" in md and "107 ms" in md
+
+
 def test_the_room_logs_reports_with_where_they_came_from(caplog):
     async def go():
         room = Room("ABCD")

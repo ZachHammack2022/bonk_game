@@ -5,7 +5,8 @@
 // The client is a few plain scripts that share one global scope, loaded in
 // order by index.html (no build step):
 //   report.js    playtest reports: ping, late states, rubber-banding, errors
-// (netsim.js, loaded before core.js, pretends the network is worse: ?net=mobile)
+// (netsim.js, loaded before core.js, pretends the network is worse: ?net=mobile;
+// clock.js says what moment of the match to draw)
 //   core.js      colours, helpers, app state, your profile, home screen, connection
 //   lobby.js     the lobby and the ball pickers
 //   results.js   the results screen
@@ -39,7 +40,8 @@ const PATTERNS = ["plain", "stripes", "dots", "ring", "split", "star", "zigzag",
 const PATTERN_NAMES = { plain: "Plain", stripes: "Stripes", dots: "Dots", ring: "Ring", split: "Split", star: "Star", zigzag: "Zigzag", eyes: "Eyes" };
 const W = 680, H = 480;
 const TICK_MS = 1000 / 30;
-const INTERP_DELAY = 50;   // ms behind the newest state we draw at
+const playClock = BonkClock.make(TICK_MS);  // what moment of the match to draw (clock.js)
+const STATES_KEPT = 16;   // enough to draw up to the longest delay (clock.js) behind the newest
 const MAX_JUMP = 60;       // a bigger move in one tick is a teleport, not blended
 
 // Testing switches: ?net=mobile (or ?lag=150&jitter=40...) pretends the
@@ -316,6 +318,7 @@ function onMessage(msg) {
       app.states = [];
       app.last = null;
       app.results = null;
+      playClock.reset();
       replayer.stop();
       replayer.recent = [];
       $("killcam").classList.add("hidden");
@@ -344,7 +347,8 @@ function onMessage(msg) {
       replayer.keep(S);
       if (replayer.active) break;  // (watching the killcam)
       app.states.push([performance.now(), S]);
-      if (app.states.length > 8) app.states.shift();
+      if (app.states.length > STATES_KEPT) app.states.shift();
+      playClock.arrive(S.tick, performance.now());
       for (const ev of S.events || []) onEvent(ev, S);
       break;
     }

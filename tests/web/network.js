@@ -80,13 +80,14 @@ async function play(browser, base, netName) {
       const perMin = (x) => (x * 60) / r.seconds;
       rows.push([n, r.sim || "–", `${Math.round(r.ping.med)} / ${Math.round(r.ping.p95)} ms`,
         perMin(r.states.late).toFixed(1), `${Math.round(r.states.max_gap)} ms`,
-        `${r.frames.frozen.toFixed(1)}%`, perMin(r.corrections.big).toFixed(1),
+        `${r.frames.frozen.toFixed(1)}%`, `${(r.frames.guessed || 0).toFixed(1)}%`,
+        r.frames.delay == null ? "–" : `${Math.round(r.frames.delay)} ms`, perMin(r.corrections.big).toFixed(1),
         perMin(r.corrections.huge).toFixed(1), `${Math.round(r.corrections.max)} px`]);
       console.error(`${n}: done`);
     }
     console.log(`You against 2 Hard bots on ${MAP}, ${SECONDS} s per network:\n`);
-    console.log("| network | simulated | ping med / p95 | late states /min | worst gap | frames frozen | corrections >6 px /min | >20 px /min | worst correction |");
-    console.log("|---|---|---|---|---|---|---|---|---|");
+    console.log("| network | simulated | ping med / p95 | late states /min | worst gap | frames frozen | frames guessed | drawn behind | corrections >6 px /min | >20 px /min | worst correction |");
+    console.log("|---|---|---|---|---|---|---|---|---|---|---|");
     for (const row of rows) console.log("| " + row.join(" | ") + " |");
   } finally {
     if (browser) await browser.close();
