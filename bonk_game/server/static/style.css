@@ -249,3 +249,22 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 #profile { z-index: 10; }
 .seat canvas.ball { box-shadow: none; background: none !important; width: 22px; height: 22px; }
 .power-help { margin: -8px 0 0 30px; }
+
+/* Your stats */
+.home-links { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.stats-card { max-height: calc(100vh - 32px); overflow-y: auto; }
+.stats-card h3 { margin: 12px 0 6px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stat-tile { background: var(--panel-light); border-radius: 10px; padding: 8px 6px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.stat-tile b { font-size: 22px; color: var(--accent); }
+.stat-awards { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.stat-awards li { background: var(--panel-light); border-radius: 999px; padding: 4px 10px; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+.stat-modes { width: 100%; border-collapse: collapse; font-size: 14px; }
+.stat-modes td { padding: 4px 0; }
+.stat-modes td:not(:first-child) { text-align: right; }
+.stat-history { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.stat-history li { background: var(--panel-light); border-radius: 10px; padding: 8px 10px; border-left: 3px solid transparent; }
+.stat-history li.won { border-left-color: var(--accent); }
+.row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.stats-file { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
+@media (max-width: 420px) { .stat-tiles { grid-template-columns: repeat(2, 1fr); } }

@@ -16,12 +16,10 @@ const RESERVED_KEYS = new Set(["Digit1", "Digit2", "Digit3", "Digit4", "KeyM", "
 
 const prefs = (() => {
   const d = { volume: 0.8, shake: true, ping: true, keys: { ...DEFAULT_KEYS } };
-  try {
-    const saved = JSON.parse(store.get("bonk.prefs", "{}"));
-    return { ...d, ...saved, keys: { ...d.keys, ...(saved.keys || {}) } };
-  } catch (e) { return d; }
+  const saved = profileStore.get().prefs;
+  return { ...d, ...saved, keys: { ...d.keys, ...(saved.keys || {}) } };
 })();
-const savePrefs = () => store.set("bonk.prefs", JSON.stringify(prefs));
+const savePrefs = () => profileStore.update((p) => ({ ...p, prefs: JSON.parse(JSON.stringify(prefs)) }));
 
 let KEYMAP = {};
 function buildKeymap() {

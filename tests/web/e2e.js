@@ -82,7 +82,7 @@ function check(cond, what) {
     await host.click("#set-keys [data-action=heavy]");
     await host.keyboard.press("KeyH");
     await host.keyboard.press("Escape");
-    check(await host.evaluate(() => JSON.parse(localStorage.getItem("bonk.prefs")).keys.heavy === "KeyH"), "keys can be rebound in settings");
+    check(await host.evaluate(() => JSON.parse(localStorage.getItem("bonk.profile")).prefs.keys.heavy === "KeyH"), "keys can be rebound in settings");
     await host.click("#create");
     await host.waitForSelector("#lobby:not(.hidden)");
     const url = host.url();
@@ -294,6 +294,41 @@ function check(cond, what) {
     await slow.waitForSelector("#lobby:not(.hidden)");
     await slow.waitForFunction(() => bonkDebug.net.rtt > 170, null, { timeout: 10000 });
     check(true, `and its ping shows the delay (${Math.round(await slow.evaluate(() => bonkDebug.net.rtt))} ms)`);
+
+    // Your stats: both matches are in the host's history
+    const prof = await host.evaluate(() => profileStore.get());
+    check(prof.stats.matches === 2 && prof.history.length === 2 && prof.history[0].map === "classic" && prof.history[0].of === prof.history[0].players,
+      `matches go into your history (${prof.stats.matches}: ${prof.history.map((h) => h.mode + " " + h.place + "/" + h.of).join(", ")})`);
+    await host.goto(base + "/");
+    await host.click("#open-stats");
+    check((await host.$$eval("#stats .stat-history li", (els) => els.length)) === 2 && (await host.isVisible(".stat-tiles")),
+      "the stats screen shows your totals and recent matches");
+    await shot(host, "stats");
+    const [download] = await Promise.all([host.waitForEvent("download"), host.click("#stats-export")]);
+    const file = await download.path();
+    const fresh = await open("fresh");
+    await fresh.goto(base + "/");
+    await fresh.click("#open-stats");
+    check((await fresh.textContent("#stats-body")).includes("No matches yet"), "a new browser has no matches");
+    await fresh.setInputFiles("#stats-file", file);
+    await fresh.waitForFunction(() => /Added 2 matches/.test(document.querySelector("#toast").textContent));
+    await fresh.setInputFiles("#stats-file", file);
+    await fresh.waitForFunction(() => /Nothing new/.test(document.querySelector("#toast").textContent));
+    check((await fresh.evaluate(() => profileStore.get().stats.matches)) === 2, "a saved profile can be added to another browser (once)");
+
+    // Saved before profiles: the old settings come along
+    const old = await open("old");
+    await old.addInitScript(() => {
+      if (localStorage.getItem("bonk.profile")) return;
+      localStorage.setItem("bonk.name", "Olga"); localStorage.setItem("bonk.color", "4");
+      localStorage.setItem("bonk.pattern", "dots"); localStorage.setItem("bonk.muted", "1");
+      localStorage.setItem("bonk.prefs", JSON.stringify({ shake: false, keys: { heavy: "KeyJ" } }));
+    });
+    await old.goto(base + "/");
+    const moved = await old.evaluate(() => ({ p: profileStore.get(), left: localStorage.getItem("bonk.name"), shake: prefs.shake, muted: sound.muted }));
+    check(moved.p.name === "Olga" && moved.p.color === 4 && moved.p.pattern === "dots" && moved.muted && !moved.shake
+      && moved.p.prefs.keys.heavy === "KeyJ" && moved.left === null && (await old.inputValue("#name")) === "Olga",
+      "settings saved before profiles move into the profile");
 
     check(errors.length === 0, "no page errors" + (errors.length ? ": " + errors.join(" | ") : ""));
   } finally {
