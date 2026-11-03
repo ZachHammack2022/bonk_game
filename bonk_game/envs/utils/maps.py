@@ -10,7 +10,7 @@ import numpy as np
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.bodies import Block, OrientedBlock, SlidingPlatform, Swing, collide_block
 from bonk_game.envs.utils.mechanics import env_collision, handle_env_collision
-from bonk_game.envs.utils.player import player
+from bonk_game.envs.utils.player import new_rng, player
 from bonk_game.ui import theme
 
 
@@ -53,18 +53,21 @@ class Map:
         """Length of one agent's observation."""
         return arena.OBS_SIZE + self.n_extra_obs
 
-    def make_players(self, n=2, colors=None):
+    def make_players(self, n=2, colors=None, rng=None):
         """`n` players (2-10), each in its own colour. `colors`: an index into
-        theme.PLAYER_COLORS per player (default: the first n, in order)."""
+        theme.PLAYER_COLORS per player (default: the first n, in order).
+        rng: random numbers for where they spawn, shared by all of them
+        (player.new_rng() if not given)."""
         if not arena.MIN_PLAYERS <= n <= arena.MAX_PLAYERS:
             raise ValueError(f"{n} players: need {arena.MIN_PLAYERS}-{arena.MAX_PLAYERS}")
         colors = list(range(n)) if colors is None else list(colors)
         if len(colors) != n or len(set(colors)) != n:
             raise ValueError("need a different colour for each player")
         left, right, top, bottom = self.obs_bounds
+        rng = new_rng() if rng is None else rng
         players = tuple(
             player(arena.RADIUS, left, right, top, bottom, theme.PLAYER_COLORS[c],
-                   spawn=self.spawn_box, clamp_bottom=self.clamp_bottom)
+                   spawn=self.spawn_box, clamp_bottom=self.clamp_bottom, rng=rng)
             for c in colors
         )
         for p in players:
@@ -75,7 +78,7 @@ class Map:
 
     def place_players(self, players):
         """Reset every player at the start of a round, spread over the spawn box."""
-        points = arena.spawn_points(len(players), self.spawn_box, arena.RADIUS)
+        points = arena.spawn_points(len(players), self.spawn_box, arena.RADIUS, players[0].rng)
         for p, (x, y) in zip(players, points):
             p.reset()
             p.x, p.y = x, y

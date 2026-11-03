@@ -5,9 +5,18 @@ import numpy as np
 JUMP_BUFFER = 4  # an "up" press is remembered this long, then jumps on landing
 COYOTE_TIME = 4  # you can still jump this long after leaving the ground
 
+def new_rng(seed=None):
+    """Random numbers for one env and its players (where they spawn).
+
+    Without a seed, one is drawn from numpy's global random numbers, once:
+    so np.random.seed() still makes things repeatable, but nothing after
+    that touches (or is changed by) the global state."""
+    return np.random.RandomState(int(np.random.randint(2 ** 31)) if seed is None else seed)
+
+
 class player():
     
-    def __init__(self,radius,left,right,top,bottom,color,spawn=None,clamp_bottom=True) -> None:
+    def __init__(self,radius,left,right,top,bottom,color,spawn=None,clamp_bottom=True,rng=None) -> None:
         """Create a player.
 
         Args:
@@ -16,7 +25,10 @@ class player():
                 observation area
             clamp_bottom: never let the player sink below `bottom` (the
                 classic map's floor). Maps where you can fall out turn it off.
+            rng: random numbers for spawning (new_rng(); an env shares one
+                between its players)
         """
+        self.rng = new_rng() if rng is None else rng
         # store env bounds
         self.left = left
         self.right = right
@@ -102,8 +114,8 @@ class player():
         start_height = (bottom-top-2*self.r-2)
 
         self.alive = 1.0
-        self.x = left+ self.r+1+ np.random.random()*start_width
-        self.y = top+ self.r+1+ np.random.random()*start_height
+        self.x = left+ self.r+1+ self.rng.random()*start_width
+        self.y = top+ self.r+1+ self.rng.random()*start_height
         self.x_v = 0
         self.y_v = 0
         self.y_a = 0

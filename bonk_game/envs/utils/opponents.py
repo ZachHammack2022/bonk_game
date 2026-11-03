@@ -27,7 +27,10 @@ class OpponentPool:
         max_snapshots: how many past self-snapshots to keep (oldest dropped)
     """
 
-    def __init__(self, map_name=DEFAULT_MAP, weights=None, max_snapshots=5, load_bad=True):
+    def __init__(self, map_name=DEFAULT_MAP, weights=None, max_snapshots=5, load_bad=True, rng=None):
+        """rng: random numbers for picking (a random.Random; None: one seeded
+        from Python's global random numbers)."""
+        self.rng = random.Random(random.getrandbits(32)) if rng is None else rng
         self.map_name = map_name
         self.weights = dict(weights or {"bot": 0.35, "bad": 0.15, "self": 0.5})
         self.max_snapshots = max_snapshots
@@ -51,13 +54,13 @@ class OpponentPool:
         options = self.available()
         if not options:
             return None
-        kind = random.choices(list(options), weights=list(options.values()))[0]
+        kind = self.rng.choices(list(options), weights=list(options.values()))[0]
         if kind == "bot":
             from bonk_game.ui.bot import LEVEL_NAMES, Bot
-            return Bot(env, index, random.choice(LEVEL_NAMES))
+            return Bot(env, index, self.rng.choice(LEVEL_NAMES), rng=random.Random(self.rng.getrandbits(32)))
         if kind == "bad":
             return self.bad
-        return random.choice(self.snapshots)
+        return self.rng.choice(self.snapshots)
 
 
 def snapshot_callback(pool, model_cls, every, folder):

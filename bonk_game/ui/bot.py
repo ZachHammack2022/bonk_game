@@ -15,10 +15,10 @@ from bonk_game.envs.utils.arena import ACTIONS, FORCE
 _LOOKUP = {(int(dx), int(dy), int(h)): a for a, (dx, dy, h) in ACTIONS.items()}
 
 
-def action_for(dx, dy, heavy):
+def action_for(dx, dy, heavy, rng=random):
     """Discrete action for a direction (-1/0/1 each) plus heavy flag."""
     if dx == 0 and dy == 0:
-        dx = random.choice((-1, 1))  # there's no "do nothing" action
+        dx = rng.choice((-1, 1))  # there's no "do nothing" action
     return _LOOKUP[(dx, dy, int(heavy))]
 
 
@@ -48,19 +48,25 @@ LEVEL_NAMES = tuple(LEVELS)
 class Bot:
     """Drop-in for a trained agent: has predict(obs) -> (action, state)."""
 
-    def __init__(self, env, index, level="medium", reaction=None):
-        """level: "easy", "medium" or "hard" (see LEVELS)."""
+    def __init__(self, env, index, level="medium", reaction=None, rng=None):
+        """level: "easy", "medium" or "hard" (see LEVELS). rng: the bot's own
+        random numbers (a random.Random; None: one seeded from Python's
+        global random numbers, so random.seed() still makes bots repeatable)."""
         if level not in LEVELS:
             raise ValueError(f"Unknown bot level {level!r}. Choose from: {', '.join(LEVELS)}")
         self.env = env
         self.index = index
         self.level = level
+        self.rng = random.Random(random.getrandbits(32)) if rng is None else rng
         for k, v in LEVELS[level].items():
             setattr(self, k, v)
         if reaction is not None:
             self.reaction = reaction
         self.aim = 0.0  # current aiming error, changes now and then
         self.last = 0
+
+    def _act(self, dx, dy, heavy):
+        return action_for(dx, dy, heavy, self.rng)
 
     @property
     def me(self):
@@ -75,7 +81,7 @@ class Bot:
         return env.players[1 - self.index]  # the 1v1 training env
 
     def predict(self, obs, *args, **kwargs):
-        if random.random() > self.reaction:
+        if self.rng.random() > self.reaction:
             return self.last, None
         self.last = self.think()
         return self.last, None
@@ -103,8 +109,8 @@ class Bot:
         # Aim for the side of the opponent closer to the middle, then push out
         them_x = them.x
         side = 1 if them_x < centre else -1
-        if self.aim_error and random.random() < 0.05:
-            self.aim = random.uniform(-self.aim_error, self.aim_error)
+        if self.aim_error and self.rng.random() < 0.05:
+            self.aim = self.rng.uniform(-self.aim_error, self.aim_error)
         target_x = them_x + side * (me.r + them.r) * 0.6 + self.aim
         margin = max(me.r, m.bot_margin * self.caution)
         target_x = min(max(target_x, lo + margin), hi - margin)
@@ -131,7 +137,7 @@ class Bot:
                 (them.y < me.y - 50 and abs(them.x - me.x) < 140)
                 # Now and then hop in close, to hit from above or pop them
                 # over an obstacle
-                or (abs(them.x - me.x) < 90 and random.random() < self.hop)):
+                or (abs(them.x - me.x) < 90 and self.rng.random() < self.hop)):
             ydir = -1
         elif not me.grounded and (me.x < lo or me.x > hi):
             # Off the edge: jump is gone, steer back hard
@@ -147,9 +153,9 @@ class Bot:
         if self.defend and them_heavy and dist < 90 and closing > 1 and not braking:
             # They're coming in heavy: meet them heavy so we don't get bowled over
             heavy = True
-        if heavy and self.heavy_chance < 1 and random.random() > self.heavy_chance:
+        if heavy and self.heavy_chance < 1 and self.rng.random() > self.heavy_chance:
             heavy = False
-        return action_for(xdir, ydir, heavy)
+        return self._act(xdir, ydir, heavy)
 
     def go_to_swing(self, m):
         me = self.me
@@ -157,16 +163,16 @@ class Bot:
         in_seat = abs(me.x - sx) < m.swing.seat_width / 2 and sy - 2 * me.r < me.y < sy + 2
         if in_seat:
             xdir = 0 if abs(me.x - sx) < 6 else (1 if sx > me.x else -1)
-            return action_for(xdir, 0, False)
+            return self._act(xdir, 0, False)
         approach = sx - 110 if me.x < sx else sx + 110
         if me.y > sy and me.grounded:
             if abs(me.x - approach) < 15:
-                return action_for(1 if sx > me.x else -1, -1, False)
-            return action_for(1 if approach > me.x else -1, 0, False)
+                return self._act(1 if sx > me.x else -1, -1, False)
+            return self._act(1 if approach > me.x else -1, 0, False)
         # In the air: steer gently toward the seat
         xdir = 0
         if me.x < sx - 3 and me.x_v < 4:
             xdir = 1
         elif me.x > sx + 3 and me.x_v > -4:
             xdir = -1
-        return action_for(xdir, 1 if xdir == 0 and me.y < sy - 30 else 0, False)
+        return self._act(xdir, 1 if xdir == 0 and me.y < sy - 30 else 0, False)

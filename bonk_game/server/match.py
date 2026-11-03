@@ -13,7 +13,6 @@ seed, and `recording` keeps every player's input whenever it changes
 (bots' and agents' too). Match(..., seed=s, replay=recording) plays those
 inputs back through the same physics instead of asking anyone.
 """
-import contextlib
 import math
 import random
 
@@ -81,9 +80,6 @@ class Match:
         self.seed = int(np.random.randint(2 ** 31)) if seed is None else int(seed)
         self.options = {"mode": mode, "first_to": first_to, "round_time": round_time,
                         "gravity": gravity, "power_ups": bool(power_ups)}
-        # Spawns use numpy's random numbers: the match has its own, so
-        # other matches (and agents) don't change where anyone appears
-        self._np_state = np.random.RandomState(self.seed).get_state()
         self.map_name = map_name
         self.slots = [dict(s) for s in slots]
         self.first_to = first_to
@@ -93,8 +89,8 @@ class Match:
         teams = [s.get("team", k % 2) for k, s in enumerate(self.slots)]
         self.mode = modes.make_mode(mode, len(kinds), first_to, teams, rng=random.Random(self.seed + 1))
         options = {"round_time": round_time, **self.mode.env_options()}
-        with self.own_random():
-            self.env = TestEnv(*kinds, map_name=map_name, colors=self.colors, gravity=gravity, **options)
+        self.env = TestEnv(*kinds, map_name=map_name, colors=self.colors, gravity=gravity, seed=self.seed,
+                           **options)
         self.mode.start(self.env)
         self.powerups = powerups.PowerUps(self.env, random.Random(self.seed + 2)) if power_ups else None
         self.replay = None
@@ -110,29 +106,17 @@ class Match:
             if kind == "human" or replay is not None:
                 self.controllers.append(None)
             elif is_bot(kind):
-                self.controllers.append(Bot(self.env, i, bot_level(kind)))
+                self.controllers.append(Bot(self.env, i, bot_level(kind), rng=random.Random(self.seed + 10 + i)))
             else:
                 self.controllers.append(agents[kind])
         self.inputs = [NO_BUTTONS] * len(kinds)
         self.stand_ins = {}  # slot -> Bot playing for a disconnected human
-        with self.own_random():
-            self.obs = self.env.reset()
+        self.obs = self.env.reset()
         self.done = False       # someone reached first_to
         self.finished = False   # done and the final pause is over
         self.tick_count = 0
         self.stats = [new_stats() for _ in kinds]
         self.set_phase("countdown", 3)
-
-    @contextlib.contextmanager
-    def own_random(self):
-        """numpy's random numbers are this match's while inside."""
-        outer = np.random.get_state()
-        np.random.set_state(self._np_state)
-        try:
-            yield
-        finally:
-            self._np_state = np.random.get_state()
-            np.random.set_state(outer)
 
     @property
     def n(self):
@@ -214,14 +198,13 @@ class Match:
         was_sudden = env.timer.sudden_death
         if self.powerups:
             self.powerups.apply()
-        actions = self._actions()  # (bots and agents use the global random numbers)
+        actions = self._actions()
         for i, a in enumerate(actions):
             code = input_code(a)
             if code != self._codes[i]:
                 self._codes[i] = code
                 self.recording.append([env.steps, i, code])
-        with self.own_random():
-            self.obs, _, info = env.step(actions)
+        self.obs, _, info = env.step(actions)
         events = self.mode.step(info)
         if self.powerups:
             events += self.powerups.step(info)
