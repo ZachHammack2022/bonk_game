@@ -28,6 +28,8 @@
       </form>
       <div class="home-links">
         <button id="open-stats" class="link-button">📊 Your stats</button>
+        <button id="open-replay" class="link-button">🎞 Watch a replay</button>
+        <input id="replay-file" type="file" accept="application/json,.json" hidden>
         <button id="open-settings-home" class="link-button">⚙ Settings</button>
       </div>
     </div>
@@ -89,6 +91,16 @@
   <!-- The match -->
   <section id="game" class="screen hidden">
     <div id="stage"><canvas id="canvas"></canvas></div>
+    <div id="killcam" class="killcam hidden"><b>KILLCAM</b><span class="dim small">click to skip</span></div>
+    <div id="replay-bar" class="replay-bar hidden">
+      <button id="replay-play" aria-label="Play or pause">❚❚</button>
+      <input id="replay-seek" type="range" min="0" max="0" value="0" aria-label="Jump to">
+      <span id="replay-time" class="dim small"></span>
+      <select id="replay-speed" aria-label="Speed">
+        <option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option>
+      </select>
+      <button id="replay-back">Done</button>
+    </div>
     <div class="game-bar">
       <button id="open-settings-game" class="icon-button game-gear" aria-label="Settings" title="Settings (Esc)">⚙</button>
       <div id="emotes" aria-label="Emotes">
@@ -123,6 +135,10 @@
           </div>
           <input id="feel-note" maxlength="500" placeholder="Anything else? (optional)" aria-label="Anything else about that match">
           <p id="feel-thanks" class="dim small hidden">Thanks!</p>
+        </div>
+        <div class="results-watch">
+          <button id="killcam-btn" class="hidden">🎬 Killcam</button>
+          <button id="replay-download" class="hidden" title="Download this match as a replay file">⬇ Replay</button>
         </div>
         <button id="vote" class="primary">Play again</button>
         <button id="again" class="host-only">Start now</button>
@@ -198,6 +214,7 @@
   <script src="/static/js/input.js"></script>
   <script src="/static/js/effects.js"></script>
   <script src="/static/js/net.js"></script>
+  <script src="/static/js/replay.js"></script>
   <script src="/static/js/draw.js"></script>
   <script src="/static/js/main.js"></script>
 </body>

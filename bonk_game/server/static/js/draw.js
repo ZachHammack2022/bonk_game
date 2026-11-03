@@ -441,6 +441,7 @@ function frame(now) {
   const dt = Math.min(0.1, ms / 1000);
   lastFrame = now;
   fx.update(dt);
+  replayer.frame(now);
   if ($("game").classList.contains("hidden") || !app.match) return;
   drawFrozen = false;
   let st = blendedState(now);

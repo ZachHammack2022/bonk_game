@@ -14,6 +14,7 @@
 //   input.js     keyboard, touch and emotes
 //   effects.js   sound, particles, the knockout feed, game events
 //   net.js       network timing and predicting your own ball (predict.js)
+//   replay.js    the killcam, and watching replay files
 //   draw.js      drawing the match
 //   main.js      start up
 // Code that runs as a file loads may only use what earlier files define.
@@ -308,13 +309,17 @@ function onMessage(msg) {
         if (isHost()) send({ type: "settings", ...app.restoring });
         app.restoring = null;
       }
-      if (msg.phase === "lobby") { playtest.flush(); $("feel").classList.add("hidden"); app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
+      if (msg.phase === "lobby") { replayer.stop(); $("killcam").classList.add("hidden"); playtest.flush(); $("feel").classList.add("hidden"); app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
       break;
     case "match":
       app.match = msg;
       app.states = [];
       app.last = null;
       app.results = null;
+      replayer.stop();
+      replayer.recent = [];
+      $("killcam").classList.add("hidden");
+      $("replay-bar").classList.add("hidden");
       playtest.start(!msg.slots.some((x) => x.id === me.token));
       fx.reset();
       $("results").classList.add("hidden");
@@ -336,6 +341,8 @@ function onMessage(msg) {
       playtest.state(!!S);
       if (!S) break;  // missed the state it builds on: wait for the next full one
       app.last = S;
+      replayer.keep(S);
+      if (replayer.active) break;  // (watching the killcam)
       app.states.push([performance.now(), S]);
       if (app.states.length > 8) app.states.shift();
       for (const ev of S.events || []) onEvent(ev, S);
@@ -350,6 +357,7 @@ function onMessage(msg) {
       showResults(msg);
       playtest.finish();
       recordMatch(msg);
+      showReplayButtons(msg);
       break;
     case "notice":
       toast(msg.message);

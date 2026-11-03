@@ -22,7 +22,7 @@ import traceback
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import delta, limits, metrics, modes, playtest
+from bonk_game.server import delta, limits, metrics, modes, playtest, replay
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
@@ -86,6 +86,7 @@ class Room:
         self.results = None
         self.task = None
         self.encoder = None        # the match's state messages (delta.py)
+        self.last_replay = None    # the last finished match, as a replay file (replay.py)
         self.banned = set()        # tokens the host removed
         self.votes = set()         # tokens that want a rematch (on the results screen)
         self.closing = False       # the server is restarting: no new matches
@@ -594,6 +595,8 @@ class Room:
             # For players' match history (profiles.py): which match, and when
             self.results["match_id"] = f"{self.code}-{int(began_at * 1000)}"
             self.results["at"] = int(began_at)
+            self.last_replay = replay.record(match, match.tick_count, self.results["match_id"], int(began_at))
+            self.results["replay"] = True  # GET /api/rooms/<code>/replay
             self.results["slots"] = match.describe()["slots"]
         except asyncio.CancelledError:
             why = "stopped"

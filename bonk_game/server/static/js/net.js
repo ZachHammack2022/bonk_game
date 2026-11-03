@@ -55,7 +55,7 @@ function effectPhysics(M, S, i) {
 // faded in over ~0.1 s instead of snapping. Null when not predicting.
 function ownPosition(now, dt) {
   const M = app.match;
-  if (!PREDICT || !M || !app.states.length || typeof BonkPredict === "undefined") return null;
+  if (!PREDICT || !M || !app.states.length || typeof BonkPredict === "undefined" || replayer.active) return null;
   const i = M.slots.findIndex((s) => s.id === me.token);
   const entry = app.states[app.states.length - 1];
   const S = entry[1];
