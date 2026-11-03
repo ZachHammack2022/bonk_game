@@ -1,0 +1,109 @@
+// bonk web client: The results screen: winner, standings and awards.
+// Plain scripts sharing one global scope; index.html loads them in order.
+"use strict";
+
+function showResults(msg) {
+  const slots = msg.slots || (app.match && app.match.slots) || [];
+  const w = msg.winner;
+  const el = $("winner");
+  const M = app.match || {};
+  const teamWin = msg.winner_team;
+  if (msg.team_scores) {
+    const mine = slots.find((x) => x.id === me.token);
+    if (teamWin === null || teamWin === undefined) { el.textContent = "Draw!"; el.style.color = T.text; }
+    else {
+      el.textContent = mine && mine.team === teamWin ? "Your team wins!" : `${M.team_names[teamWin]} wins!`;
+      el.style.color = M.team_colors[teamWin];
+    }
+  } else if (w === null || w === undefined) {
+    el.textContent = "Draw!";
+    el.style.color = T.text;
+  } else {
+    const s = slots[w];
+    el.textContent = s && s.id === me.token ? "You win!" : `${s ? s.name : "?"} wins!`;
+    el.style.color = s ? s.color : T.text;
+  }
+  const ol = $("standings");
+  ol.innerHTML = "";
+  const order = msg.scores.map((sc, i) => i).sort((a, b) => msg.scores[b] - msg.scores[a]);
+  const unit = { lives: (v) => `♥${v}`, crown: (v) => `${v} s` }[msg.mode] || String;
+  if (msg.team_scores) {
+    for (const t of [0, 1].sort((a, b) => msg.team_scores[b] - msg.team_scores[a])) {
+      const li = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = M.team_names[t] + ": " + slots.filter((s) => s.team === t).map((s) => s.id === me.token ? "You" : s.name).join(", ");
+      name.style.color = M.team_colors[t];
+      const score = document.createElement("span");
+      score.className = "score";
+      score.textContent = msg.team_scores[t];
+      li.append(name, score);
+      ol.appendChild(li);
+    }
+  }
+  for (const i of msg.team_scores ? [] : order) {
+    const s = slots[i] || { name: "?", color: T.faint };
+    const li = document.createElement("li");
+    const ball = document.createElement("span");
+    ball.className = "ball";
+    Object.assign(ball.style, { width: "16px", height: "16px", borderRadius: "50%", background: s.color, flex: "none" });
+    const name = document.createElement("span");
+    name.textContent = s.id === me.token ? `${s.name} (you)` : s.name;
+    const score = document.createElement("span");
+    score.className = "score";
+    score.textContent = unit(msg.scores[i]);
+    li.append(ball, name, score);
+    ol.appendChild(li);
+  }
+  renderAwards(msg, slots);
+  $("results").classList.remove("hidden");
+  $("emotes").classList.add("hidden");
+  if (w !== null && w !== undefined) fx.confetti(slots[w] ? slots[w].color : T.accent);
+  else if (teamWin !== null && teamWin !== undefined && M.team_colors) fx.confetti(M.team_colors[teamWin]);
+}
+
+const AWARD_ICONS = { kos: "💥", hit: "🔨", falls: "🧈", survivor: "🛡️", pickups: "🍬" };
+const POWER_ICONS = { speed: "⚡", float: "🎈", iron: "🪨", punch: "👊" };
+const POWER_COLORS = { speed: "#ffd166", float: "#9be7ff", iron: "#a0aec6", punch: "#ff8a65" };
+
+function awardDetail(a) {
+  switch (a.id) {
+    case "kos": return `${a.value} knockout${a.value === 1 ? "" : "s"}`;
+    case "hit": return `power ${Math.round(a.value)}`;
+    case "falls": return `fell ${a.value} time${a.value === 1 ? "" : "s"}`;
+    case "survivor": return a.value ? `out ${a.value === 1 ? "once" : a.value + " times"}` : "never out";
+    case "pickups": return `${a.value} power-up${a.value === 1 ? "" : "s"}`;
+  }
+  return "";
+}
+
+function renderAwards(msg, slots) {
+  const ul = $("awards");
+  ul.innerHTML = "";
+  for (const a of msg.awards || []) {
+    const li = document.createElement("li");
+    li.dataset.award = a.id;
+    const icon = document.createElement("span");
+    icon.className = "icon";
+    icon.textContent = AWARD_ICONS[a.id] || "🏅";
+    const body = document.createElement("span");
+    body.className = "body";
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = a.title;
+    const who = document.createElement("span");
+    who.className = "who";
+    for (const [k, i] of a.slots.entries()) {
+      const s = slots[i] || { name: "?", color: T.faint };
+      if (k) who.append(" & ");
+      const name = document.createElement("b");
+      name.style.color = s.color;
+      name.textContent = s.id === me.token ? "You" : s.name;
+      who.append(name);
+    }
+    who.append(" · " + awardDetail(a));
+    body.append(title, who);
+    li.append(icon, body);
+    ul.appendChild(li);
+  }
+  ul.classList.toggle("hidden", !ul.children.length);
+}

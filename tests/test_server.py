@@ -208,10 +208,14 @@ def test_full_match_over_websockets(monkeypatch):
         await client.start_server()
         try:
             assert (await (await client.get("/healthz")).text()) == "ok"
-            page = await client.get("/r/ABCD")
-            assert "bonk" in await page.text()
-            js = await client.get("/static/client.js")
-            assert js.status == 200
+            page = await (await client.get("/r/ABCD")).text()
+            assert "bonk" in page
+            # Every script the page loads is served
+            import re
+            scripts = re.findall(r'<script src="([^"]+)"', page)
+            assert len(scripts) > 5
+            for src in scripts:
+                assert (await client.get(src)).status == 200, src
 
             code = (await (await client.post("/api/rooms")).json())["room"]
             info = await (await client.get(f"/api/rooms/{code}")).json()

@@ -8,7 +8,7 @@ from bonk_game.server import room as room_mod
 from bonk_game.server.room import PATTERNS, Room
 from bonk_game.ui import theme
 
-CLIENT = Path(room_mod.__file__).parent / "static" / "client.js"
+CLIENT = Path(room_mod.__file__).parent / "static" / "js" / "core.js"
 
 
 def test_the_client_knows_the_same_colours_and_patterns():
