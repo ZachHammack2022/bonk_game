@@ -177,7 +177,8 @@ jobs:
     # One check that says whether everything this change needed passed
     # (skipped jobs count as passed), for branch protection to require.
     needs: [changes, test, training, web]
-    if: always()
+    # (not when the whole run was cancelled by a newer push: that's not a failure)
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
       - name: All needed jobs passed
