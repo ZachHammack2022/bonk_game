@@ -66,3 +66,41 @@ jobs:
           mkdir -p /tmp/run && cd /tmp/run
           python "$GITHUB_WORKSPACE/main.py" --train platform --steps 2000
           python "$GITHUB_WORKSPACE/main.py" --train platform --steps 2000 --opponents bad
+
+  web:
+    # The web version in a real browser: two players, a full match,
+    # a reload mid-match, results and a phone-sized lobby.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-server.txt
+
+      - name: Install the server (no pygame, no training stack)
+        run: pip install -r requirements-server.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save playwright@1.48.2
+          npx playwright install --with-deps chromium
+
+      - name: Browser test
+        run: node tests/web/e2e.js
+        env:
+          E2E_SHOTS: e2e-shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: e2e-shots
+          if-no-files-found: ignore

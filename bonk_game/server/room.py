@@ -19,6 +19,7 @@ import random
 import time
 
 from bonk_game.envs.utils import arena
+from bonk_game.server import limits
 from bonk_game.envs.utils.maps import MAPS
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
@@ -30,6 +31,14 @@ EMPTY_ROOM_TTL = 600.0   # seconds an empty room is kept around
 NAME_LEN = 16
 FIRST_TO_RANGE = (1, 100)
 DEFAULT_MAP = "platform"
+
+
+class RoomFull(Exception):
+    pass
+
+
+class ServerFull(Exception):
+    pass
 
 
 def clean_name(name):
@@ -70,6 +79,8 @@ class Room:
         """Add (or reconnect) a member. Returns the Member."""
         m = self.members.get(token)
         if m is None:
+            if len(self.members) >= limits.MAX_MEMBERS:
+                raise RoomFull("This room is full.")
             m = Member(token, clean_name(name), send)
             self.members[token] = m
         else:
@@ -89,9 +100,11 @@ class Room:
         await self.broadcast_lobby()
         return m
 
-    async def disconnect(self, token):
+    async def disconnect(self, token, send=None):
+        """`send`: the connection that closed. If the member has already
+        reconnected on a newer one (a refresh), nothing changes."""
         m = self.members.get(token)
-        if m is None:
+        if m is None or (send is not None and m.send is not send):
             return
         m.connected = False
         m.left_at = time.monotonic()
@@ -309,6 +322,8 @@ class RoomManager:
         self.rng = rng or random.Random()
 
     def create(self):
+        if len(self.rooms) >= limits.MAX_ROOMS:
+            raise ServerFull()
         for _ in range(1000):
             code = "".join(self.rng.choice(ROOM_ALPHABET) for _ in range(ROOM_CODE_LEN))
             if code not in self.rooms:

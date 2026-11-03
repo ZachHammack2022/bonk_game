@@ -101,8 +101,9 @@ $("create").addEventListener("click", async () => {
   $("create").disabled = true;
   try {
     const r = await fetch("/api/rooms", { method: "POST" });
-    const { room } = await r.json();
-    openRoom(room, true);
+    const body = await r.json();
+    if (!r.ok) toast(body.error || "Couldn't create a room.", true);
+    else openRoom(body.room, true);
   } catch (e) {
     toast("Couldn't create a room. Is the server running?", true);
   } finally {

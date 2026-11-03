@@ -244,3 +244,118 @@ def test_full_match_over_websockets(monkeypatch):
             await client.close()
 
     run(go())
+
+
+# ---------------------------------------------------------------------------
+# Limits
+# ---------------------------------------------------------------------------
+def test_token_bucket():
+    from bonk_game.server.limits import TokenBucket
+    now = [0.0]
+    b = TokenBucket(rate=2, burst=3, clock=lambda: now[0])
+    assert [b.allow() for _ in range(4)] == [True, True, True, False]
+    now[0] += 0.5  # one token back
+    assert b.allow() and not b.allow()
+
+
+def test_room_and_server_capacity(monkeypatch):
+    from bonk_game.server import limits
+
+    async def go():
+        monkeypatch.setattr(limits, "MAX_MEMBERS", 2)
+        room = Room("ABCD")
+        await room.join("a", "Ann", Inbox())
+        await room.join("b", "Bob", Inbox())
+        with pytest.raises(room_mod.RoomFull):
+            await room.join("c", "Cat", Inbox())
+        await room.join("a", "Ann", Inbox())  # people already in can always come back
+
+    run(go())
+    monkeypatch.setattr(limits, "MAX_ROOMS", 3)
+    rooms = RoomManager()
+    for _ in range(3):
+        rooms.create()
+    with pytest.raises(room_mod.ServerFull):
+        rooms.create()
+
+
+def test_a_stale_disconnect_does_not_kick_a_reconnected_member():
+    async def go():
+        room = Room("ABCD")
+        old, new = Inbox(), Inbox()
+        await room.join("a", "Ann", old)
+        await room.join("a", "Ann", new)  # refreshed before the old socket closed
+        await room.disconnect("a", old)
+        assert room.members["a"].connected
+        await room.disconnect("a", new)
+        assert not room.members["a"].connected
+    run(go())
+
+
+def _client(monkeypatch, **overrides):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from bonk_game.server import limits
+    from bonk_game.server.web import make_app
+    for k, v in overrides.items():
+        monkeypatch.setattr(limits, k, v)
+    return TestClient(TestServer(make_app(RoomManager())))
+
+
+def test_room_creation_is_rate_limited(monkeypatch):
+    async def go():
+        client = _client(monkeypatch, ROOMS_PER_IP=3)
+        await client.start_server()
+        try:
+            statuses = [(await client.post("/api/rooms")).status for _ in range(5)]
+            assert statuses == [200, 200, 200, 429, 429]
+        finally:
+            await client.close()
+    run(go())
+
+
+def test_connections_per_ip_are_capped(monkeypatch):
+    async def go():
+        client = _client(monkeypatch, CONNECTIONS_PER_IP=2)
+        await client.start_server()
+        try:
+            code = (await (await client.post("/api/rooms")).json())["room"]
+            socks = []
+            for i in range(2):
+                ws = await client.ws_connect(f"/ws/{code}")
+                await ws.send_json({"type": "hello", "name": f"p{i}", "token": f"t{i}"})
+                assert (await ws.receive_json())["type"] == "welcome"
+                socks.append(ws)
+            extra = await client.ws_connect(f"/ws/{code}")
+            err = await extra.receive_json()
+            assert err["fatal"] and "Too many connections" in err["message"]
+            await socks[0].close()
+            await asyncio.sleep(0.05)
+            again = await client.ws_connect(f"/ws/{code}")  # a slot freed up
+            await again.send_json({"type": "hello", "name": "p9", "token": "t9"})
+            assert (await again.receive_json())["type"] == "welcome"
+        finally:
+            await client.close()
+    run(go())
+
+
+def test_flooding_messages_gets_you_disconnected(monkeypatch):
+    async def go():
+        client = _client(monkeypatch, MESSAGES_PER_SECOND=1.0, MESSAGE_BURST=5.0, MAX_DROPPED=20)
+        await client.start_server()
+        try:
+            code = (await (await client.post("/api/rooms")).json())["room"]
+            ws = await client.ws_connect(f"/ws/{code}")
+            await ws.send_json({"type": "hello", "name": "Ann", "token": "t"})
+            for _ in range(100):
+                await ws.send_json({"type": "input", "b": [0, 0, 0, 0, 0]})
+            msgs = []
+            while True:
+                m = await ws.receive(timeout=5)
+                if m.type != aiohttp.WSMsgType.TEXT:
+                    break
+                msgs.append(json.loads(m.data))
+            assert any(m["type"] == "error" and "too much" in m["message"] for m in msgs)
+        finally:
+            await client.close()
+    run(go())
