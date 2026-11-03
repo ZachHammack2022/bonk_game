@@ -14,7 +14,7 @@ from bonk_game.envs.testing_env import TestEnv
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS, make_map
 from bonk_game.ui import theme
-from bonk_game.ui.bot import Bot
+from bonk_game.ui.bot import LEVEL_NAMES, Bot
 from bonk_game.ui.interp import Interpolator
 from bonk_game.ui.painter import Painter
 from bonk_game.ui.sound import Sound
@@ -273,11 +273,12 @@ class Effects:
 # ---------------------------------------------------------------------------
 class Sim:
     def __init__(self, map_name, controllers, first_to):
-        """controllers: list of "human", "bot" or a trained model, per player."""
+        """controllers: per player, "human", "bot:<level>" (or "bot" for
+        medium) or a trained model."""
         kinds = ["user" if c == "human" else "ai" for c in controllers]
         self.env = TestEnv(kinds[0], kinds[1], None, winning_score=first_to, map_name=map_name)
         self.controllers = [
-            None if c == "human" else Bot(self.env, i) if c == "bot" else c
+            None if c == "human" else Bot(self.env, i, bot_level(c)) if is_bot(c) else c
             for i, c in enumerate(controllers)
         ]
         self.obs = self.env.reset()
@@ -349,11 +350,27 @@ class Sim:
             painter.offscreen_marker(p, W)
 
 
+BOT_CHOICES = tuple(f"bot:{level}" for level in LEVEL_NAMES)
+BOT_BLURBS = {
+    "easy": "Slow and sloppy. Good for learning.",
+    "medium": "A fair fight.",
+    "hard": "Quick, lines up hits, braces for yours.",
+}
+
+
+def is_bot(choice):
+    return isinstance(choice, str) and (choice == "bot" or choice.startswith("bot:"))
+
+
+def bot_level(choice):
+    return choice.split(":", 1)[1] if ":" in choice else "medium"
+
+
 def describe(choice):
     if choice == "human":
         return "Human"
-    if choice == "bot":
-        return "Bot"
+    if is_bot(choice):
+        return f"{bot_level(choice).title()} bot"
     return choice.upper()
 
 
@@ -378,9 +395,7 @@ class Scene:
 class TitleScene(Scene):
     def __init__(self, app):
         super().__init__(app)
-        self.demo = Sim("platform", ["bot", "bot"], 10 ** 9)
-        for c in self.demo.controllers:
-            c.reaction = 0.6
+        self.demo = Sim("platform", ["bot:medium", "bot:medium"], 10 ** 9)
         self.effects = Effects()
         self.acc = 0.0
         self.menu = Menu(app, [
@@ -626,8 +641,8 @@ class PlayerSelectScene(Scene):
         self.map_name = map_name
         self.map_cls = MAPS[map_name]
         self.agents = app.load_agents(map_name)
-        self.options = ["human", "bot"] + list(self.agents)
-        default = picks or ("human", "bot")
+        self.options = ["human", *BOT_CHOICES] + list(self.agents)
+        default = picks or ("human", "bot:medium")
         self.picks = [self.options.index(p) if p in self.options else 0 for p in default]
         default_first = first_to or min(self.map_cls.winning_score, 10)
         self.first_opts = sorted(set(FIRST_TO_OPTIONS) | {default_first})
@@ -638,7 +653,7 @@ class PlayerSelectScene(Scene):
 
     def choice(self, i):
         o = self.options[self.picks[i]]
-        return o if o in ("human", "bot") else self.agents[o]
+        return o if o == "human" or is_bot(o) else self.agents[o]
 
     def back(self):
         self.app.go(MapSelectScene(self.app, self.map_name))
@@ -741,7 +756,7 @@ class PlayerSelectScene(Scene):
                     ui.text(label, 11, theme.TEXT_FAINT, (kx + 6, ky + 10), anchor="midleft",
                             bold=False, shadow=False)
             else:
-                desc = "Built-in bot. Not too smart." if opt == "bot" else f"Your trained {opt.upper()} agent."
+                desc = BOT_BLURBS[bot_level(opt)] if is_bot(opt) else f"Your trained {opt.upper()} agent."
                 ui.text(desc, 12.5, theme.TEXT_DIM, (x + 140, 248), bold=False, shadow=False)
 
         # First-to row

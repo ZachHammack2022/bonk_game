@@ -3,7 +3,8 @@
 Training against a single fixed opponent teaches an agent to beat that one
 opponent and nothing else. The pool mixes:
 
-- the built-in Bot (bonk_game/ui/bot.py), which needs no training,
+- the built-in Bot (bonk_game/ui/bot.py) at a random difficulty, which
+  needs no training,
 - the map's "bad" PPO agent, if it has been trained,
 - snapshots of the agent being trained, taken every so often (self-play).
 
@@ -52,8 +53,8 @@ class OpponentPool:
             return None
         kind = random.choices(list(options), weights=list(options.values()))[0]
         if kind == "bot":
-            from bonk_game.ui.bot import Bot
-            return Bot(env, index)
+            from bonk_game.ui.bot import LEVEL_NAMES, Bot
+            return Bot(env, index, random.choice(LEVEL_NAMES))
         if kind == "bad":
             return self.bad
         return random.choice(self.snapshots)
