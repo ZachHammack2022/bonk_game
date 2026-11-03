@@ -170,8 +170,8 @@ def summarize(records):
     if reports:
         lines += ["## Reports", "",
                   "| when | who | device | network | ping med / p95 | jitter | late states /min "
-                  "| corrections >6 px /min | worst correction | fps | frozen | felt | note |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| corrections >6 px /min | worst correction | fps | frozen | drawn behind | felt | note |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for r in reports:
             kind, browser = device_kind(r.get("device"))
             late = per_min(r, _g(r, "states", "late", 0))
@@ -191,6 +191,7 @@ def summarize(records):
                    _f(late, "{:.1f}"), _f(big, "{:.1f}"),
                    _f(_g(r, "corrections", "max"), "{:.0f} px"),
                    _f(_g(r, "frames", "fps")), _f(_g(r, "frames", "frozen"), "{:.0f}%"),
+                   _f(_g(r, "frames", "delay"), "{:.0f} ms"),
                    r.get("feel", "–"), r.get("note", "")]
             lines.append("| " + " | ".join(_cell(c) for c in row) + " |")
         lines.append("")

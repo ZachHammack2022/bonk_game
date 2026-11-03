@@ -108,18 +108,19 @@ To see how the game plays on a worse connection without leaving your desk, add `
 
 Or set each part yourself: `?lag=150&jitter=40&stall=400&stall_every=10` (`?seed=7` gives the same "random" network every time). Messages stay in order, as over a real WebSocket: in a stall nothing arrives, then everything held up arrives at once, which is what a lost packet does. The page says what it's simulating in the top right corner, and playtest reports say so too.
 
-`node tests/web/network.js` plays a match in a real browser on each of these and prints what the playtest report saw (it needs Playwright, as the browser test does). Before any tuning, against two Hard bots on Platform:
+`node tests/web/network.js` plays a match in a real browser on each of these and prints what the playtest report saw (it needs Playwright, as the browser test does). Against two Hard bots on Platform, 40 s each:
 
-| network | ping median / p95 | late states /min | worst gap | frames frozen | your ball corrected >6 px /min | >20 px /min | worst correction |
-|---|---|---|---|---|---|---|---|
-| normal | 1 / 1 ms | 0.0 | 94 ms | 0.1% | 21.9 | 11.9 | 72 px |
-| `wifi` | 56 / 75 ms | 0.0 | 78 ms | 1.8% | 89.9 | 20.0 | 150 px |
-| `mobile` | 126 / 435 ms | 28.9 | 142 ms | 12.1% | 225.7 | 65.6 | 241 px |
-| `far` | 194 / 206 ms | 0.0 | 77 ms | 0.8% | 81.8 | 17.9 | 312 px |
-| `bad` | 284 / 633 ms | 129.6 | 718 ms | 32.4% | 182.6 | 76.6 | 463 px |
+| network | ping median / p95 | late states /min | worst gap | frames frozen (before → now) | frames guessed | drawn behind (before → now) | your ball corrected >6 px /min | >20 px /min | worst correction |
+|---|---|---|---|---|---|---|---|---|---|
+| normal | 1 / 1 ms | 0.0 | 58 ms | 0.0% → 0.0% | 0.0% | 50 → 41 ms | 32.9 | 18.0 | 103 px |
+| `wifi` | 58 / 86 ms | 0.0 | 83 ms | 1.8% → 0.0% | 0.6% | 50 → 66 ms | 74.3 | 8.9 | 107 px |
+| `mobile` | 132 / 186 ms | 33.9 | 152 ms | 12.1% → 0.0% | 1.4% | 50 → 107 ms | 224.2 | 67.8 | 234 px |
+| `far` | 198 / 218 ms | 0.0 | 66 ms | 0.3% → 0.0% | 0.0% | 50 → 61 ms | 87.8 | 23.8 | 316 px |
+| `bad` | 269 / 816 ms | 137.6 | 726 ms | 35.5% → 2.4% | 2.4% | 50 → 219 ms | 224.9 | 127.3 | 629 px |
 
-- **Frames frozen** is how often the browser had no newer state to move toward, so every ball stood still for a frame. Anything over a few percent looks like stutter: the 50 ms the browser draws behind the server isn't enough for jitter and stalls.
-- **Corrections** are how far your own ball had to be moved when the server's answer came back (small ones fade in over 0.1 s). With no lag at all, they're bots bumping you, which your browser can't predict; more lag means each bump is found out later and is bigger.
+- **Drawn behind**: the browser draws the match a little in the past, blending between states, so motion is smooth although states come only 30 times a second. It used to be a fixed 50 ms; now it's measured for each connection (`static/clock.js`): the moment by which 95 % of the last 10 s of states had arrived, plus a tick. A steady connection draws closer behind than before; a jittery one waits as long as it needs (up to 250 ms more), and the clock speeds up or slows down by at most 6 % to get there, so nothing jumps.
+- **Frames frozen** is how often everything stood still because the next state hadn't arrived. **Frames guessed** is how often a state was late and the browser carried on along the way things were moving instead (for up to 0.1 s), which is hard to notice. Before, a fixed 50 ms wasn't enough for jitter and stalls, and on jittery connections the match sometimes ran backwards for a frame.
+- **Corrections** are how far your own ball had to be moved when the server's answer came back (small ones fade in over 0.1 s). With no lag at all, they're bots bumping you, which your browser can't predict; more lag means each bump is found out later and is bigger. (They vary a lot from run to run: the bots don't play the same way twice.)
 
 ### How big a server?
 `python -m bonk_game.server.load_test --sockets` runs more and more rooms of 10 at once over real WebSockets until the server can't keep up, and prints what it used. The "browsers" ask for compression, as real ones do. Below: a 4-core cloud VM (the server is one process, so it uses one core), bots playing all 10 balls on Grand Stage.
@@ -267,4 +268,4 @@ node tests/web/e2e.js
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
 - `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
 - `Dockerfile`, `fly.toml`, `deploy/fly.sh`: hosting the web server (on Fly.io, or anywhere that runs Docker)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), playtest reports and their write-up (`playtest.py`, `playtest_report.py`, and `static/js/report.js`), checking a deployed server (`smoke.py`), replays (`replay.py`, and `static/js/replay.js` for the killcam and watching), profiles and match history (`profiles.py`, the same rules as `static/profile.js` in the browser), pretending the network is worse (`static/netsim.js`, measured by `tests/web/network.js`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), playtest reports and their write-up (`playtest.py`, `playtest_report.py`, and `static/js/report.js`), checking a deployed server (`smoke.py`), replays (`replay.py`, and `static/js/replay.js` for the killcam and watching), profiles and match history (`profiles.py`, the same rules as `static/profile.js` in the browser), pretending the network is worse (`static/netsim.js`, measured by `tests/web/network.js`), what moment of the match to draw (`static/clock.js`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)

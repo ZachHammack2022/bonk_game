@@ -35,7 +35,10 @@ NUMBERS = {
     "ping": ("n", "min", "med", "p95", "max", "jitter"),
     "states": ("n", "late", "max_gap", "missed"),
     "corrections": ("n", "big", "huge", "max", "avg"),
-    "frames": ("fps", "slow", "frozen"),  # frozen: % of frames with nothing new to draw
+    # frozen: % of frames where everything stood still (the next state was too
+    # late); guessed: % carried on past the newest state; delay: ms the match
+    # was drawn behind (static/clock.js)
+    "frames": ("fps", "slow", "frozen", "guessed", "delay"),
 }
 DEVICE_TEXT = {"ua": 160, "screen": 20, "net": 12}
 
