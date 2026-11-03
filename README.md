@@ -3,14 +3,16 @@ This is a working version of bonk.io, a popular online physics-based platform ga
 Currently, only one bonk.io env exists, but multiple envs could easily be created. There are options for multiplayer, AI agent vs user, and AI vs AI (same or different training algorithms). Tournaments are supported for AI agents only. User cannot interact in tournament yet.
 
 ## How it plays
+Run `python3 main.py` to open the game. Pick a map, choose who's playing (a human, the built-in Bot, or any AI agents you've trained for that map), and pick how many points win.
+
 Two balls fight to knock each other out. Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
 
-| | Move | Go heavy |
+| | Move / jump | Go heavy |
 |---|---|---|
-| Player 1 (red) | W A S D | Caps Lock |
-| Player 2 (blue) | Arrow keys | Space |
+| Red | W A S D | Left Shift |
+| Blue | Arrow keys | Space or Right Shift |
 
-Close the window at any time to end the match.
+Esc pauses, M mutes. Everything works with the mouse too.
 
 ## Maps
 You pick a map when you run `main.py`. Agents are trained separately for each map.
@@ -39,8 +41,11 @@ Subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.p
 5. Run "pip install -r requirements.txt"
 6. Run "pip install -e ." to make the gym environment
 7. Run "defaults write org.python.python ApplePersistenceIgnoreState NO" if on macOS.
-8. Run "python3 main.py". This will train your agents and allow you to begin testing.
-9. Once you have trained your agents, you can run a tournament. Run "python3 tournament.py". This will put your trained agents against one another to find the winner! Add `--map platform`, `--map slider` or `--map swing` to hold it on another map.
+8. Run "python3 main.py" to play. You can play against a friend or the built-in Bot straight away.
+9. To play against AI agents, train them for a map with "python3 main.py --train <map>" (maps: classic, platform, slider, swing). It takes 10-15 minutes per map. They then show up as players in the game.
+10. Once you have trained agents, you can run a tournament: "python3 tournament.py --map <map>". This puts your trained agents against one another to find the winner!
+
+The old text menus are still available with "python3 main.py --terminal".
 
 To retrain from scratch, delete the map's agent folder (`agents` for Classic, `agents/<map>` for the others) and run `python3 main.py` again.
 
@@ -58,7 +63,8 @@ python -m pytest
 ```
 
 ## Code layout
-- `bonk_game/envs/utils/arena.py`: arena size, action table, spawning and rendering shared by every env
+- `bonk_game/ui/`: the game window: screens and HUD (`app.py`), the visual style (`painter.py`, `theme.py`), sound effects (`sound.py`) and the built-in Bot (`bot.py`)
+- `bonk_game/envs/utils/arena.py`: arena size, action table and spawning shared by every env
 - `bonk_game/envs/utils/maps.py`: the maps
 - `bonk_game/envs/utils/bodies.py`: moving/bouncy blocks, the sliding platform and the swing
 - `bonk_game/envs/utils/mechanics.py`: classic collision physics and player-vs-player collisions

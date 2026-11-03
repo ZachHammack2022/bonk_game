@@ -1,7 +1,4 @@
 """Contains player class and methods"""
-import os
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
 import numpy as np
 
 class player():
@@ -89,10 +86,6 @@ class player():
         self.update_position()
         self.update_mass()
         
-    def render(self,canvas)-> None:
-        pygame.draw.circle(canvas, (0,0,0), [self.x,self.y], self.r)
-        pygame.draw.circle(canvas, self.color, [self.x,self.y], self.r-4*(self.m - self.min_m))
-
     
     def reset(self)->None:
         """Respawn at a random spot inside the arena with no velocity."""

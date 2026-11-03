@@ -6,10 +6,6 @@ rectangles that can move, bounce from any side, have friction or launch
 players, and a swing that players can knock around and ride.
 """
 import math
-import os
-
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
 
 GRAVITY = 1.5  # matches the per-step gravity players feel in player.py
 
@@ -72,9 +68,8 @@ class Block:
     def rect(self):
         return self.x1, self.y1, self.x2, self.y2
 
-    def render(self, canvas):
-        rect = pygame.Rect(self.x1, self.y1, self.x2 - self.x1, self.y2 - self.y1)
-        pygame.draw.rect(canvas, self.color, rect)
+    def render(self, painter):
+        painter.draw_block(self)
 
 
 def resolve_contact(p, contact, surface_v=(0.0, 0.0), restitution=0.5,
@@ -190,9 +185,9 @@ class SlidingPlatform:
         """Collide a player with every part. True if a kill block was hit."""
         return any([collide_block(p, block, body=self) for block in self.blocks])
 
-    def render(self, canvas):
+    def render(self, painter):
         for block in self.blocks:
-            block.render(canvas)
+            painter.draw_block(block)
 
 
 class Swing:
@@ -205,8 +200,7 @@ class Swing:
 
     def __init__(self, pivot_x, pivot_y, length, seat_width=96, lip_height=18,
                  thickness=8, mass=4.0, damping=0.997, max_omega=0.12,
-                 restitution=0.15, friction=0.35,
-                 color=(139, 90, 43), rope_color=(90, 60, 30)):
+                 restitution=0.15, friction=0.35):
         self.px, self.py = pivot_x, pivot_y
         self.length = length
         self.seat_width = seat_width
@@ -217,8 +211,6 @@ class Swing:
         self.max_omega = max_omega
         self.restitution = restitution
         self.friction = friction
-        self.color = color
-        self.rope_color = rope_color
         self.reset()
 
     def reset(self):
@@ -281,11 +273,5 @@ class Swing:
                                 self.friction, body=self)
                 svx, svy = self.velocity()
 
-    def render(self, canvas):
-        sx, sy = self.seat_pos()
-        half = self.seat_width / 2
-        for end_x in (sx - half, sx + half):
-            pygame.draw.line(canvas, self.rope_color, (self.px, self.py), (end_x, sy - self.lip_height), 3)
-        pygame.draw.circle(canvas, self.rope_color, (self.px, self.py), 6)
-        for x1, y1, x2, y2 in self.rects():
-            pygame.draw.rect(canvas, self.color, pygame.Rect(x1, y1, x2 - x1, y2 - y1))
+    def render(self, painter):
+        painter.swing(self)

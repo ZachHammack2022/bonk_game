@@ -10,6 +10,7 @@ from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.bodies import Block, SlidingPlatform, Swing, collide_block
 from bonk_game.envs.utils.mechanics import env_collision, handle_env_collision
 from bonk_game.envs.utils.player import player
+from bonk_game.ui import theme
 
 
 class Map:
@@ -67,7 +68,15 @@ class Map:
     def extra_obs(self):
         return np.zeros(0)
 
-    def render(self, canvas):
+    # How far the built-in bot keeps from the ends of safe_x_range()
+    bot_margin = 20
+
+    def safe_x_range(self):
+        """Left/right x of the main ground right now (used by the built-in bot)."""
+        return self.spawn_box[0], self.spawn_box[1]
+
+    def render(self, painter):
+        """Draw the level with a bonk_game.ui.painter.Painter."""
         raise NotImplementedError
 
 
@@ -77,6 +86,7 @@ class ClassicMap(Map):
     name = "classic"
     title = "Classic"
     description = "Bouncy floor and ceiling, deadly side walls."
+    bot_margin = 60  # the walls kill on touch, so keep well clear
 
     def __init__(self):
         self.platforms = arena.make_platforms()
@@ -89,9 +99,12 @@ class ClassicMap(Map):
                 handle_env_collision(p, obj)
         return False
 
-    def render(self, canvas):
+    def render(self, painter):
         for obj in self.platforms:
-            obj.render(canvas)
+            if obj.kill:
+                painter.block(obj.x1, obj.y1, obj.x2, obj.y2, theme.HAZARD, "hazard")
+            else:
+                painter.block(obj.x1, obj.y1, obj.x2, obj.y2, theme.PLATFORM)
 
 
 class OpenMap(Map):
@@ -104,7 +117,7 @@ class OpenMap(Map):
 
     Subclasses fill in `self.blocks` (static Blocks) and/or `self.bodies`
     (moving things like a Swing or SlidingPlatform, which need step(),
-    collide(p) and render(canvas)).
+    collide(p) and render(painter)).
     """
 
     KILL_TOP = -120  # "way too high": well above the top of the screen
@@ -117,8 +130,8 @@ class OpenMap(Map):
     winning_score = 5
     reset_round_on_kill = True
 
-    PLATFORM_COLOR = (130, 200, 160)
-    POST_COLOR = (90, 90, 110)
+    PLATFORM_COLOR = theme.PLATFORM
+    POST_COLOR = theme.POST
 
     def __init__(self):
         self.blocks = []
@@ -148,11 +161,12 @@ class OpenMap(Map):
             killed |= bool(body.collide(p))
         return killed or self.out_of_bounds(p)
 
-    def render(self, canvas):
+    def render(self, painter):
+        painter.danger_edges()
         for body in self.bodies:
-            body.render(canvas)
+            body.render(painter)
         for block in self.blocks:
-            block.render(canvas)
+            block.render(painter)
 
 
 class PlatformMap(OpenMap):
@@ -195,7 +209,6 @@ class SliderMap(OpenMap):
     spawn_box = (LEFT + 10, RIGHT - 10, 200, TOP - 2)
     n_extra_obs = 2  # platform offset and velocity
 
-    RAIL_COLOR = (170, 170, 185)
 
     def __init__(self):
         super().__init__()
@@ -212,22 +225,20 @@ class SliderMap(OpenMap):
         ], mass=6.0, travel=self.TRAVEL)
         self.bodies = [self.platform]
 
+    def safe_x_range(self):
+        return self.LEFT + self.platform.offset, self.RIGHT + self.platform.offset
+
     def extra_obs(self):
         return np.clip(np.array([
             self.platform.offset / self.TRAVEL,
             self.platform.vx / self.platform.max_speed,
         ]), -1, 1)
 
-    def render(self, canvas):
-        import pygame
+    def render(self, painter):
         # The rail the platform slides along
-        y = self.TOP + self.THICKNESS + 6
-        x1 = self.LEFT - self.TRAVEL
-        x2 = self.RIGHT + self.TRAVEL
-        pygame.draw.line(canvas, self.RAIL_COLOR, (x1, y), (x2, y), 3)
-        for x in (x1, x2):
-            pygame.draw.line(canvas, self.RAIL_COLOR, (x, y - 6), (x, y + 6), 3)
-        super().render(canvas)
+        painter.rail(self.LEFT - self.TRAVEL, self.RIGHT + self.TRAVEL,
+                     self.TOP + self.THICKNESS + 10)
+        super().render(painter)
 
 
 class SwingMap(OpenMap):
@@ -257,9 +268,9 @@ class SwingMap(OpenMap):
     spawn_box = (FLOOR_LEFT + 20, FLOOR_RIGHT - 20, 290, FLOOR_Y - 2)
     n_extra_obs = 3  # floor depth, swing angle, swing angular velocity
 
-    FLOOR_COLOR = (255, 204, 204)
-    PIT_COLOR = (200, 160, 160)
-    PAD_COLOR = (102, 204, 102)
+    FLOOR_COLOR = theme.PLATFORM
+    PIT_COLOR = theme.PIT
+    PAD_COLOR = theme.PAD
 
     def __init__(self):
         self.swing = Swing(pivot_x=arena.WIDTH / 2, pivot_y=24, length=245)

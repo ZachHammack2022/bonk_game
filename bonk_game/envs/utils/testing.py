@@ -57,8 +57,8 @@ def run_test(model1, model2, env, steps):
 
 
 CONTROLS = {
-    "first": "wasd + caps lock to go heavy",
-    "second": "the arrow keys + space to go heavy",
+    "first": "wasd + left shift to go heavy",
+    "second": "the arrow keys + space or right shift to go heavy",
 }
 
 

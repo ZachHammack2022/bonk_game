@@ -9,9 +9,11 @@ from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import DEFAULT_MAP, make_map
 from bonk_game.envs.utils.mechanics import player_collision
 
-# (up, left, down, right, heavy) keys for each human player
-P1_KEYS = (pygame.K_w, pygame.K_a, pygame.K_s, pygame.K_d, pygame.K_CAPSLOCK)
-P2_KEYS = (pygame.K_UP, pygame.K_LEFT, pygame.K_DOWN, pygame.K_RIGHT, pygame.K_SPACE)
+# (up, left, down, right, heavy) keys for each human player; any key in a
+# group works. Caps Lock isn't used: on macOS it reads as held while toggled.
+P1_KEYS = ((pygame.K_w,), (pygame.K_a,), (pygame.K_s,), (pygame.K_d,), (pygame.K_LSHIFT,))
+P2_KEYS = ((pygame.K_UP,), (pygame.K_LEFT,), (pygame.K_DOWN,), (pygame.K_RIGHT,),
+           (pygame.K_RSHIFT, pygame.K_SPACE))
 
 
 class TestEnv():
@@ -88,15 +90,19 @@ class TestEnv():
 
     def check_keydown(self, keys, agent):
         up, left, down, right, heavy = P2_KEYS if agent is self.p2 else P1_KEYS
-        if keys[up]:
+
+        def held(group):
+            return any(keys[k] for k in group)
+
+        if held(up):
             agent.move_up(arena.FORCE)
-        if keys[left]:
+        if held(left):
             agent.move_left(arena.FORCE)
-        if keys[down]:
+        if held(down):
             agent.move_down(arena.FORCE)
-        if keys[right]:
+        if held(right):
             agent.move_right(arena.FORCE)
-        if keys[heavy]:
+        if held(heavy):
             agent.make_heavy()
 
     def apply_forces(self, actions):
