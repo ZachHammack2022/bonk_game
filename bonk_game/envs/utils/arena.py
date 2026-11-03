@@ -116,7 +116,7 @@ class Renderer:
             pygame.display.set_caption(self.caption)
             self.clock = pygame.time.Clock()
 
-    def draw(self, players, game_map, scores=None):
+    def draw(self, players, game_map, scores=None, timer=None):
         self._ensure_init()
         from bonk_game.ui.painter import Painter
         from bonk_game.ui import theme
@@ -125,6 +125,8 @@ class Renderer:
         painter = Painter(canvas)
         painter.background()
         game_map.render(painter)
+        if timer is not None:
+            painter.closing_walls(timer.walls(), WIDTH, HEIGHT, timer.steps / 30)
         for p in players:
             painter.player(p)
 

@@ -303,9 +303,12 @@ class Sim:
             actions = None
 
         before = list(env.scores)
+        was_sudden = env.timer.sudden_death
         self.obs, self.done, _ = env.step(actions)
 
         events = []
+        if env.timer.sudden_death and not was_sudden:
+            events.append(("sudden_death",))
         for i in (0, 1):
             if env.scores[i] > before[i]:
                 vx, vy = pre[1 - i][0], pre[1 - i][1]
@@ -325,6 +328,8 @@ class Sim:
         painter = Painter(surface, scale, shake)
         painter.background()
         self.map.render(painter)
+        timer = self.env.timer
+        painter.closing_walls(timer.walls(), W, H, timer.steps / PHYSICS_HZ)
         if effects:
             effects.draw(painter)
         for p in self.env.players:
@@ -807,6 +812,10 @@ class MatchScene(Scene):
             else:
                 self.banner = (f"+1 {name}", color, self.t)
                 self.effects.ring(victim.x, victim.y, victim.color)
+        elif ev[0] == "sudden_death":
+            self.banner = ("Sudden death!", theme.DANGER, self.t)
+            self.effects.kick(6)
+            self.app.sound.play("go")
         elif ev[0] == "hit":
             pos, strength = ev[1], ev[2]
             self.effects.burst(*pos, theme.TEXT, n=int(4 + strength), speed=strength * 0.5, size=3, life=0.35)
@@ -849,6 +858,8 @@ class MatchScene(Scene):
             ui.text(f"{MAPS[self.map_name].title}  ·  first to {self.first_to}", 11, theme.TEXT_DIM,
                     (W / 2, 24), bold=False, shadow=False, alpha=int(255 * min(1.0, 5 - self.t)))
 
+        self.draw_timer(ui)
+
         # Control hints for human players at the start
         if any(self.humans) and self.t < 6:
             alpha = int(255 * min(1.0, (6 - self.t) / 1.0))
@@ -861,6 +872,25 @@ class MatchScene(Scene):
             w = ui.text_width(hint, 12, bold=False) + 28
             ui.panel((W / 2 - w / 2, H - 38, w, 26), alpha=int(190 * alpha / 255), radius=13, border=None)
             ui.text(hint, 12, theme.TEXT_DIM, (W / 2, H - 25), bold=False, shadow=False, alpha=alpha)
+
+    def draw_timer(self, ui):
+        timer = self.sim.env.timer
+        if not timer.enabled:
+            return
+        # Shares the bottom of the screen with the control hints, so it
+        # fades in as they fade out
+        alpha = 255 if not any(self.humans) else int(255 * max(0.0, min(1.0, self.t - 5.5)))
+        if alpha <= 0:
+            return
+        if timer.sudden_death:
+            text, color = "SUDDEN DEATH", theme.DANGER
+        else:
+            left = math.ceil(timer.remaining)
+            text = f"{left // 60}:{left % 60:02d}"
+            color = theme.ACCENT if left <= 10 else theme.TEXT_DIM
+        w = ui.text_width(text, 13) + 28
+        ui.panel((W / 2 - w / 2, H - 36, w, 24), alpha=int(190 * alpha / 255), radius=12, border=None)
+        ui.text(text, 13, color, (W / 2, H - 24), shadow=False, alpha=alpha)
 
     def draw_center(self, ui):
         if self.phase == "countdown":

@@ -8,6 +8,7 @@ import pygame
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import DEFAULT_MAP, make_map
 from bonk_game.envs.utils.mechanics import player_collision
+from bonk_game.envs.utils.timer import RoundTimer
 
 # (up, left, down, right, heavy) keys for each human player; any key in a
 # group works. Caps Lock isn't used: on macOS it reads as held while toggled.
@@ -23,18 +24,24 @@ class TestEnv():
     control. When a player dies the opponent scores; depending on the map
     either the dead player respawns or the whole round restarts. The first
     to the winning score (the map's default unless given) wins.
+
+    Rounds have a time limit (the map's round_time unless given; 0 turns it
+    off). When it runs out, sudden death walls close in from the sides.
     """
 
     __test__ = False  # not a pytest test class
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
-    def __init__(self, model1, model2, render_mode=None, winning_score=None, map_name=DEFAULT_MAP):
+    def __init__(self, model1, model2, render_mode=None, winning_score=None, map_name=DEFAULT_MAP,
+                 round_time=None):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.map = make_map(map_name)
         self.winning_score = winning_score or self.map.winning_score
         self.obs_size = self.map.obs_size
+        self.timer = RoundTimer(self.map.round_time if round_time is None else round_time,
+                                self.map.sudden_death_start)
 
         self.user1 = model1 == "user"
         self.user2 = model2 == "user"
@@ -64,7 +71,8 @@ class TestEnv():
         return np.concatenate((p1, p2, extra, p2, p1, extra), axis=0)
 
     def check_collisions(self):
-        died1, died2 = self.map.collide(self.p1), self.map.collide(self.p2)
+        died1 = self.map.collide(self.p1) or self.timer.kills(self.p1)
+        died2 = self.map.collide(self.p2) or self.timer.kills(self.p2)
         if died1:
             self.p2.score += 1
         if died2:
@@ -78,6 +86,8 @@ class TestEnv():
                 return
         else:
             # Respawn just the dead player, away from the opponent
+            if died1 or died2:
+                self.timer.reset()
             if died1:
                 arena.respawn_apart(self.p1, [self.p2])
             if died2:
@@ -86,6 +96,7 @@ class TestEnv():
 
     def new_round(self):
         self.map.reset()
+        self.timer.reset()
         arena.reset_players(self.players)
 
     def check_keydown(self, keys, agent):
@@ -135,6 +146,7 @@ class TestEnv():
     def step(self, actions):
         self.apply_forces(actions)
         self.map.step()
+        self.timer.step()
         self.check_collisions()
         self.p1.update()
         self.p2.update()
@@ -153,7 +165,7 @@ class TestEnv():
             return self._render_frame()
 
     def _render_frame(self):
-        return self.renderer.draw(self.players, self.map, self.scores)
+        return self.renderer.draw(self.players, self.map, self.scores, self.timer)
 
     def close(self):
         self.renderer.close()

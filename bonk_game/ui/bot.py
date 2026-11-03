@@ -43,11 +43,21 @@ class Bot:
         self.last = self.think()
         return self.last, None
 
+    def walls(self):
+        timer = getattr(self.env, "timer", None)
+        return timer.walls() if timer is not None else None
+
     # ------------------------------------------------------------------
     def think(self):
         m = self.env.map
         me, them = self.me, self.them
         lo, hi = m.safe_x_range()
+        walls = self.walls()
+        if walls is not None:
+            # Sudden death: the walls are the new edges
+            lo, hi = max(lo, walls[0] + me.r), min(hi, walls[1] - me.r)
+            if lo > hi:
+                lo = hi = (walls[0] + walls[1]) / 2
         centre = (lo + hi) / 2
 
         if not me.can_fly and hasattr(m, "swing") and m.steps > m.SINK_DELAY - 45:

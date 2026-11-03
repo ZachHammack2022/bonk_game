@@ -163,6 +163,22 @@ class Painter:
             self.circle(x, a[1], self.ln(5), theme.RAIL)
             self.circle(x, a[1], self.ln(2), darken(theme.RAIL, 0.4))
 
+    def closing_walls(self, walls, world_w, world_h, t=0.0):
+        """Sudden-death walls: red zones from the screen edges in to x=walls."""
+        if walls is None:
+            return
+        left, right = walls
+        pulse = 0.5 + 0.5 * math.sin(t * 8)
+        zone = pygame.Surface(self.surface.get_size(), pygame.SRCALPHA)
+        fill = (*theme.DANGER, int(70 + 30 * pulse))
+        for x1, x2 in ((-40, left), (right, world_w + 40)):
+            if x2 > x1:
+                zone.fill(fill, self.rect(x1, -40, x2, world_h + 40))
+        self.surface.blit(zone, (0, 0))
+        glow = lighten(theme.DANGER, 0.25 + 0.25 * pulse)
+        for x in (left, right):
+            self.line((x, -40), (x, world_h + 40), glow, 3)
+
     # --- actors -------------------------------------------------------------
     def player(self, p, color=None):
         color = color or p.color
