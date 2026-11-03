@@ -15,6 +15,7 @@ from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS, make_map
 from bonk_game.ui import theme
 from bonk_game.ui.bot import Bot
+from bonk_game.ui.interp import Interpolator
 from bonk_game.ui.painter import Painter
 from bonk_game.ui.sound import Sound
 
@@ -281,6 +282,7 @@ class Sim:
         ]
         self.obs = self.env.reset()
         self.done = False
+        self.interp = Interpolator(self.env)
 
     @property
     def map(self):
@@ -304,6 +306,7 @@ class Sim:
 
         before = list(env.scores)
         was_sudden = env.timer.sudden_death
+        self.interp.before_step()
         self.obs, self.done, _ = env.step(actions)
 
         events = []
@@ -313,6 +316,8 @@ class Sim:
             if env.scores[i] > before[i]:
                 vx, vy = pre[1 - i][0], pre[1 - i][1]
                 events.append(("score", i, (min(max(vx, 12), W - 12), min(max(vy, 12), H - 12))))
+        if any(e[0] == "score" for e in events) and env.map.reset_round_on_kill:
+            self.interp.forget()  # everything was just put back for a new round
         if not events:
             (x1, y1, vx1, vy1), (x2, y2, vx2, vy2) = pre
             p, q = env.players
@@ -324,7 +329,13 @@ class Sim:
                     events.append(("hit", ((p.x + q.x) / 2, (p.y + q.y) / 2), closing))
         return events
 
-    def draw(self, surface, scale, shake=(0, 0), effects=None):
+    def draw(self, surface, scale, shake=(0, 0), effects=None, alpha=1.0):
+        """alpha: how far into the next physics step we are (0-1), to draw
+        positions blended between the last two steps."""
+        with self.interp.blended(alpha):
+            self._draw(surface, scale, shake, effects)
+
+    def _draw(self, surface, scale, shake, effects):
         painter = Painter(surface, scale, shake)
         painter.background()
         self.map.render(painter)
@@ -395,7 +406,7 @@ class TitleScene(Scene):
         self.effects.update(dt)
 
     def draw(self, ui):
-        self.demo.draw(ui.surface, ui.s, effects=self.effects)
+        self.demo.draw(ui.surface, ui.s, effects=self.effects, alpha=self.acc * PHYSICS_HZ)
         ui.dim(115)
 
         # Logo: "bonk" with the o as a ball
@@ -824,7 +835,8 @@ class MatchScene(Scene):
 
     # --- drawing ------------------------------------------------------------
     def draw_world(self, ui):
-        self.sim.draw(ui.surface, ui.s, self.effects.offset(ui.s), self.effects)
+        alpha = self.acc * PHYSICS_HZ if self.phase == "play" else 1.0
+        self.sim.draw(ui.surface, ui.s, self.effects.offset(ui.s), self.effects, alpha)
 
     def draw_hud(self, ui):
         env = self.sim.env
