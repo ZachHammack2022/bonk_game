@@ -143,6 +143,10 @@ function check(cond, what) {
     await guest.evaluate(() => { window.__pads[0].axes = [0, 0, 0, 0]; });
     await guest.waitForFunction(() => bonkDebug.net.inputs.at(-1).b.join("") === "00000");
     check(true, "a gamepad's stick moves your ball");
+    check(await guest.evaluate(() => {
+      const S = bonkDebug.app.last;
+      return !!S && S.you.length === 3 && S.players.length === bonkDebug.app.match.slots.length;
+    }), "the match is rebuilt from changes, with your own speeds");
     check(await guest.evaluate(() => bonkDebug.app.match.slots[1].color_name) === "Green", "the match uses the picked colour");
 
     // The guest reloads mid-match and gets their seat back

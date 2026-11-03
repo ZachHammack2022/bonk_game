@@ -32,7 +32,13 @@ function predictFrom(entry, now) {
   const n = Math.min((now - arrived + rtt) / tick + 0.5, 15);
   const inputs = [];
   for (let k = 0; k <= Math.ceil(n); k++) inputs.push(buttonsAt(arrived - rtt + (k + 1) * tick));
-  return BonkPredict.predict(S.players[i], effectPhysics(M, S, i), S.level, inputs, n, M.radius);
+  return BonkPredict.predict(ownBall(S, i), effectPhysics(M, S, i), S.level, inputs, n, M.radius);
+}
+
+// Your ball as predict.js wants it: [x, y, heavy, alive, vx, vy, standing].
+// Everyone gets positions; only you get your speeds ("you").
+function ownBall(S, i) {
+  return [...S.players[i].slice(0, 4), ...(S.you || [0, 0, 0])];
 }
 
 // Your ball's physics with any power-up you're holding

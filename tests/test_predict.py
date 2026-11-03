@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from bonk_game.server.match import Match
-from bonk_game.server.scene import level_shapes, player_state
+from bonk_game.server.scene import level_shapes, player_motion, player_state
 
 NODE = shutil.which("node")
 PREDICT = Path(__file__).resolve().parent.parent / "bonk_game" / "server" / "static" / "predict.js"
@@ -43,7 +43,7 @@ def server_run(map_name, inputs, place):
     place(me)
     for _ in range(3):  # settle (land on the floor)
         m.tick()
-    start = player_state(me)
+    start = player_state(me) + player_motion(me)
     level = level_shapes(m.env.map)
     steps = []
     for b in inputs:

@@ -22,7 +22,7 @@ import traceback
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import limits, metrics, modes
+from bonk_game.server import delta, limits, metrics, modes
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
@@ -83,6 +83,7 @@ class Room:
         self.match_tokens = []     # slot -> member token (None for bots)
         self.results = None
         self.task = None
+        self.encoder = None        # the match's state messages (delta.py)
         self.banned = set()        # tokens the host removed
         self.votes = set()         # tokens that want a rematch (on the results screen)
         self.closing = False       # the server is restarting: no new matches
@@ -123,6 +124,10 @@ class Room:
             self.match.release(self.match_tokens.index(token))
         if self.match is not None:
             await m.send(self.match.describe())
+            # The others get changes since the last tick; this one needs it all
+            key = self.encoder.keyframe() if self.encoder else None
+            if key is not None:
+                await m.send(key)
         elif self.results is not None:
             await m.send(self.results)
         await self.broadcast_lobby()
@@ -217,6 +222,24 @@ class Room:
         live = self.connected
         if live:
             await asyncio.gather(*(m.send(text) for m in live), return_exceptions=True)
+
+    async def send_state(self, text, match):
+        """Everyone gets the same state, and each player their own ball's
+        speeds as well ("you": [vx, vy, standing], for predict.js). Only
+        they need those, so the others don't pay for them."""
+        live = self.connected
+        if not live:
+            return
+        slot = {t: k for k, t in enumerate(self.match_tokens) if t is not None}
+        head = text[:-1]  # the JSON object without its closing brace
+
+        def for_member(m):
+            k = slot.get(m.token)
+            if k is None:
+                return text
+            vx, vy, ground = match.motion(k)
+            return f'{head},"you":[{vx},{vy},{ground}]}}'
+        await asyncio.gather(*(m.send(for_member(m)) for m in live), return_exceptions=True)
 
     async def broadcast_lobby(self):
         await self.broadcast(self.lobby())
@@ -512,6 +535,7 @@ class Room:
     async def run_match(self):
         """Step the match 30 times a second and send everyone the state."""
         match = self.match
+        self.encoder = encoder = delta.Encoder()
         loop = asyncio.get_running_loop()
         stats = metrics.STATS
         began = loop.time()
@@ -523,9 +547,9 @@ class Room:
                 events = match.tick()
                 state = match.snapshot()
                 state["events"] = events
-                text = json.dumps(state, separators=(",", ":"))
+                text = json.dumps(encoder.encode(state), separators=(",", ":"))
                 stats.tick(time.perf_counter() - t0)
-                await self.broadcast(text)
+                await self.send_state(text, match)
                 next_t += 1 / TICK_HZ
                 delay = next_t - loop.time()
                 if delay < -0.25:
@@ -549,6 +573,7 @@ class Room:
             self.match = None
             self.match_tokens = []
             self.task = None
+            self.encoder = None
             stats.matches_finished += 1
             metrics.event("match_ended", room=self.code, why=why, ticks=match.env.steps,
                           seconds=round(loop.time() - began, 1),

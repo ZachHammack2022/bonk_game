@@ -33,8 +33,10 @@ WebSocket protocol (JSON text messages):
     {"type": "start"}
     {"type": "lobby"}                                          back from results
   server -> browser
-    welcome, lobby, match (once per match), state (30 times a second),
-    results, error, notice, restart. See room.py and match.py.
+    welcome, lobby, match (once per match), 30 times a second a state or,
+    mostly, "d" (just what changed: delta.py), results, error, notice,
+    restart. See room.py and match.py. Players' own state messages also
+    have "you": [x speed, y speed, standing] for predicting their ball.
 
 On SIGTERM the server stops taking connections, lets the matches being
 played finish (up to BONK_DRAIN_SECONDS), then sends every room "restart"
@@ -203,8 +205,11 @@ async def websocket(request):
     rooms = request.app[ROOMS]
     conns = request.app[CONNECTIONS]
     ip = limits.client_ip(request)
-    ws = web.WebSocketResponse(heartbeat=20, max_msg_size=MAX_MESSAGE)
+    # compress: permessage-deflate, if the browser asks (they do). Costs CPU
+    # per connection; BONK_WS_COMPRESS=0 trades it for more bandwidth.
+    ws = web.WebSocketResponse(heartbeat=20, max_msg_size=MAX_MESSAGE, compress=limits.WS_COMPRESS)
     await ws.prepare(request)
+    metrics.STATS.count_wire(request.transport)
     code = request.match_info["code"].upper()
     send = _sender(ws)
 

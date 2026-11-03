@@ -38,6 +38,7 @@
   // One player's state from a server "state" message entry:
   // [x, y, heavy 0-1, alive, vx, vy, grounded]
   function fromServer(p, phys) {
+    // p: [x, y, heavy, alive, vx, vy, standing] (js/net.js ownBall)
     const grounded = !!p[6];
     return {
       x: p[0], y: p[1], vx: p[4], vy: p[5],

@@ -15,7 +15,7 @@ from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.mechanics import BOUNCE
 from bonk_game.envs.utils.controls import NO_BUTTONS, Buttons
 from bonk_game.server import modes, powerups
-from bonk_game.server.scene import level_shapes, player_state
+from bonk_game.server.scene import level_shapes, player_motion, player_state
 from bonk_game.ui import theme
 from bonk_game.ui.bot import LEVEL_NAMES, Bot
 
@@ -217,6 +217,10 @@ class Match:
             **self.mode.extra_state(),
             **(self.powerups.state() if self.powerups else {}),
         }
+
+    def motion(self, i):
+        """Player i's speeds, for their own browser only (see room.py)."""
+        return player_motion(self.env.players[i])
 
     def describe(self):
         """Static info about the match, sent once when it starts."""
