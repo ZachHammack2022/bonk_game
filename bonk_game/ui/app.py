@@ -23,7 +23,7 @@ W, H = arena.WIDTH, arena.HEIGHT
 FPS = 60
 PHYSICS_HZ = 30  # the physics was tuned for 30 steps per second
 FIRST_TO_OPTIONS = [3, 5, 7, 10, 25, 50, 100]
-MAP_ORDER = ["platform", "slider", "swing", "classic"]
+MAP_ORDER = ["platform", "slider", "swing", "ramps", "classic"]  # then any other map files
 ARROWS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 
 
@@ -479,16 +479,38 @@ class HowToScene(Scene):
 class MapSelectScene(Scene):
     CARD_W, CARD_H = 300, 172
     THUMB_H = 104
+    ROW_H = CARD_H + 18
+    VISIBLE_ROWS = 2
+    VIEW = (64, 448)  # top and bottom of the scrolling area
 
     def __init__(self, app, selected=None):
         super().__init__(app)
         self.names = [n for n in MAP_ORDER if n in MAPS] + [n for n in MAPS if n not in MAP_ORDER]
         self.focus = self.names.index(selected) if selected in self.names else 0
         self.thumbs = {}
+        self.rows = (len(self.names) + 1) // 2
+        self.top_row = 0
+        self.follow_focus()
+        self.scroll = self.top_row * self.ROW_H
+
+    def follow_focus(self):
+        """Scroll so the focused card's row is on screen."""
+        row = self.focus // 2
+        if row < self.top_row:
+            self.top_row = row
+        elif row >= self.top_row + self.VISIBLE_ROWS:
+            self.top_row = row - self.VISIBLE_ROWS + 1
+
+    def update(self, dt):
+        super().update(dt)
+        target = self.top_row * self.ROW_H
+        self.scroll += (target - self.scroll) * min(1.0, dt * 14)
+        if abs(target - self.scroll) < 0.5:
+            self.scroll = target
 
     def card_pos(self, i):
         col, row = i % 2, i // 2
-        return 30 + col * (self.CARD_W + 20), 72 + row * (self.CARD_H + 18)
+        return 30 + col * (self.CARD_W + 20), 72 + row * self.ROW_H - self.scroll
 
     def thumb(self, name):
         if name not in self.thumbs:
@@ -521,13 +543,19 @@ class MapSelectScene(Scene):
                      pygame.K_UP: -2, pygame.K_w: -2, pygame.K_DOWN: 2, pygame.K_s: 2, pygame.K_TAB: 1}
             if e.key in moves:
                 self.focus = (self.focus + moves[e.key]) % n
+                self.follow_focus()
                 self.app.sound.play("move")
             elif e.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                 self.choose()
             elif e.key == pygame.K_ESCAPE:
                 self.app.go(TitleScene(self.app))
+        elif e.type == pygame.MOUSEWHEEL:
+            most = max(0, self.rows - self.VISIBLE_ROWS)
+            self.top_row = max(0, min(most, self.top_row - e.y))
         elif e.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN):
             vx, vy = self.app.to_virtual(e.pos)
+            if not self.VIEW[0] <= vy <= self.VIEW[1]:
+                return
             for i in range(n):
                 x, y = self.card_pos(i)
                 if x <= vx <= x + self.CARD_W and y <= vy <= y + self.CARD_H:
@@ -541,9 +569,14 @@ class MapSelectScene(Scene):
     def draw(self, ui):
         Painter(ui.surface, ui.s).background()
         ui.text("Choose a map", 28, theme.TEXT, (W / 2, 38))
+        top, bottom = self.VIEW
+        old_clip = ui.surface.get_clip()
+        ui.surface.set_clip(pygame.Rect(0, ui.v(top), ui.surface.get_width(), ui.v(bottom - top)))
         for i, name in enumerate(self.names):
             cls = MAPS[name]
             x, y = self.card_pos(i)
+            if y > bottom or y + self.CARD_H < top:
+                continue
             focused = i == self.focus
             lift = -3 if focused else 0
             y += lift
@@ -576,6 +609,13 @@ class MapSelectScene(Scene):
                 ui.text(chip, 10.5, theme.ACCENT if chip == "AI ready" else theme.TEXT,
                         (cx + w / 2, y + 17.5), shadow=False)
                 cx -= 6
+        ui.surface.set_clip(old_clip)
+        # Little arrows when more maps are above or below
+        for show, y, d in ((self.scroll > 1, 66, -1),
+                           (self.scroll < (self.rows - self.VISIBLE_ROWS) * self.ROW_H - 1, 439, 1)):
+            if show:
+                a, b, c = (W / 2 - 7, y), (W / 2 + 7, y), (W / 2, y + 6 * d)
+                pygame.draw.polygon(ui.surface, theme.TEXT_DIM, [(ui.v(px), ui.v(py)) for px, py in (a, b, c)])
         ui.text("Arrows to choose  ·  Enter to select  ·  Esc to go back", 12, theme.TEXT_FAINT,
                 (W / 2, 462), bold=False, shadow=False)
 

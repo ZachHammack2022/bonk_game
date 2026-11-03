@@ -1,6 +1,8 @@
 """Maps. Each map owns its level geometry, how players die, and its drawing.
 
-To add a map: subclass Map, then add it to MAPS at the bottom of this file.
+To add a map: write a JSON file (see bonk_game/envs/utils/map_files.py and
+bonk_game/maps/), or subclass Map and add it to MAPS at the bottom of this
+file.
 It is automatically available in the main menu, the tournament
 (`--map <name>`), and as the gym env `bonk_game/bonk-<name>-v0`.
 """
@@ -338,6 +340,11 @@ class SwingMap(OpenMap):
 
 MAPS = {m.name: m for m in (ClassicMap, PlatformMap, SliderMap, SwingMap)}
 DEFAULT_MAP = "classic"
+
+# Maps from JSON files (bonk_game/maps/, ./maps/, $BONK_MAPS); see map_files.py
+from bonk_game.envs.utils.map_files import load_all as _load_map_files  # noqa: E402
+
+MAPS.update(_load_map_files(MAPS))
 
 
 def make_map(name=DEFAULT_MAP):

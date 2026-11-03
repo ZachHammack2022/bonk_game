@@ -27,6 +27,8 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 
 **Sliding Platform**: a platform with an outward-leaning bumper post at each end that slides left and right on a rail. Every hit and every roll shoves it, so you can rock it back and forth to build momentum and fling your opponent. Going heavy shoves it much harder. Jump over a post to leave (or get thrown over one).
 
+**Ramp Rumble**: a halfpipe with springy bumpers overhead, made from a map file (see "Making maps" below). Ride the ramps and bounce in from above.
+
 **Sinking Swing**: a floor with a hole in the middle, a launch pad at the bottom of the hole, and a swing hanging above it all.
 - After about 5 seconds the floor (with the hole and pad) starts sinking, and eventually drops off the screen.
 - Fall through the hole and the pad fires you back up.
@@ -34,9 +36,46 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 
 **Round timer**: rounds last 45 seconds. On Classic, which has no rounds, you get 30 seconds to score. When time runs out it's **sudden death**: red walls close in from both sides, and touching one kills you. Whoever gets pushed into a wall first loses. Change the limit with `round_time` on the map class (0 turns it off).
 
-### Adding a map
-Subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. It then shows up in the main menu, in `tournament.py --map <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. `bonk_game/envs/utils/bodies.py` has building blocks: rectangles (`Block`), rotated rectangles for slopes and leaning posts (`OrientedBlock`), round bumpers (`Bumper`), a platform that slides when pushed, and a swing. Pieces can move, bounce, have friction, kill, or launch players (pinball-style for bumpers).
+### Making maps
+Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `maps/` folder next to where you run the game, or in any folder listed in the `BONK_MAPS` environment variable is loaded at startup. It shows up in the menu, in `tournament.py --map <name>`, in `main.py --train <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. A file with a mistake is skipped with a message saying exactly what's wrong. To check one yourself, run `python -m bonk_game.check_map my_map.json`.
 
+`bonk_game/maps/ramps.json` is a complete example. The screen is 680 x 480, with y pointing down, and players are 40 px across.
+
+```json
+{
+  "name": "my_map",                 // lowercase, used in env and folder names
+  "title": "My Map",                // shown in the menu (optional)
+  "description": "One line pitch",  // optional
+  "rules": {                        // all optional
+    "movement": "jump",             // "jump" or "fly"
+    "first_to": 5,
+    "round_time": 45,               // seconds before sudden death; 0 = off
+    "on_death": "new_round",        // or "respawn" (only the dead player)
+    "jump_speed": 23.5, "max_speed": 28
+  },
+  "spawn": [260, 420, 200, 328],    // [left, right, top, bottom] players spawn in
+  "pieces": [ ... ]
+}
+```
+
+| Piece | Shape keys |
+|---|---|
+| `block` | `"rect": [left, top, right, bottom]` |
+| `slope` | `"center": [x, y], "size": [w, h], "angle": degrees` (positive is clockwise, so the surface rises to the left) |
+| `post` | `"foot": [x, y], "size": [w, h], "lean": degrees` (positive leans right) |
+| `bumper` | `"center": [x, y], "radius": r` |
+| `swing` | `"pivot": [x, y], "length": 245, "seat_width": 96` |
+| `slider` | `"travel": 140, "mass": 6, "rail": true, "pieces": [blocks, slopes, posts, bumpers that move together]` |
+
+`block`, `slope`, `post` and `bumper` also take these options:
+- `"bounce"` (0-1.5, default 0.3) and `"friction"` (0-1, default 0.04);
+- `"launch"`: a speed. Pads fire you out of their top face; bumpers fire you away from their centre, like pinball;
+- `"kill": true`;
+- `"color"`: one of `platform`, `post`, `pad`, `pit`, `wood`, `hazard`, `rail`, or `[r, g, b]`.
+
+The comments in the example above are only there to explain it; JSON files can't contain comments.
+
+For things a file can't describe (like Sinking Swing's sinking floor), subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. The pieces live in `bonk_game/envs/utils/bodies.py`.
 ## To run
 1. Install Python 3.10 or newer
 2. Clone repo (if you're unfamiliar, click the green button above and download the zip. Then click the zip to open the files once you download it.)

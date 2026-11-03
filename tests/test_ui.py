@@ -93,3 +93,19 @@ def test_bot_beats_a_player_who_does_nothing():
         if done:
             break
     assert env.scores[1] == 3
+
+
+def test_map_select_scrolls_to_every_map(app):
+    from bonk_game.ui import app as A
+    scene = A.MapSelectScene(app)
+    app.scene = scene
+    for i in range(len(scene.names) - 1):
+        key(app, pygame.K_TAB)
+        tick(app, 0.4)
+        x, y = scene.card_pos(scene.focus)
+        top, bottom = scene.VIEW
+        assert top - 4 <= y and y + scene.CARD_H <= bottom, scene.names[scene.focus]
+    assert scene.focus == len(scene.names) - 1
+    key(app, pygame.K_TAB)  # wraps to the first map
+    tick(app, 0.6)
+    assert scene.focus == 0 and scene.scroll == 0
