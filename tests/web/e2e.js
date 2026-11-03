@@ -85,6 +85,11 @@ function check(cond, what) {
 
     // A friend opens the link: asked for a name, then joins
     const guest = await open("guest");
+    // A pretend controller the test can press (navigator.getGamepads)
+    await guest.addInitScript(() => {
+      window.__pads = [];
+      navigator.getGamepads = () => window.__pads;
+    });
     await guest.goto(url);
     await guest.fill("#name", "Bob");
     await guest.click("#join-form button");
@@ -120,6 +125,17 @@ function check(cond, what) {
     await host.waitForTimeout(150);
     await shot(guest, "match");
     await guest.keyboard.up("ArrowRight");
+
+    // A controller: push the stick left, then let go
+    await guest.bringToFront();
+    await guest.evaluate(() => {
+      const idle = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
+      window.__pads = [{ id: "Test pad", buttons: idle, axes: [-1, 0, 0, 0] }];
+    });
+    await guest.waitForFunction(() => bonkDebug.net.inputs.at(-1).b.join("") === "01000");
+    await guest.evaluate(() => { window.__pads[0].axes = [0, 0, 0, 0]; });
+    await guest.waitForFunction(() => bonkDebug.net.inputs.at(-1).b.join("") === "00000");
+    check(true, "a gamepad's stick moves your ball");
     check(await guest.evaluate(() => bonkDebug.app.match.slots[1].color_name) === "Green", "the match uses the picked colour");
 
     // The guest reloads mid-match and gets their seat back
@@ -141,10 +157,18 @@ function check(cond, what) {
     await guest.waitForSelector("#results:not(.hidden)");
     await host.click("#vote");
     await guest.waitForFunction(() => /1\/2/.test(document.querySelector("#vote").textContent));
-    await guest.click("#vote");
+    // The guest votes with the controller's A button. (Gamepads are read
+    // each animation frame, which only runs in the tab in front.)
+    await guest.bringToFront();
+    await guest.evaluate(() => {
+      const buttons = Array.from({ length: 17 }, (_, i) => ({ pressed: i === 0, value: i === 0 ? 1 : 0 }));
+      window.__pads = [{ id: "Test pad", buttons, axes: [0, 0, 0, 0] }];
+    });
+    await guest.waitForFunction(() => bonkDebug.app.lobby.votes.length === 2 || bonkDebug.app.match && !bonkDebug.app.results);
+    await guest.evaluate(() => { window.__pads = []; });
     await host.waitForSelector("#results.hidden", { state: "attached" });
     await host.waitForFunction(() => bonkDebug.app.match && !bonkDebug.app.results);
-    check(true, "a rematch starts once everyone votes");
+    check(true, "a rematch starts once everyone votes (the guest with a controller)");
     await host.waitForSelector("#results:not(.hidden)", { timeout: 120000 });
     await host.click("#to-lobby");
     await host.waitForSelector("#lobby:not(.hidden)");

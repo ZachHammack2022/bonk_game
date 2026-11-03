@@ -28,9 +28,12 @@ A knockout counts for whoever last hit you in the past 3 seconds; if nobody did,
 
 Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
 
-| Move / jump | Go heavy |
-|---|---|
-| W A S D or the arrow keys | Space or Shift |
+| | Move / jump | Go heavy |
+|---|---|---|
+| Keyboard | W A S D or the arrow keys | Space or Shift |
+| Gamepad | left stick or d-pad; A jumps | B, X, a bumper or a trigger |
+
+On a gamepad, Y waves, Start opens settings, and A votes to play again on the results screen. Any controller the browser knows (Xbox, PlayStation, Switch Pro and most others) works; press a button on it once the page is open.
 
 - On phones and tablets there are on-screen buttons. M mutes.
 - Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it with a slow connection, add `?lag=150` to the page address (150 ms of fake delay); `?predict=0` turns prediction off for comparison.
