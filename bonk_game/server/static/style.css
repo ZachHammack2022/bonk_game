@@ -184,6 +184,7 @@ body.is-host .guest-only { display: none !important; }
 .status { top: 12px; }
 .toast { bottom: 16px; }
 .toast.error { border-color: var(--danger); }
+.netsim { position: fixed; top: 6px; right: 8px; font-size: 11px; color: var(--accent); opacity: 0.8; pointer-events: none; }
 
 .seat .ball.pick { cursor: pointer; outline: 2px dashed rgba(255, 209, 102, 0.6); outline-offset: 2px; }
 .picker { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--panel-light); border-radius: 10px; }

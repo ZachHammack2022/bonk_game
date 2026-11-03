@@ -36,7 +36,7 @@ Going **heavy** makes you 5x heavier for a moment, so you hit harder and get kno
 On a gamepad, Y waves, Start opens settings, and A votes to play again on the results screen. Any controller the browser knows (Xbox, PlayStation, Switch Pro and most others) works; press a button on it once the page is open.
 
 - On phones and tablets there are on-screen buttons. M mutes.
-- Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it with a slow connection, add `?lag=150` to the page address (150 ms of fake delay); `?predict=0` turns prediction off for comparison.
+- Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it on a worse connection, add `?net=mobile` to the page address (see [Simulating bad networks](#simulating-bad-networks)); `?predict=0` turns prediction off for comparison.
 - If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
 - People who join during a match watch it and play in the next one.
 - **Your ball:** pick a favourite colour and a pattern (stripes, dots, eyes and more) with **Customize** on the home page, or by clicking your ball in the lobby. They're saved in your browser (no sign-up needed) and come with you into every room; you get your colour whenever it's free.
@@ -93,6 +93,31 @@ A playtest session:
 2. Play a few full matches on different maps and modes, with and without bots and power-ups. Try a phone in portrait and landscape, and walk away from the Wi-Fi.
 3. Ask everyone to pick how each match felt, and to say in the note anything that felt wrong: controls slow to respond, your ball jumping back (rubber-banding), others' balls stuttering, buttons hard to hit.
 4. Write it up with `playtest_report` and add it, with what people said, to the tuning issue.
+
+### Simulating bad networks
+To see how the game plays on a worse connection without leaving your desk, add `?net=` to the page address:
+
+| `?net=` | round trip added | jitter | stalls | like |
+|---|---|---|---|---|
+| `wifi` | 30 ms | ±15 ms | 150 ms, every ~30 s | a decent home connection |
+| `mobile` | 80 ms | ±40 ms | 400 ms, every ~15 s | a phone on 4G |
+| `far` | 180 ms | ±10 ms | none | another continent, wired |
+| `bad` | 150 ms | ±80 ms | 800 ms, every ~8 s | weak signal |
+
+Or set each part yourself: `?lag=150&jitter=40&stall=400&stall_every=10` (`?seed=7` gives the same "random" network every time). Messages stay in order, as over a real WebSocket: in a stall nothing arrives, then everything held up arrives at once, which is what a lost packet does. The page says what it's simulating in the top right corner, and playtest reports say so too.
+
+`node tests/web/network.js` plays a match in a real browser on each of these and prints what the playtest report saw (it needs Playwright, as the browser test does). Before any tuning, against two Hard bots on Platform:
+
+| network | ping median / p95 | late states /min | worst gap | frames frozen | your ball corrected >6 px /min | >20 px /min | worst correction |
+|---|---|---|---|---|---|---|---|
+| normal | 1 / 1 ms | 0.0 | 94 ms | 0.1% | 21.9 | 11.9 | 72 px |
+| `wifi` | 56 / 75 ms | 0.0 | 78 ms | 1.8% | 89.9 | 20.0 | 150 px |
+| `mobile` | 126 / 435 ms | 28.9 | 142 ms | 12.1% | 225.7 | 65.6 | 241 px |
+| `far` | 194 / 206 ms | 0.0 | 77 ms | 0.8% | 81.8 | 17.9 | 312 px |
+| `bad` | 284 / 633 ms | 129.6 | 718 ms | 32.4% | 182.6 | 76.6 | 463 px |
+
+- **Frames frozen** is how often the browser had no newer state to move toward, so every ball stood still for a frame. Anything over a few percent looks like stutter: the 50 ms the browser draws behind the server isn't enough for jitter and stalls.
+- **Corrections** are how far your own ball had to be moved when the server's answer came back (small ones fade in over 0.1 s). With no lag at all, they're bots bumping you, which your browser can't predict; more lag means each bump is found out later and is bigger.
 
 ### How big a server?
 `python -m bonk_game.server.load_test --sockets` runs more and more rooms of 10 at once over real WebSockets until the server can't keep up, and prints what it used. The "browsers" ask for compression, as real ones do. Below: a 4-core cloud VM (the server is one process, so it uses one core), bots playing all 10 balls on Grand Stage.
@@ -238,4 +263,4 @@ node tests/web/e2e.js
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
 - `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
 - `Dockerfile`, `fly.toml`, `deploy/fly.sh`: hosting the web server (on Fly.io, or anywhere that runs Docker)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), playtest reports and their write-up (`playtest.py`, `playtest_report.py`, and `static/js/report.js`), checking a deployed server (`smoke.py`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), playtest reports and their write-up (`playtest.py`, `playtest_report.py`, and `static/js/report.js`), checking a deployed server (`smoke.py`), pretending the network is worse (`static/netsim.js`, measured by `tests/web/network.js`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)
