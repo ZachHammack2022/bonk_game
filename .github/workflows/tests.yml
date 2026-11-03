@@ -189,3 +189,25 @@ jobs:
           for r in $RESULTS; do
             case "$r" in success|skipped) ;; *) echo "A job $r"; exit 1 ;; esac
           done
+
+  merge-ready:
+    # The check main requires: every job ran (not just the ones this change
+    # needed) and passed. On a pull request that means the "full-ci" label.
+    needs: [changes, test, training, web]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Everything ran and passed
+        env:
+          EVENT: ${{ github.event_name }}
+          FULL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          if [ "$EVENT" = "pull_request" ] && [ "$FULL" != "true" ]; then
+            echo "::error::Only the jobs this change needs ran. Add the full-ci label to run everything before merging."
+            exit 1
+          fi
+          for r in $RESULTS; do
+            [ "$r" = "success" ] || { echo "A job $r"; exit 1; }
+          done
