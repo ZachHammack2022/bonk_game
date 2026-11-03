@@ -1,24 +1,9 @@
 [![tests](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml/badge.svg)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml)
 
-This is a working version of bonk.io, a popular online physics-based platform game. This was created using pygame, mostly from scratch aside from the collision functions. This environment supports single agent RL using Gymnasium and Stable Baselines 3.
-
-There are several maps and 2 to 10 players per match: you, friends online, the built-in bot, and trained AI agents.
-
-## How it plays
-Run `python3 main.py` to open the game. Pick a map, choose how many players (2 to 10) and who controls each one (you, the built-in bot at Easy, Medium or Hard, or any AI agents you've trained for that map), and pick how many points win.
-
-It's a free-for-all: every ball tries to knock the others out. On most maps a ball that's knocked out sits out the rest of the round, and the last one standing takes it. (On Classic, where you respawn, the point goes to whoever last hit you.) Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
-
-| Move / jump | Go heavy |
-|---|---|
-| W A S D or the arrow keys | Space or Shift |
-
-There's one human player per computer. To play with friends, use the web version (below); in the desktop game the other players are bots or trained agents.
-
-Esc pauses, M mutes. Everything works with the mouse too.
+bonk is a tiny physics brawler, inspired by bonk.io, that you play in the browser with friends: 2 to 10 balls on a map, everyone trying to knock everyone else off. A Python server runs every match. The same physics is a Gymnasium env for training AI agents with Stable Baselines 3, and trained agents can join online matches alongside the built-in bots.
 
 ## Play online with friends
-The web server runs every match and your browser just sends your keys and draws what it gets back, so friends only need a link.
+The server runs every match; your browser just sends your keys and draws what it gets back, so friends only need a link.
 
 ```
 pip install -r requirements-server.txt
@@ -27,12 +12,37 @@ python -m bonk_game.server            # http://localhost:8000 (--port to change)
 
 Open the page, pick a name and **Create a room**. You get a 4-letter room code; **Copy invite link** and send it to friends. Whoever made the room is the host (marked ★): they pick the map, how many points win, and add bots (Easy, Medium or Hard) to fill seats, up to 10 players. Then **Start match**.
 
-- WASD or the arrow keys move, Space or Shift goes heavy. On phones and tablets there are on-screen buttons.
+It's a free-for-all. On most maps a ball that's knocked out sits out the rest of the round, and the last one standing takes it. (On Classic, where you respawn, the point goes to whoever last hit you.) Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
+
+| Move / jump | Go heavy |
+|---|---|
+| W A S D or the arrow keys | Space or Shift |
+
+- On phones and tablets there are on-screen buttons. M mutes.
+- Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it with a slow connection, add `?lag=150` to the page address (150 ms of fake delay); `?predict=0` turns prediction off for comparison.
 - If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
 - People who join during a match watch it and play in the next one.
+- Click your ball in the lobby to pick a colour. Press 1-4 (or the buttons in the corner) for emotes during a match.
+- After a match everyone can vote to play again; the next one starts when everyone has voted (or the host starts it). The host can also remove someone from the room (✕ next to their name); they can't rejoin it.
 - Trained agents can play online too: if the server has stable-baselines3 installed and agents in `./agents`, they show up next to the bots.
 
-To put it on the internet, run it on any host that supports WebSockets. The `Dockerfile` builds the server (`docker build -t bonk . && docker run -p 8000:8000 bonk`), and it reads the port from `PORT`. Rooms live in memory, so run a single instance; restarting the server ends any rooms in progress.
+### Running it on the internet
+Run it on any host that supports WebSockets. The `Dockerfile` builds the server (`docker build -t bonk . && docker run -p 8000:8000 bonk`), and it reads the port from `PORT`. Rooms live in memory, so run a single instance; restarting the server ends any rooms in progress.
+
+The server limits how much any one visitor can use. Each limit can be changed with an environment variable:
+
+| Variable | Default | |
+|---|---|---|
+| `BONK_MAX_ROOMS` | 500 | rooms open at once |
+| `BONK_ROOMS_PER_IP` | 10 | new rooms per IP per minute |
+| `BONK_MAX_MEMBERS` | 16 | people in a room, players and watchers |
+| `BONK_CONNECTIONS_PER_IP` | 20 | open connections per IP |
+| `BONK_MESSAGES_PER_SECOND` / `BONK_MESSAGE_BURST` | 60 / 120 | messages per connection; a connection that keeps going over is closed |
+
+Behind a proxy (Fly, Render, nginx), set `BONK_TRUST_PROXY=1` so the limits see each visitor's real IP rather than the proxy's.
+
+## The desktop game (for training)
+`python3 main.py` opens a local window, used for training and testing agents: try a map, and watch trained agents play against each other, the bots, or you. Pick a map, choose 2 to 10 players (you, a bot at Easy, Medium or Hard, or any agents trained for that map) and how many points win. Esc pauses.
 
 ## Maps
 You pick a map when you run `main.py`. Agents are trained separately for each map.
@@ -124,6 +134,13 @@ The tests only need a few packages, and run on every push and pull request via G
 ```
 pip install -r requirements-test.txt
 python -m pytest
+```
+
+CI also plays the web version in a real browser (two players, a full match, a reload mid-match, a phone-sized lobby):
+
+```
+npm install --no-save playwright && npx playwright install chromium
+node tests/web/e2e.js
 ```
 
 ## Code layout

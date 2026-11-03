@@ -51,9 +51,12 @@ class ShapeRecorder:
     def danger_edges(self):
         self.shapes.append({"t": "edges"})
 
-    def block(self, x1, y1, x2, y2, color, kind="solid"):
-        self.shapes.append({"t": "rect", "r": [_r(x1), _r(y1), _r(x2), _r(y2)],
-                            "c": hex_color(color), "k": kind})
+    def block(self, x1, y1, x2, y2, color, kind="solid", bounce=None, friction=None):
+        shape = {"t": "rect", "r": [_r(x1), _r(y1), _r(x2), _r(y2)], "c": hex_color(color), "k": kind}
+        if bounce is not None:
+            shape["e"] = round(bounce, 3)  # for the client's prediction (predict.js)
+            shape["fr"] = round(friction or 0.0, 3)
+        self.shapes.append(shape)
 
     def draw_block(self, block):
         # Same styling rules as Painter.draw_block
@@ -67,7 +70,8 @@ class ShapeRecorder:
                                 "f": _pts(oriented_face(block, min(3, block.h / 3))),
                                 "c": hex_color(color), "k": kind})
         else:
-            self.block(block.x1, block.y1, block.x2, block.y2, color, kind)
+            self.block(block.x1, block.y1, block.x2, block.y2, color, kind,
+                       bounce=block.restitution, friction=block.friction)
 
     def swing(self, swing):
         sx, sy = swing.seat_pos()
@@ -92,8 +96,12 @@ def level_shapes(game_map):
 
 
 def player_state(p):
-    """[x, y, how heavy 0-1, alive] for one player."""
+    """[x, y, how heavy 0-1, alive, x speed, y speed, standing on something]
+    for one player. The speeds and standing flag are for the client's
+    prediction of its own ball (predict.js)."""
     heavy = 0.0
     if p.max_m > p.min_m:
         heavy = max(0.0, min(1.0, (p.m - p.min_m) / (p.max_m - p.min_m)))
-    return [_r(p.x), _r(p.y), round(heavy, 2), 1 if p.alive else 0]
+    return [_r(p.x), _r(p.y), round(heavy, 3), 1 if p.alive else 0,
+            round(float(p.x_v), 2), round(float(p.y_v), 2), 1 if p.grounded else 0]
+

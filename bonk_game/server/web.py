@@ -32,11 +32,17 @@ import secrets
 from aiohttp import WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server.room import RoomManager
+from bonk_game.server import limits
+from bonk_game.server.room import RoomFull, RoomManager, ServerFull
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 AGENT_KINDS = ("ppo", "a2c", "dqn", "ars", "bad")
 SWEEP_EVERY = 5.0
+
+ROOMS = web.AppKey("rooms", object)
+ROOM_LIMIT = web.AppKey("room_limit", object)
+CONNECTIONS = web.AppKey("connections", dict)
+SWEEPER = web.AppKey("sweeper", object)
 MAX_MESSAGE = 4096
 
 
@@ -83,12 +89,19 @@ async def index(request):
 
 
 async def create_room(request):
-    room = request.app["rooms"].create()
+    if not request.app[ROOM_LIMIT].allow(limits.client_ip(request)):
+        return web.json_response({"error": "You're making rooms too quickly. Try again in a minute."},
+                                 status=429)
+    try:
+        room = request.app[ROOMS].create()
+    except ServerFull:
+        return web.json_response({"error": "The server is full right now. Try again later."},
+                                 status=503)
     return web.json_response({"room": room.code})
 
 
 async def room_info(request):
-    room = request.app["rooms"].get(request.match_info["code"])
+    room = request.app[ROOMS].get(request.match_info["code"])
     if room is None:
         raise web.HTTPNotFound(text="No such room")
     return web.json_response({"room": room.code, "players": len(room.connected)})
@@ -99,17 +112,27 @@ async def healthz(request):
 
 
 async def websocket(request):
-    rooms = request.app["rooms"]
+    rooms = request.app[ROOMS]
+    conns = request.app[CONNECTIONS]
+    ip = limits.client_ip(request)
     ws = web.WebSocketResponse(heartbeat=20, max_msg_size=MAX_MESSAGE)
     await ws.prepare(request)
     room = rooms.get(request.match_info["code"])
     send = _sender(ws)
-    if room is None:
-        await send({"type": "error", "message": "That room doesn't exist (or has closed).",
-                    "fatal": True})
+
+    async def refuse(text):
+        await send({"type": "error", "message": text, "fatal": True})
         await ws.close()
         return ws
 
+    if room is None:
+        return await refuse("That room doesn't exist (or has closed).")
+    if conns.get(ip, 0) >= limits.CONNECTIONS_PER_IP:
+        return await refuse("Too many connections from your network.")
+    conns[ip] = conns.get(ip, 0) + 1
+
+    bucket = limits.TokenBucket(limits.MESSAGES_PER_SECOND, limits.MESSAGE_BURST)
+    dropped = 0
     token = None
     try:
         hello = await ws.receive(timeout=10)
@@ -119,10 +142,21 @@ async def websocket(request):
         if msg.get("type") != "hello":
             return ws
         token = str(msg.get("token") or "")[:64] or secrets.token_hex(12)
-        await room.join(token, msg.get("name"), send)
+        try:
+            await room.join(token, msg.get("name"), send)
+        except RoomFull as e:
+            token = None
+            return await refuse(str(e))
 
         async for raw in ws:
             if raw.type != WSMsgType.TEXT:
+                continue
+            if not bucket.allow():
+                dropped += 1
+                if dropped > limits.MAX_DROPPED:
+                    await send({"type": "error", "message": "Disconnected for sending too much.",
+                                "fatal": True})
+                    break
                 continue
             try:
                 msg = json.loads(raw.data)
@@ -133,30 +167,35 @@ async def websocket(request):
     except (asyncio.TimeoutError, ValueError):
         pass
     finally:
+        conns[ip] -= 1
+        if not conns[ip]:
+            del conns[ip]
         if token is not None:
-            await room.disconnect(token)
+            await room.disconnect(token, send)
     return ws
 
 
 async def _sweeper(app):
     while True:
         await asyncio.sleep(SWEEP_EVERY)
-        await app["rooms"].sweep()
+        await app[ROOMS].sweep()
 
 
 async def _start_background(app):
-    app["sweeper"] = asyncio.ensure_future(_sweeper(app))
+    app[SWEEPER] = asyncio.ensure_future(_sweeper(app))
 
 
 async def _stop_background(app):
-    app["sweeper"].cancel()
-    for room in list(app["rooms"].rooms.values()):
+    app[SWEEPER].cancel()
+    for room in list(app[ROOMS].rooms.values()):
         await room.stop()
 
 
 def make_app(rooms=None):
     app = web.Application()
-    app["rooms"] = rooms or RoomManager(AgentStore())
+    app[ROOMS] = rooms or RoomManager(AgentStore())
+    app[ROOM_LIMIT] = limits.PerKey(limits.ROOMS_PER_IP / 60, limits.ROOMS_PER_IP)
+    app[CONNECTIONS] = {}  # ip -> open WebSockets
     app.router.add_get("/", index)
     app.router.add_get("/r/{code}", index)
     app.router.add_post("/api/rooms", create_room)

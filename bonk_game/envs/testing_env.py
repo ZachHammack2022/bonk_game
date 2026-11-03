@@ -43,7 +43,8 @@ class TestEnv():
     HIT_CREDIT_STEPS = 90
 
     def __init__(self, *controllers, render_mode=None, winning_score=None, map_name=DEFAULT_MAP,
-                 round_time=None):
+                 round_time=None, colors=None):
+        """colors: optional colour index (into theme.PLAYER_COLORS) per player."""
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.map = make_map(map_name)
@@ -54,7 +55,7 @@ class TestEnv():
 
         self.controllers = list(controllers)
         self.n = len(controllers)
-        self.players = list(self.map.make_players(self.n))
+        self.players = list(self.map.make_players(self.n, colors))
         self.scores = [0] * self.n
         self.last_hit = [None] * self.n  # (index of who hit them, step) per player
         self.steps = 0
