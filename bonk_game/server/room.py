@@ -22,7 +22,7 @@ import traceback
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import delta, limits, metrics, modes
+from bonk_game.server import delta, limits, metrics, modes, playtest
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
@@ -67,6 +67,8 @@ class Member:
         self.team = None        # team they picked (0 or 1) in the teams mode, if any
         self.pattern = "plain"  # pattern on their ball (PATTERNS)
         self.last_emote = 0.0
+        self.last_report = None  # when they last sent a playtest report
+        self.errors_sent = 0     # client errors logged for them
 
 
 class Room:
@@ -200,6 +202,7 @@ class Room:
             "team_colors": list(modes.TEAM_HEX),
             "team_size": modes.TEAM_SIZE,
             "team_palettes": [list(c) for c in modes.TEAM_COLORS],
+            "playtest": playtest.ENABLED,  # send playtest reports (playtest.py)
         }
 
     def lobby(self):
@@ -263,6 +266,9 @@ class Room:
             if m is not None:
                 await m.send({"type": "pong", "t": msg.get("t")})
             return
+        if kind in ("report", "client_error"):
+            self.playtest_report(token, kind, msg)
+            return
         if kind == "name":
             self.members[token].name = clean_name(msg.get("name"))
             await self.broadcast_lobby()
@@ -311,6 +317,30 @@ class Room:
                 await self.broadcast_lobby()
         elif kind == "kick":
             await self.kick(str(msg.get("id")))
+
+    def playtest_report(self, token, kind, msg):
+        """A browser says what it saw during a match, or that it hit an error
+        (see playtest.py)."""
+        m = self.members.get(token)
+        if m is None or not playtest.ENABLED:
+            return
+        where = {"room": self.code, "name": m.name, "map": self.settings["map"],
+                 "mode": self.settings["mode"]}
+        if kind == "client_error":
+            if m.errors_sent < playtest.ERRORS_PER_PERSON:
+                m.errors_sent += 1
+                playtest.REPORTS.add("client_error", {**where, **playtest.clean_error(msg)})
+            return
+        now = time.monotonic()
+        if m.last_report is not None and now - m.last_report < playtest.REPORT_EVERY:
+            return
+        m.last_report = now
+        # Reports come in on the results screen, after the match is gone
+        slots = (self.results or {}).get("slots") or []
+        if slots:
+            where["players"] = len(slots)
+            where["people"] = sum(1 for s in slots if s.get("kind") == "human")
+        playtest.REPORTS.add("playtest", {**where, **playtest.clean_report(msg)})
 
     # --- people -------------------------------------------------------------
     def pick_color(self, token, color):

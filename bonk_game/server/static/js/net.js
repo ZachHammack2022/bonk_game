@@ -9,7 +9,7 @@ const net = {
   rtt: null,                                  // smoothed round trip, ms
   inputs: [{ t: 0, b: [0, 0, 0, 0, 0] }],     // when your buttons changed
 };
-setInterval(() => { if (app.ws && app.ws.readyState === WebSocket.OPEN) send({ type: "ping", t: performance.now() }); }, 2000);
+setInterval(() => { if (app.ws && app.ws.readyState === WebSocket.OPEN) send({ type: "ping", t: performance.now() }); }, 1000);
 
 function buttonsAt(t) {
   let b = net.inputs[0].b;
@@ -75,6 +75,7 @@ function ownPosition(now, dt) {
       else {
         const [ox, oy] = predictFrom(own.base, now);
         own.offX += ox - x; own.offY += oy - y;
+        playtest.correction(Math.hypot(ox - x, oy - y));
       }
     }
     own.tick = S.tick;

@@ -13,6 +13,8 @@ Routes:
     GET  /metrics        numbers for whoever runs the server (Prometheus
                          text; ?format=json for JSON). If BONK_METRICS_TOKEN
                          is set, send it as "Authorization: Bearer <token>".
+    GET  /api/playtest   the latest playtest reports and browser errors
+                         (playtest.py; same token as /metrics)
 
 The page is served with every /static/ URL ending in ?v=<VERSION>, a hash
 of the client files, so browsers can cache them for good and still pick up
@@ -28,6 +30,8 @@ WebSocket protocol (JSON text messages):
         so you get that back (once, within room.REOPEN_GRACE seconds).
     {"type": "input", "b": [up, left, down, right, heavy]}      0/1 each, on change
     {"type": "name", "name": "Sam"}
+    {"type": "report", "ping": {...}, ...}     after a match: what it saw (playtest.py)
+    {"type": "client_error", "message": "...", "where": "draw.js:12"}
     host only:
     {"type": "settings", "map": "platform", "first_to": 5, "bots": ["bot:medium"]}
     {"type": "start"}
@@ -56,7 +60,7 @@ import traceback
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server import limits, metrics
+from bonk_game.server import limits, metrics, playtest
 from bonk_game.server.room import RoomFull, RoomManager, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -186,12 +190,25 @@ async def healthz(request):
     return web.Response(text="ok")
 
 
-async def metrics_page(request):
+def _check_token(request):
     if METRICS_TOKEN:
         given = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not hmac.compare_digest(given.encode(), METRICS_TOKEN.encode()):
             raise web.HTTPUnauthorized(text="Send the metrics token.")
+
+
+async def playtest_page(request):
+    """The latest playtest reports and browser errors (playtest.py)."""
+    _check_token(request)
+    return web.json_response({"version": VERSION, "items": list(playtest.REPORTS.items)},
+                             headers={"Cache-Control": "no-store"})
+
+
+async def metrics_page(request):
+    _check_token(request)
     snap = metrics.STATS.snapshot(request.app[ROOMS])
+    snap["playtest_reports_total"] = playtest.REPORTS.reports
+    snap["client_errors_total"] = playtest.REPORTS.client_errors
     snap["version"] = VERSION
     headers = {"Cache-Control": "no-store"}
     if request.query.get("format") == "json":
@@ -329,6 +346,7 @@ def make_app(rooms=None):
     app.router.add_get("/ws/{code}", websocket)
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/metrics", metrics_page)
+    app.router.add_get("/api/playtest", playtest_page)
     app.router.add_static("/static/", STATIC)
     app.on_startup.append(_start_background)
     app.on_shutdown.append(_shutdown)

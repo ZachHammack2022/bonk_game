@@ -46,7 +46,19 @@ On a gamepad, Y waves, Start opens settings, and A votes to play again on the re
 - Trained agents can play online too: if the server has stable-baselines3 installed and agents in `./agents`, they show up next to the bots.
 
 ### Running it on the internet
-Run it on any host that supports WebSockets. The `Dockerfile` builds the server (`docker build -t bonk . && docker run -p 8000:8000 bonk`), and it reads the port from `PORT`. Rooms live in memory, so run a single instance.
+Run it on any host that supports WebSockets. The `Dockerfile` builds the server (`docker build -t bonk . && docker run -p 8000:8000 bonk`), and it reads the port from `PORT`. Rooms live in memory, so run a single instance. Serve it over HTTPS: the page then connects with `wss://` by itself.
+
+**Hosting it on Fly.io** (what `fly.toml` is set up for). [Install flyctl](https://fly.io/docs/flyctl/install/) and make a Fly account, then:
+
+```
+./deploy/fly.sh bonk-yourname ord     # app name (it's in the address), then a region
+```
+
+Pick the region nearest your players (`fly platform regions` lists them: `iad` Virginia, `ord` Chicago, `lax` Los Angeles, `lhr` London, `fra` Frankfurt…). The first run makes the app and prints a metrics token; keep it. Every run builds the Dockerfile, deploys it to one small machine (`shared-cpu-1x`, 512 MB, about 10 full rooms), and runs the smoke test against `https://bonk-yourname.fly.dev`, which is the link to send friends. Run the same command again to deploy an update: matches being played finish first. The machine stops when nobody has been connected for a while and starts again on the next visit (the first page load then takes a few seconds), so it costs little when idle. `fly logs -a bonk-yourname` shows the server's logs.
+
+`fly.toml` sets `BONK_TRUST_PROXY=1`, HTTPS only, the `/healthz` check, and a stop timeout longer than the server's drain. Elsewhere (Render, Railway, a VPS behind nginx or Caddy), set the same yourself.
+
+**Checking a deploy.** `python -m bonk_game.server.smoke https://your-server` loads the page, makes a room, connects over the WebSocket, plays a few seconds against a bot and prints the ping and how steadily states arrive from where you run it. It exits 1 if anything fails.
 
 **Updating it.** Stop the server with SIGTERM (what Docker, Fly and most hosts send). It stops taking new connections, lets the matches being played finish (up to `BONK_DRAIN_SECONDS`, 120 by default; give your host a stop timeout a bit longer than that), tells everyone it's restarting, and exits. Open tabs reconnect to the new server and get their room back: same code, same host, same settings. Every client file's URL carries a hash of the client (`?v=...`), so browsers cache them for good but load the new ones after a deploy. A tab still running the old client is told to refresh, and does.
 
@@ -62,8 +74,25 @@ The server limits how much any one visitor can use. Each limit can be changed wi
 | `BONK_CONNECTIONS_PER_IP` | 20 | open connections per IP |
 | `BONK_MESSAGES_PER_SECOND` / `BONK_MESSAGE_BURST` | 60 / 120 | messages per connection; a connection that keeps going over is closed |
 | `BONK_WS_COMPRESS` | 1 | compress WebSocket messages (see below) |
+| `BONK_PLAYTEST` | 1 | collect playtest reports (see below); 0 turns them off |
 
 Behind a proxy (Fly, Render, nginx), set `BONK_TRUST_PROXY=1` so the limits see each visitor's real IP rather than the proxy's.
+
+### Playtesting with friends
+After every match each browser sends the server a short report: its ping (median, p95 and jitter), how many states arrived late (over 100 ms after the last), how far its own ball had to be corrected when the server's answer came back (rubber-banding: corrections over 6 px, over 20 px and the worst), its frame rate, whether it lost connection, and the device (browser, screen size, network type, touch or controller). The results screen asks **How did that match feel?** (Smooth, OK, Laggy, Unplayable, and a note), sent along with the report. JavaScript errors are sent as they happen. Nothing else is collected; the reports carry the player's name but no IP address. They're logged (`"event": "playtest"` and `"client_error"`), and the latest 500 are at `GET /api/playtest` (same token as `/metrics`).
+
+```
+python -m bonk_game.server.playtest_report https://bonk-yourname.fly.dev --token <metrics token>
+fly logs -a bonk-yourname --no-tail | python -m bonk_game.server.playtest_report -
+```
+
+writes them up in Markdown: a row per report, medians by device, how matches felt with everyone's notes, errors grouped, and a list of things to look at (ping p95 over 150 ms, late states, more than 3 corrections over 6 px a minute, any over 20 px, under 45 fps, lost connections, matches that felt laggy). The in-memory list starts again after a deploy, so write it up before deploying, or use the logs.
+
+A playtest session:
+1. Deploy, run the smoke test, and send the link to 3–6 friends: on different networks (home Wi-Fi, a phone on mobile data, someone far away) and devices (a laptop, a phone, a tablet, a controller).
+2. Play a few full matches on different maps and modes, with and without bots and power-ups. Try a phone in portrait and landscape, and walk away from the Wi-Fi.
+3. Ask everyone to pick how each match felt, and to say in the note anything that felt wrong: controls slow to respond, your ball jumping back (rubber-banding), others' balls stuttering, buttons hard to hit.
+4. Write it up with `playtest_report` and add it, with what people said, to the tuning issue.
 
 ### How big a server?
 `python -m bonk_game.server.load_test --sockets` runs more and more rooms of 10 at once over real WebSockets until the server can't keep up, and prints what it used. The "browsers" ask for compression, as real ones do. Below: a 4-core cloud VM (the server is one process, so it uses one core), bots playing all 10 balls on Grand Stage.
@@ -208,4 +237,5 @@ node tests/web/e2e.js
 - `bonk_game/envs/training_env.py`: the gym env agents train on
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
 - `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)
+- `Dockerfile`, `fly.toml`, `deploy/fly.sh`: hosting the web server (on Fly.io, or anywhere that runs Docker)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), playtest reports and their write-up (`playtest.py`, `playtest_report.py`, and `static/js/report.js`), checking a deployed server (`smoke.py`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)

@@ -14,7 +14,7 @@ import time
 log = logging.getLogger("bonk")
 
 
-def event(name, level=logging.INFO, **fields):
+def event(name, level=logging.INFO, /, **fields):
     """Log one thing that happened (room_created, match_ended, error...)."""
     if not log.isEnabledFor(level):
         return
