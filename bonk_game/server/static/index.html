@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>bonk</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23803636'/%3E%3Ccircle cx='32' cy='32' r='24' fill='%23ff6b6b'/%3E%3Ccircle cx='24' cy='23' r='6' fill='%23ffc4c4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Home: pick a name, make a room or join one -->
+  <section id="home" class="screen">
+    <h1 class="logo">b<span class="logo-ball"></span>nk</h1>
+    <p class="tagline">a tiny physics brawler, with friends</p>
+    <div class="card">
+      <label for="name">Your name</label>
+      <input id="name" maxlength="16" autocomplete="nickname" placeholder="Player">
+      <button id="create" class="primary">Create a room</button>
+      <div class="or">or join one</div>
+      <form id="join-form" class="row">
+        <input id="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
+        <button type="submit">Join</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Lobby: who's here, the host's settings -->
+  <section id="lobby" class="screen hidden">
+    <header class="lobby-head">
+      <div>
+        <div class="dim small">Room</div>
+        <div id="room-code" class="room-code"></div>
+      </div>
+      <button id="copy-link">Copy invite link</button>
+    </header>
+    <div class="lobby-grid">
+      <div class="card">
+        <h2>Players <span id="seat-count" class="dim"></span></h2>
+        <ul id="seats" class="seats"></ul>
+        <div id="bot-controls" class="host-only">
+          <button id="add-bot">+ Add bot</button>
+        </div>
+        <p id="spectators" class="dim small"></p>
+      </div>
+      <div class="card">
+        <h2>Match</h2>
+        <label for="map">Map</label>
+        <select id="map"></select>
+        <p id="map-desc" class="dim small"></p>
+        <label for="first-to">First to</label>
+        <select id="first-to"></select>
+        <button id="start" class="primary host-only">Start match</button>
+        <p id="waiting" class="dim guest-only">Waiting for the host to start…</p>
+        <p class="dim small">Move with WASD or the arrow keys. Space or Shift goes heavy.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- The match -->
+  <section id="game" class="screen hidden">
+    <div id="stage"><canvas id="canvas"></canvas></div>
+    <div id="touch" class="hidden">
+      <div class="pad-left">
+        <button data-b="1" aria-label="left">◀</button>
+        <button data-b="3" aria-label="right">▶</button>
+      </div>
+      <div class="pad-right">
+        <button data-b="4" aria-label="heavy">heavy</button>
+        <button data-b="0" aria-label="jump">▲</button>
+      </div>
+    </div>
+    <div id="results" class="overlay hidden">
+      <div class="card results-card">
+        <div id="winner"></div>
+        <ol id="standings"></ol>
+        <button id="again" class="primary host-only">Play again</button>
+        <button id="to-lobby" class="host-only">Back to lobby</button>
+        <p class="dim guest-only">Waiting for the host…</p>
+      </div>
+    </div>
+  </section>
+
+  <div id="status" class="status hidden"></div>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/client.js"></script>
+</body>
+</html>

@@ -2,28 +2,44 @@
 
 This is a working version of bonk.io, a popular online physics-based platform game. This was created using pygame, mostly from scratch aside from the collision functions. This environment supports single agent RL using Gymnasium and Stable Baselines 3.
 
-There are several maps, and up to four players: any mix of humans on one keyboard, the built-in bot, and trained AI agents. Tournaments are supported for AI agents only.
+There are several maps and 2 to 10 players per match: you, friends online, the built-in bot, and trained AI agents.
 
 ## How it plays
-Run `python3 main.py` to open the game. Pick a map, choose who's playing (2-4 players, each a human, the built-in bot at Easy, Medium or Hard, or any AI agents you've trained for that map), and pick how many points win.
+Run `python3 main.py` to open the game. Pick a map, choose how many players (2 to 10) and who controls each one (you, the built-in bot at Easy, Medium or Hard, or any AI agents you've trained for that map), and pick how many points win.
 
-Balls fight to knock each other out. With 3 or 4 players it's a free-for-all: a ball that's knocked out sits out the rest of the round, and the last one standing takes it. (On Classic, where you respawn, the point goes to whoever last touched you.) Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
+It's a free-for-all: every ball tries to knock the others out. On most maps a ball that's knocked out sits out the rest of the round, and the last one standing takes it. (On Classic, where you respawn, the point goes to whoever last hit you.) Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
 
-| | Move / jump | Go heavy |
-|---|---|---|
-| Red | W A S D | Left Shift |
-| Blue | Arrow keys | Space or Right Shift |
-| Purple | I J K L | H |
-| Yellow | Numpad 8 4 5 6 | Numpad 0 |
+| Move / jump | Go heavy |
+|---|---|
+| W A S D or the arrow keys | Space or Shift |
+
+There's one human player per computer. To play with friends, use the web version (below); in the desktop game the other players are bots or trained agents.
 
 Esc pauses, M mutes. Everything works with the mouse too.
+
+## Play online with friends
+The web server runs every match and your browser just sends your keys and draws what it gets back, so friends only need a link.
+
+```
+pip install -r requirements-server.txt
+python -m bonk_game.server            # http://localhost:8000 (--port to change)
+```
+
+Open the page, pick a name and **Create a room**. You get a 4-letter room code; **Copy invite link** and send it to friends. Whoever made the room is the host (marked ★): they pick the map, how many points win, and add bots (Easy, Medium or Hard) to fill seats, up to 10 players. Then **Start match**.
+
+- WASD or the arrow keys move, Space or Shift goes heavy. On phones and tablets there are on-screen buttons.
+- If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
+- People who join during a match watch it and play in the next one.
+- Trained agents can play online too: if the server has stable-baselines3 installed and agents in `./agents`, they show up next to the bots.
+
+To put it on the internet, run it on any host that supports WebSockets. The `Dockerfile` builds the server (`docker build -t bonk . && docker run -p 8000:8000 bonk`), and it reads the port from `PORT`. Rooms live in memory, so run a single instance; restarting the server ends any rooms in progress.
 
 ## Maps
 You pick a map when you run `main.py`. Agents are trained separately for each map.
 
-**Classic**: a box with a bouncy floor and ceiling and deadly side walls. "Up" is a thrust, so you can fly. Push your opponent into a wall to score; a point respawns only the player who died. First to 100 wins.
+**Classic**: a box with a bouncy floor and ceiling and deadly side walls. "Up" is a thrust, so you can fly. Push someone into a wall to score: the point goes to whoever last hit them (with two players, always the other player), and only the player who died respawns. First to 100 wins.
 
-The other maps float in open space, bonk-style. There are no walls: you die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top. You can't fly on them either: "up" is a jump, and it only works while you're standing on something. Each death gives the other player a point and restarts the round, and the first to 5 wins.
+The other maps float in open space, bonk-style. There are no walls: you die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top. You can't fly on them either: "up" is a jump, and it only works while you're standing on something. If you die you're out until the next round. The last ball standing scores and a new round starts; the first to 5 wins.
 
 **Floating Platform**: one platform, nothing else. Knock your opponent off.
 
@@ -39,7 +55,7 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 **Round timer**: rounds last 45 seconds. On Classic, which has no rounds, you get 30 seconds to score. When time runs out it's **sudden death**: red walls close in from both sides, and touching one kills you. Whoever gets pushed into a wall first loses. Change the limit with `round_time` on the map class (0 turns it off).
 
 ### Making maps
-Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `maps/` folder next to where you run the game, or in any folder listed in the `BONK_MAPS` environment variable is loaded at startup. It shows up in the menu, in `tournament.py --map <name>`, in `main.py --train <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. A file with a mistake is skipped with a message saying exactly what's wrong. To check one yourself, run `python -m bonk_game.check_map my_map.json`.
+Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `maps/` folder next to where you run the game, or in any folder listed in the `BONK_MAPS` environment variable is loaded at startup. It shows up in the menu, in `main.py --train <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. A file with a mistake is skipped with a message saying exactly what's wrong. To check one yourself, run `python -m bonk_game.check_map my_map.json`.
 
 `bonk_game/maps/ramps.json` is a complete example. The screen is 680 x 480, with y pointing down, and players are 40 px across.
 
@@ -77,6 +93,8 @@ Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `ma
 
 The comments in the example above are only there to explain it; JSON files can't contain comments.
 
+Matches have up to 10 players. Each round they're spread over the spawn box, one per ball-sized cell; if the box is too small for everyone, the rest drop in from just above it. A box 220 x 88 px or bigger fits all 10 inside it.
+
 For things a file can't describe (like Sinking Swing's sinking floor), subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. The pieces live in `bonk_game/envs/utils/bodies.py`.
 ## To run
 1. Install Python 3.10 or newer
@@ -86,9 +104,8 @@ For things a file can't describe (like Sinking Swing's sinking floor), subclass 
 5. Run "pip install -r requirements.txt"
 6. Run "pip install -e ." to make the gym environment
 7. Run "defaults write org.python.python ApplePersistenceIgnoreState NO" if on macOS.
-8. Run "python3 main.py" to play. You can play against a friend or the built-in Bot straight away.
+8. Run "python3 main.py" to play. You can play against the built-in Bot straight away.
 9. To play against AI agents, train them for a map with "python3 main.py --train <map>" (maps: classic, platform, slider, swing, ramps, plus any map files you add). It takes 10-15 minutes per map. They then show up as players in the game. For a quick try, add "--steps 20000" (the agents will be weak). Agents train against a mix of opponents: the built-in bot at all three difficulties, the map's "bad" agent and snapshots of themselves (self-play). Add "--opponents bad" to train only against the bad agent, as older versions did.
-10. Once you have trained agents, you can run a tournament: "python3 tournament.py --map <map>". This puts your trained agents against one another to find the winner!
 
 The old text menus are still available with "python3 main.py --terminal".
 
@@ -116,4 +133,6 @@ python -m pytest
 - `bonk_game/envs/utils/bodies.py`: moving/bouncy blocks, the sliding platform and the swing
 - `bonk_game/envs/utils/mechanics.py`: classic collision physics and player-vs-player collisions
 - `bonk_game/envs/training_env.py`: the gym env agents train on
-- `bonk_game/envs/testing_env.py`: the two-player env used for playing and for tournament matches
+- `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
+- `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), running a match (`match.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`)

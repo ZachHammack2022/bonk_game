@@ -31,23 +31,19 @@ def create_env(model1, model2, render_mode, map_name=DEFAULT_MAP):
     # User input will not work with no display initialized
     if model1 == "user" or model2 == "user":
         assert render_mode == "human", "keyboard players need a window"
-    return TestEnv(model1, model2, render_mode, map_name=map_name)
+    return TestEnv(model1, model2, render_mode=render_mode, map_name=map_name)
 
 
 def run_test(model1, model2, env, steps):
+    from bonk_game.ui.keys import keyboard_buttons
+    import pygame
+
     obs = env.reset()
-    n = env.obs_size
+    models = (model1, model2)
     for _ in range(steps):
-        if model1 == "user" and model2 == "user":
-            actions = None
-        elif model1 == "user":
-            actions, _states = model2.predict(obs[n:])
-        elif model2 == "user":
-            actions, _states = model1.predict(obs[:n])
-        else:
-            action1, _states = model1.predict(obs[:n])
-            action2, _states = model2.predict(obs[n:])
-            actions = [action1, action2]
+        buttons = keyboard_buttons(pygame.key.get_pressed()) if "user" in models else None
+        actions = [buttons if m == "user" else m.predict(env.view(obs, i))[0]
+                   for i, m in enumerate(models)]
         obs, done, info = env.step(actions)
         if done:
             break
@@ -56,17 +52,14 @@ def run_test(model1, model2, env, steps):
     env.close()
 
 
-CONTROLS = {
-    "first": "wasd + left shift to go heavy",
-    "second": "the arrow keys + space or right shift to go heavy",
-}
+CONTROLS = "WASD or the arrow keys, space or shift to go heavy"
 
 
 def make_statement(choices, num):
     statement = f"Your choices for the {num} agent:\n"
     for i, name in enumerate(choices):
         if name == "user":
-            statement += f"{i}: user input (controlled with {CONTROLS[num]})\n"
+            statement += f"{i}: you, on the keyboard ({CONTROLS})\n"
         else:
             statement += f"{i}: {name}\n"
     statement += "Please enter the integer for your selected algorithm: "
@@ -124,6 +117,8 @@ def test(map_name=DEFAULT_MAP):
     choices = list(agents.keys()) + ["user"]
 
     pick1 = pick_agent(choices, "first")
+    if pick1 == "user":
+        choices.remove("user")  # one human per computer
     pick2 = pick_agent(choices, "second")
 
     agent1 = "user" if pick1 == "user" else agents[pick1]

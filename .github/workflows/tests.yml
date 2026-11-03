@@ -61,9 +61,8 @@ jobs:
       - name: Check every map's env with stable-baselines3
         run: python -m bonk_game.envs.check_env
 
-      - name: Tiny training run and tournament
+      - name: Tiny training run
         run: |
           mkdir -p /tmp/run && cd /tmp/run
           python "$GITHUB_WORKSPACE/main.py" --train platform --steps 2000
           python "$GITHUB_WORKSPACE/main.py" --train platform --steps 2000 --opponents bad
-          python "$GITHUB_WORKSPACE/tournament.py" --map platform --steps 500
