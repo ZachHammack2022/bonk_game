@@ -11,14 +11,20 @@ from bonk_game.envs.utils.mechanics import player_collision
 class BonkEnv(gym.Env):
     """Single-agent training env.
 
-    The learning agent controls player 1. Player 2 is controlled by the
-    map's "bad" agent (e.g. ./agents/bad.zip) if it exists, otherwise it is
-    left to physics. An episode ends as soon as either player dies.
+    The learning agent controls player 1. Player 2 is the opponent:
+
+    - with `opponents` (an OpponentPool), a new opponent is picked from the
+      pool at every reset: the built-in Bot, the bad agent, or a snapshot
+      of the learner itself;
+    - otherwise the map's "bad" agent (e.g. ./agents/bad.zip) if it exists,
+      or nobody (player 2 is just left to physics).
+
+    An episode ends as soon as either player dies.
     """
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
 
-    def __init__(self, render_mode=None, map_name=DEFAULT_MAP, opponent_path="default"):
+    def __init__(self, render_mode=None, map_name=DEFAULT_MAP, opponent_path="default", opponents=None):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
@@ -33,10 +39,12 @@ class BonkEnv(gym.Env):
         # env (and its physics) can be used without stable-baselines3.
         if opponent_path == "default":
             opponent_path = f"{agent_dir(map_name)}/bad"
+        self.opponents = opponents
         self.bad_agent = None
-        if opponent_path and os.path.exists(f"{opponent_path}.zip"):
+        if opponents is None and opponent_path and os.path.exists(f"{opponent_path}.zip"):
             from stable_baselines3 import PPO
             self.bad_agent = PPO.load(opponent_path)
+        self.opponent = self.bad_agent
 
         self.renderer = arena.Renderer(render_mode, self.metadata["render_fps"],
                                        f"Bonk Training - {self.map.title}")
@@ -60,14 +68,16 @@ class BonkEnv(gym.Env):
             np.random.seed(seed)
         self.map.reset()
         arena.reset_players(self.players)
+        if self.opponents is not None:
+            self.opponent = self.opponents.sample(self, index=1)
         if self.render_mode == "human":
             self._render_frame()
         return self._get_obs(), {}
 
     def step(self, action):
         # Opponent acts on the current state, seen from its own side
-        if self.bad_agent is not None:
-            action2, _states = self.bad_agent.predict(self._get_obs(bad_agent=True))
+        if self.opponent is not None:
+            action2, _states = self.opponent.predict(self._get_obs(bad_agent=True))
             arena.apply_action(self.p2, action2)
 
         arena.apply_action(self.p1, action)

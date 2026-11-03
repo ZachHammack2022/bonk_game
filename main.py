@@ -10,13 +10,16 @@ if __name__ == "__main__":
                         help=f"train AI agents for a map ({', '.join(MAPS)}) instead of playing")
     parser.add_argument("--steps", type=int, default=None,
                         help="training steps per agent (default 500000; try 20000 for a quick test)")
+    parser.add_argument("--opponents", choices=["mix", "bad"], default="mix",
+                        help="train against a mix of the Bot, the bad agent and past copies "
+                             "of itself (default), or the bad agent only")
     parser.add_argument("--terminal", action="store_true",
                         help="use the old text menus instead of the game window")
     args = parser.parse_args()
 
     if args.train:
         from bonk_game.envs.utils.training import AGENT_STEPS, train_models
-        train_models(args.train, steps=args.steps or AGENT_STEPS)
+        train_models(args.train, steps=args.steps or AGENT_STEPS, opponents=args.opponents)
     elif args.terminal:
         from bonk_game.envs.utils.start import run_game
         run_game()
