@@ -179,6 +179,7 @@ def test_a_room_gives_each_match_an_id():
 
 
 def test_the_page_knows_map_and_mode_names():
+    pytest.importorskip("aiohttp")
     from bonk_game.server import web
     page = web.render_index("v1")
     names = json.loads(page.split('<script id="bonk-names" type="application/json">')[1].split("</script>")[0])
