@@ -2,7 +2,7 @@
 
 This is a working version of bonk.io, a popular online physics-based platform game. This was created using pygame, mostly from scratch aside from the collision functions. This environment supports single agent RL using Gymnasium and Stable Baselines 3.
 
-There are several maps, and up to four players: any mix of humans on one keyboard, the built-in bot, and trained AI agents. Tournaments are supported for AI agents only.
+There are several maps, and up to four players: any mix of humans on one keyboard, the built-in bot, and trained AI agents.
 
 ## How it plays
 Run `python3 main.py` to open the game. Pick a map, choose who's playing (2-4 players, each a human, the built-in bot at Easy, Medium or Hard, or any AI agents you've trained for that map), and pick how many points win.
@@ -39,7 +39,7 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 **Round timer**: rounds last 45 seconds. On Classic, which has no rounds, you get 30 seconds to score. When time runs out it's **sudden death**: red walls close in from both sides, and touching one kills you. Whoever gets pushed into a wall first loses. Change the limit with `round_time` on the map class (0 turns it off).
 
 ### Making maps
-Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `maps/` folder next to where you run the game, or in any folder listed in the `BONK_MAPS` environment variable is loaded at startup. It shows up in the menu, in `tournament.py --map <name>`, in `main.py --train <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. A file with a mistake is skipped with a message saying exactly what's wrong. To check one yourself, run `python -m bonk_game.check_map my_map.json`.
+Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `maps/` folder next to where you run the game, or in any folder listed in the `BONK_MAPS` environment variable is loaded at startup. It shows up in the menu, in `main.py --train <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. A file with a mistake is skipped with a message saying exactly what's wrong. To check one yourself, run `python -m bonk_game.check_map my_map.json`.
 
 `bonk_game/maps/ramps.json` is a complete example. The screen is 680 x 480, with y pointing down, and players are 40 px across.
 
@@ -88,7 +88,6 @@ For things a file can't describe (like Sinking Swing's sinking floor), subclass 
 7. Run "defaults write org.python.python ApplePersistenceIgnoreState NO" if on macOS.
 8. Run "python3 main.py" to play. You can play against a friend or the built-in Bot straight away.
 9. To play against AI agents, train them for a map with "python3 main.py --train <map>" (maps: classic, platform, slider, swing, ramps, plus any map files you add). It takes 10-15 minutes per map. They then show up as players in the game. For a quick try, add "--steps 20000" (the agents will be weak). Agents train against a mix of opponents: the built-in bot at all three difficulties, the map's "bad" agent and snapshots of themselves (self-play). Add "--opponents bad" to train only against the bad agent, as older versions did.
-10. Once you have trained agents, you can run a tournament: "python3 tournament.py --map <map>". This puts your trained agents against one another to find the winner!
 
 The old text menus are still available with "python3 main.py --terminal".
 
@@ -116,4 +115,4 @@ python -m pytest
 - `bonk_game/envs/utils/bodies.py`: moving/bouncy blocks, the sliding platform and the swing
 - `bonk_game/envs/utils/mechanics.py`: classic collision physics and player-vs-player collisions
 - `bonk_game/envs/training_env.py`: the gym env agents train on
-- `bonk_game/envs/testing_env.py`: the two-player env used for playing and for tournament matches
+- `bonk_game/envs/testing_env.py`: the two-player env used for playing matches

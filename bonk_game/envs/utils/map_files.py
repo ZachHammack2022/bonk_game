@@ -3,7 +3,7 @@
 Every *.json file in bonk_game/maps/ (shipped with the game), in ./maps/
 (next to where you run the game), and in any folder listed in the
 BONK_MAPS environment variable becomes a map. It shows up in the menu, in
-tournament.py --map, in main.py --train and as the gym env
+main.py --train and as the gym env
 bonk_game/bonk-<name>-v0.
 
 Files that don't load are skipped with a message saying what's wrong.

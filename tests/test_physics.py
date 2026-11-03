@@ -148,19 +148,3 @@ def test_rgb_render():
     frame = env.render()
     assert frame.shape == (arena.HEIGHT, arena.WIDTH, 3)
     env.close()
-
-
-class _FixedAgent:
-    def __init__(self, action):
-        self.action = action
-
-    def predict(self, obs):
-        return self.action, None
-
-
-@pytest.mark.parametrize("n", [2, 3, 5])
-def test_tournament_handles_odd_brackets(n):
-    import tournament
-    agents = {f"a{i}": _FixedAgent(i % 16) for i in range(n)}
-    winner = tournament.run_tournament(agents, steps=200)
-    assert winner in agents

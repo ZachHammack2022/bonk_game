@@ -3,8 +3,7 @@
 To add a map: write a JSON file (see bonk_game/envs/utils/map_files.py and
 bonk_game/maps/), or subclass Map and add it to MAPS at the bottom of this
 file.
-It is automatically available in the main menu, the tournament
-(`--map <name>`), and as the gym env `bonk_game/bonk-<name>-v0`.
+It is automatically available in the main menu, in `main.py --train`, and as the gym env `bonk_game/bonk-<name>-v0`.
 """
 import numpy as np
 
