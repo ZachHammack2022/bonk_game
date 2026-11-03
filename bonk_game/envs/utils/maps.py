@@ -133,7 +133,9 @@ class OpenMap(Map):
     clamp_bottom = False
     max_speed = 28
     can_fly = False
-    jump_speed = 22
+    # A single jump peaks ~174 px up. (Before jump buffering, holding "up"
+    # re-fired a 22 jump on the next step, which came out the same height.)
+    jump_speed = 23.5
     winning_score = 5
     reset_round_on_kill = True
 

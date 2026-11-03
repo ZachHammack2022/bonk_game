@@ -1,6 +1,10 @@
 """Contains player class and methods"""
 import numpy as np
 
+# On jump maps, forgiving jump timing (in physics steps, 30 per second):
+JUMP_BUFFER = 4  # an "up" press is remembered this long, then jumps on landing
+COYOTE_TIME = 4  # you can still jump this long after leaving the ground
+
 class player():
     
     def __init__(self,radius,left,right,top,bottom,color,spawn=None,clamp_bottom=True) -> None:
@@ -33,6 +37,9 @@ class player():
         self.can_fly = True
         self.jump_speed = 0
         self.grounded = False
+        self.jump_buffer = 0     # steps left on a remembered "up" press
+        self.air_steps = COYOTE_TIME + 1  # steps since last standing on something
+        self.jump_used = False   # jumped since last standing on something
         self.reset()
         self.normalize_obs()
 
@@ -81,7 +88,8 @@ class player():
     def update(self)-> None:
         """_Update velocity and position values
         """
-        
+        if not self.can_fly:
+            self.update_jump()
         self.update_velocities()
         self.update_position()
         self.update_mass()
@@ -101,6 +109,9 @@ class player():
         self.y_a = 0
         self.m = self.min_m
         self.grounded = False
+        self.jump_buffer = 0
+        self.air_steps = COYOTE_TIME + 1
+        self.jump_used = False
 
     def get_obs(self):
         self.normalize_obs()
@@ -115,9 +126,36 @@ class player():
     def move_up(self,force):
         if self.can_fly:
             self.y_v -= force/self.m
-        elif self.grounded:
+        else:
+            self.jump_buffer = JUMP_BUFFER
+            self.try_jump()
+
+    def can_jump(self):
+        if self.grounded and self.y_v > -self.jump_speed / 2:
+            return True
+        return not self.jump_used and self.air_steps <= COYOTE_TIME
+
+    def try_jump(self):
+        if self.jump_buffer and self.can_jump():
             self.y_v = min(self.y_v, -self.jump_speed)
             self.grounded = False
+            self.jump_used = True
+            self.jump_buffer = 0
+
+    def update_jump(self):
+        """Track time off the ground and fire a buffered jump on landing.
+
+        Runs after collisions, which set `grounded`. Standing on something
+        right after a jump (still moving up fast) doesn't count as landing.
+        """
+        if self.grounded and self.y_v > -self.jump_speed / 2:
+            self.air_steps = 0
+            self.jump_used = False
+        else:
+            self.air_steps += 1
+        if self.jump_buffer:
+            self.try_jump()
+            self.jump_buffer = max(0, self.jump_buffer - 1)
     
     def move_down(self,force):
         self.y_v += force/self.m
