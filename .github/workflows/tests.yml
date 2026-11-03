@@ -29,3 +29,35 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+  training:
+    # Makes sure the full training stack installs and can actually train.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      PYGAME_HIDE_SUPPORT_PROMPT: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install training stack (CPU-only torch keeps this fast)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Check every map's env with stable-baselines3
+        run: python -m bonk_game.envs.check_env
+
+      - name: Tiny training run and tournament
+        run: |
+          mkdir -p /tmp/run && cd /tmp/run
+          python "$GITHUB_WORKSPACE/main.py" --train platform --steps 2000
+          python "$GITHUB_WORKSPACE/tournament.py" --map platform --steps 500

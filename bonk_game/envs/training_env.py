@@ -1,6 +1,6 @@
 import os
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 from bonk_game.envs.utils import arena
@@ -46,10 +46,6 @@ class BonkEnv(gym.Env):
         me, them = (self.p2, self.p1) if bad_agent else (self.p1, self.p2)
         return np.concatenate((me.get_obs(), them.get_obs(), self.map.extra_obs()), axis=0)
 
-    def seed(self, seed=None):
-        # Players spawn using numpy's global RNG
-        np.random.seed(seed)
-        return [seed]
 
     def check_collisions(self):
         for p in self.players:
@@ -58,13 +54,15 @@ class BonkEnv(gym.Env):
         player_collision(self.p1, self.p2)
 
     def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
         if seed is not None:
-            self.seed(seed)
+            # Players spawn using numpy's global RNG
+            np.random.seed(seed)
         self.map.reset()
         arena.reset_players(self.players)
         if self.render_mode == "human":
             self._render_frame()
-        return self._get_obs()
+        return self._get_obs(), {}
 
     def step(self, action):
         # Opponent acts on the current state, seen from its own side
@@ -89,9 +87,11 @@ class BonkEnv(gym.Env):
         if self.render_mode == "human":
             self._render_frame()
 
-        return self._get_obs(), reward, terminated, {}
+        # Time limits (truncation) come from the TimeLimit wrapper that
+        # gymnasium.make adds, using max_episode_steps from registration.
+        return self._get_obs(), reward, terminated, False, {}
 
-    def render(self, mode=None):
+    def render(self):
         if self.render_mode == "rgb_array":
             return self._render_frame()
 

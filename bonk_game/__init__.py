@@ -1,5 +1,4 @@
-#from gymnasium.envs.registration import register
-from gym.envs.registration import register
+from gymnasium.envs.registration import register
 
 from bonk_game.envs.utils.maps import MAPS, env_id
 
