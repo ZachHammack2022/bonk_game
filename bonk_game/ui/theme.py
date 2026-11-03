@@ -2,7 +2,8 @@
 import os
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
+# pygame is imported in font() only, so the colours can be used without it
+# (the web server doesn't need pygame).
 
 # Backdrop
 BG_TOP = (24, 33, 52)
@@ -51,6 +52,8 @@ _fonts = {}
 
 def font(size, bold=True):
     """A cached UI font. `size` is in screen pixels."""
+    import pygame
+
     key = (int(size), bold)
     if not pygame.font.get_init():
         # Fonts from before a pygame.quit() are dead; start a fresh cache

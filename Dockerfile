@@ -1,0 +1,13 @@
+# The bonk web server. Build and run:
+#   docker build -t bonk .
+#   docker run -p 8000:8000 bonk
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY requirements-server.txt .
+RUN pip install --no-cache-dir -r requirements-server.txt
+
+COPY bonk_game ./bonk_game
+ENV PYTHONPATH=/app PYTHONUNBUFFERED=1 PORT=8000
+EXPOSE 8000
+CMD ["python", "-m", "bonk_game.server"]

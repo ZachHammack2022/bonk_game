@@ -2,7 +2,7 @@
 
 This is a working version of bonk.io, a popular online physics-based platform game. This was created using pygame, mostly from scratch aside from the collision functions. This environment supports single agent RL using Gymnasium and Stable Baselines 3.
 
-There are several maps and 2 to 10 players per match: you, the built-in bot, and trained AI agents. A web version, where friends play together online, is in progress.
+There are several maps and 2 to 10 players per match: you, friends online, the built-in bot, and trained AI agents.
 
 ## How it plays
 Run `python3 main.py` to open the game. Pick a map, choose how many players (2 to 10) and who controls each one (you, the built-in bot at Easy, Medium or Hard, or any AI agents you've trained for that map), and pick how many points win.
@@ -13,9 +13,26 @@ It's a free-for-all: every ball tries to knock the others out. On most maps a ba
 |---|---|
 | W A S D or the arrow keys | Space or Shift |
 
-There's one human player per computer; the other players are Bots or trained agents. Playing friends will come with the web version.
+There's one human player per computer. To play with friends, use the web version (below); in the desktop game the other players are bots or trained agents.
 
 Esc pauses, M mutes. Everything works with the mouse too.
+
+## Play online with friends
+The web server runs every match and your browser just sends your keys and draws what it gets back, so friends only need a link.
+
+```
+pip install -r requirements-server.txt
+python -m bonk_game.server            # http://localhost:8000 (--port to change)
+```
+
+Open the page, pick a name and **Create a room**. You get a 4-letter room code; **Copy invite link** and send it to friends. Whoever made the room is the host (marked ★): they pick the map, how many points win, and add bots (Easy, Medium or Hard) to fill seats, up to 10 players. Then **Start match**.
+
+- WASD or the arrow keys move, Space or Shift goes heavy. On phones and tablets there are on-screen buttons.
+- If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
+- People who join during a match watch it and play in the next one.
+- Trained agents can play online too: if the server has stable-baselines3 installed and agents in `./agents`, they show up next to the bots.
+
+To put it on the internet, run it on any host that supports WebSockets. The `Dockerfile` builds the server (`docker build -t bonk . && docker run -p 8000:8000 bonk`), and it reads the port from `PORT`. Rooms live in memory, so run a single instance; restarting the server ends any rooms in progress.
 
 ## Maps
 You pick a map when you run `main.py`. Agents are trained separately for each map.
@@ -117,3 +134,5 @@ python -m pytest
 - `bonk_game/envs/utils/mechanics.py`: classic collision physics and player-vs-player collisions
 - `bonk_game/envs/training_env.py`: the gym env agents train on
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
+- `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), running a match (`match.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`)

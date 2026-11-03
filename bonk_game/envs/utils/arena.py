@@ -10,7 +10,6 @@ import os
 import numpy as np
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
 
 from bonk_game.envs.utils.player import player
 from bonk_game.envs.utils.platform import platform
@@ -140,6 +139,8 @@ class Renderer:
         self.quit_requested = False
 
     def _ensure_init(self):
+        import pygame
+
         if self.font is None:
             pygame.init()
             from bonk_game.ui import theme
@@ -151,6 +152,8 @@ class Renderer:
             self.clock = pygame.time.Clock()
 
     def draw(self, players, game_map, scores=None, timer=None):
+        import pygame
+
         self._ensure_init()
         from bonk_game.ui.painter import Painter
         from bonk_game.ui import theme
@@ -185,6 +188,8 @@ class Renderer:
         return np.transpose(np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2))
 
     def close(self):
+        import pygame
+
         if self.window is not None:
             pygame.display.quit()
             pygame.quit()

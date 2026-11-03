@@ -1,0 +1,6 @@
+# What the web server needs (python -m bonk_game.server). No pygame, no
+# training stack. Add stable-baselines3 and sb3-contrib to let trained
+# agents in ./agents play online.
+numpy>=1.24
+gymnasium>=0.29
+aiohttp>=3.9
