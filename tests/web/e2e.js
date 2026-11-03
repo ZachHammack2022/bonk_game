@@ -107,7 +107,7 @@ function check(cond, what) {
 
     await host.waitForSelector("#results:not(.hidden)", { timeout: 120000 });
     const winner = await host.textContent("#winner");
-    check(/wins!|Draw!/.test(winner), `results show a winner (${winner.trim()})`);
+    check(/wins?!|Draw!/.test(winner), `results show a winner (${winner.trim()})`);
     await shot(host, "results");
     await host.click("#to-lobby");
     await host.waitForSelector("#lobby:not(.hidden)");

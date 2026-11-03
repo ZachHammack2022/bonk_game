@@ -194,6 +194,11 @@ class Room:
                 if isinstance(b, list) and len(b) == 5:
                     self.match.set_input(self.match_tokens.index(token), b)
             return
+        if kind == "ping":
+            m = self.members.get(token)
+            if m is not None:
+                await m.send({"type": "pong", "t": msg.get("t")})
+            return
         if kind == "name":
             self.members[token].name = clean_name(msg.get("name"))
             await self.broadcast_lobby()

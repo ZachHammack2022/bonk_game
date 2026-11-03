@@ -19,6 +19,7 @@ It's a free-for-all. On most maps a ball that's knocked out sits out the rest of
 | W A S D or the arrow keys | Space or Shift |
 
 - On phones and tablets there are on-screen buttons. M mutes.
+- Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it with a slow connection, add `?lag=150` to the page address (150 ms of fake delay); `?predict=0` turns prediction off for comparison.
 - If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
 - People who join during a match watch it and play in the next one.
 - Trained agents can play online too: if the server has stable-baselines3 installed and agents in `./agents`, they show up next to the bots.

@@ -11,6 +11,8 @@ countdown (3, 2, 1) -> play -> after a round ends, a short pause and a
 import math
 
 from bonk_game.envs.testing_env import TestEnv
+from bonk_game.envs.utils import arena
+from bonk_game.envs.utils.mechanics import BOUNCE
 from bonk_game.envs.utils.controls import NO_BUTTONS, Buttons
 from bonk_game.server.scene import level_shapes, player_state
 from bonk_game.ui import theme
@@ -23,6 +25,8 @@ OVER_PAUSE = 1.4      # seconds showing the final point before results
 
 BOT_KINDS = tuple(f"bot:{level}" for level in LEVEL_NAMES)
 STAND_IN = "bot:medium"  # plays for a human who drops out mid-match
+GRAVITY = 1.5      # player.update_velocities
+MASS_DECAY = 0.1   # player.update_mass
 
 
 def bot_level(kind):
@@ -193,11 +197,31 @@ class Match:
             "width": self.env.map.width,
             "height": self.env.map.height,
             "reset_round_on_kill": self.env.map.reset_round_on_kill,
+            "physics": self.physics(),
             "slots": [
                 {"name": s["name"], "kind": s["kind"], "id": s.get("id"),
                  "color": theme_color(i), "color_name": theme.PLAYER_NAMES[i]}
                 for i, s in enumerate(self.slots)
             ],
+        }
+
+    def physics(self):
+        """Constants the client needs to predict its own ball (predict.js)."""
+        p = self.env.players[0]
+        return {
+            "force": arena.FORCE,
+            "gravity": GRAVITY,
+            "max_speed": p.v_range,
+            "can_fly": p.can_fly,
+            "jump_speed": p.jump_speed,
+            "min_m": p.min_m,
+            "max_m": p.max_m,
+            "mass_decay": MASS_DECAY,
+            # Bounce off surfaces that don't say (Classic's floor and ceiling)
+            "bounce": abs(BOUNCE) if p.can_fly else 0.3,
+            "tick_ms": 1000 / TICK_HZ,
+            # Classic never lets you sink below its floor (player.clamp_bottom)
+            "clamp_bottom": p.bottom if p.clamp_bottom else None,
         }
 
     def results(self):

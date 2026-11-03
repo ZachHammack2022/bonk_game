@@ -17,6 +17,12 @@ const TICK_MS = 1000 / 30;
 const INTERP_DELAY = 50;   // ms behind the newest state we draw at
 const MAX_JUMP = 60;       // a bigger move in one tick is a teleport, not blended
 
+// Testing switches: ?lag=150 adds 150 ms of fake round-trip delay;
+// ?predict=0 turns off prediction of your own ball.
+const params = new URLSearchParams(location.search);
+const FAKE_LAG = Math.max(0, +params.get("lag") || 0);
+const PREDICT = params.get("predict") !== "0";
+
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
@@ -83,7 +89,9 @@ const app = {
 };
 
 function send(msg) {
-  if (app.ws && app.ws.readyState === WebSocket.OPEN) app.ws.send(JSON.stringify(msg));
+  const ws = app.ws;
+  const go = () => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
+  if (FAKE_LAG) setTimeout(go, FAKE_LAG / 2); else go();
 }
 const isHost = () => app.lobby && app.lobby.host === me.token;
 
@@ -155,7 +163,11 @@ function connect() {
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: "hello", name: me.name, token: me.token }));
   };
-  ws.onmessage = (e) => onMessage(JSON.parse(e.data));
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (FAKE_LAG) setTimeout(() => { if (app.ws === ws) onMessage(msg); }, FAKE_LAG / 2);
+    else onMessage(msg);
+  };
   ws.onclose = () => {
     if (app.ws !== ws || app.fatal) return;
     app.retry = Math.min(app.retry + 1, 5);
@@ -187,6 +199,11 @@ function onMessage(msg) {
       show("game");
       resize();
       break;
+    case "pong": {
+      const sample = performance.now() - msg.t;
+      net.rtt = net.rtt === null ? sample : net.rtt * 0.8 + sample * 0.2;
+      break;
+    }
     case "state":
       app.states.push([performance.now(), msg]);
       if (app.states.length > 8) app.states.shift();
@@ -390,6 +407,11 @@ function buttons() {
 function sendInput(force) {
   const b = buttons();
   const key = b.join("");
+  if (key !== lastSent) {
+    net.inputs.push({ t: performance.now(), b });
+    const old = performance.now() - 3000;
+    while (net.inputs.length > 2 && net.inputs[1].t < old) net.inputs.shift();
+  }
   if (force || key !== lastSent) {
     lastSent = key;
     send({ type: "input", b });
@@ -520,7 +542,11 @@ function onEvent(ev, state) {
     case "go": sound.play("go"); fx.say("GO!", T.accent, true); break;
     case "death": {
       const c = slots[ev.i] ? slots[ev.i].color : T.text;
-      const x = clamp(ev.x, 12, W - 12), y = clamp(ev.y, 12, H - 12);
+      let x = clamp(ev.x, 12, W - 12), y = clamp(ev.y, 12, H - 12);
+      // Your own ball was drawn ahead of the server (prediction): burst where you saw it
+      if (slots[ev.i] && slots[ev.i].id === me.token && debug.drawn && performance.now() - debug.drawn.t < 200) {
+        x = clamp(debug.drawn.x, 12, W - 12); y = clamp(debug.drawn.y, 12, H - 12);
+      }
       fx.burst(x, y, c, 34, 9);
       fx.burst(x, y, T.text, 10, 5, 3);
       fx.kick(10);
@@ -547,6 +573,73 @@ function onEvent(ev, state) {
       break;
     case "over": sound.play("win"); break;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Network timing and predicting your own ball (see predict.js)
+// ---------------------------------------------------------------------------
+const net = {
+  rtt: null,                                  // smoothed round trip, ms
+  inputs: [{ t: 0, b: [0, 0, 0, 0, 0] }],     // when your buttons changed
+};
+setInterval(() => { if (app.ws && app.ws.readyState === WebSocket.OPEN) send({ type: "ping", t: performance.now() }); }, 2000);
+
+function buttonsAt(t) {
+  let b = net.inputs[0].b;
+  for (const e of net.inputs) { if (e.t <= t) b = e.b; else break; }
+  return b;
+}
+
+const own = { tick: null, base: null, offX: 0, offY: 0 };
+// For tests and poking around in the console
+const debug = (window.bonkDebug = { app, net, own, drawn: null });
+
+function predictFrom(entry, now) {
+  const [arrived, S] = entry;
+  const M = app.match;
+  const i = M.slots.findIndex((s) => s.id === me.token);
+  const tick = M.physics.tick_ms;
+  const rtt = net.rtt ?? 0;
+  // Steps from that state until the server uses the keys you're pressing
+  // now (plus about half a step waiting for the next server step)
+  const n = Math.min((now - arrived + rtt) / tick + 0.5, 15);
+  const inputs = [];
+  for (let k = 0; k <= Math.ceil(n); k++) inputs.push(buttonsAt(arrived - rtt + (k + 1) * tick));
+  return BonkPredict.predict(S.players[i], M.physics, S.level, inputs, n, M.radius);
+}
+
+// Where to draw your ball: predicted, with corrections from the server
+// faded in over ~0.1 s instead of snapping. Null when not predicting.
+function ownPosition(now, dt) {
+  const M = app.match;
+  if (!PREDICT || !M || !app.states.length || typeof BonkPredict === "undefined") return null;
+  const i = M.slots.findIndex((s) => s.id === me.token);
+  const entry = app.states[app.states.length - 1];
+  const S = entry[1];
+  if (i < 0 || S.phase !== "play" || !S.players[i][3] || (S.stand_ins || []).includes(i)) {
+    own.tick = null; own.offX = own.offY = 0;
+    return null;
+  }
+  const [x, y] = predictFrom(entry, now);
+  if (own.tick !== S.tick) {
+    if (own.base) {
+      // The server moved us somewhere new (a respawn or new round): jump
+      // there. Otherwise fade out the difference between the old and new
+      // predictions, so a misprediction (say, a bot shoved us) doesn't snap.
+      const was = own.base[1].players[i];
+      const teleported = Math.hypot(S.players[i][0] - was[0], S.players[i][1] - was[1]) > MAX_JUMP * (S.tick - own.tick);
+      if (teleported) { own.offX = own.offY = 0; }
+      else {
+        const [ox, oy] = predictFrom(own.base, now);
+        own.offX += ox - x; own.offY += oy - y;
+      }
+    }
+    own.tick = S.tick;
+    own.base = entry;
+  }
+  const keep = Math.exp(-dt / 0.1);
+  own.offX *= keep; own.offY *= keep;
+  return [x + own.offX, y + own.offY];
 }
 
 // ---------------------------------------------------------------------------
@@ -856,6 +949,10 @@ function drawHud(st, now) {
     }
   }
 
+  if (net.rtt !== null) {
+    text(`${Math.round(net.rtt)} ms`, 10, T.faint, W - 8, H - 10, { align: "right", weight: 600, shadow: false });
+  }
+
   if (st.phase === "countdown" && st.count_len === 3 && st.tick < 60) {
     text(`${M.title}  ·  first to ${M.first_to}`, 12, T.dim, W / 2, 56, { weight: 600, shadow: false });
   }
@@ -868,7 +965,7 @@ function frame(now) {
   lastFrame = now;
   fx.update(dt);
   if ($("game").classList.contains("hidden") || !app.match) return;
-  const st = blendedState(now);
+  let st = blendedState(now);
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
   if (!st) { drawBackground(); text("Get ready…", 24, T.dim, W / 2, H / 2); return; }
 
@@ -892,11 +989,20 @@ function frame(now) {
 
   const R = app.match.radius;
   const showNames = st.players.length > 2;
+  const mine = app.match.slots.findIndex((s) => s.id === me.token);
+  const ownAt = ownPosition(now, dt);
+  if (ownAt && mine >= 0) {
+    // A copy: st may be a stored server state, which prediction still reads
+    const players = st.players.slice();
+    players[mine] = [ownAt[0], ownAt[1], st.players[mine][2], 1];
+    st = { ...st, players };
+  }
   st.players.forEach((p, i) => {
     if (!p[3]) return;
     const slot = app.match.slots[i];
     drawPlayer(p[0], p[1], R, p[2], slot.color);
   });
+  if (mine >= 0) debug.drawn = { x: st.players[mine][0], y: st.players[mine][1], t: now };
   st.players.forEach((p, i) => {
     if (!p[3]) return;
     const slot = app.match.slots[i];
