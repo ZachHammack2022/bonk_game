@@ -65,7 +65,7 @@ async def fake_person(room, slot, rng, stop):
         await asyncio.sleep(rng.uniform(0.1, 0.5))
 
 
-async def browsers(url, codes):
+async def browsers(url, codes, compress=15):
     """The other end of --sockets: PEOPLE connections per room that read
     everything and throw it away. Runs until killed."""
     import aiohttp
@@ -78,7 +78,8 @@ async def browsers(url, codes):
             try:
                 async with gate:
                     # compress=15: ask for permessage-deflate, as browsers do
-                    ws = await session.ws_connect(f"{url}/ws/{code}", max_msg_size=0, compress=15)
+                    ws = await session.ws_connect(f"{url}/ws/{code}", max_msg_size=0,
+                                                  compress=compress)
                 break
             except aiohttp.ClientError:
                 await asyncio.sleep(0.2 * (attempt + 1))
@@ -108,7 +109,7 @@ async def serve(rooms):
     return runner, f"http://127.0.0.1:{port}"
 
 
-async def run_level(n_rooms, seconds, map_name, players, sockets=False, seed=0):
+async def run_level(n_rooms, seconds, map_name, players, sockets=False, seed=0, compress=True):
     metrics.STATS = metrics.Stats()
     rooms = RoomManager(rng=random.Random(seed))
     counters, stop, people = [], asyncio.Event(), []
@@ -118,7 +119,8 @@ async def run_level(n_rooms, seconds, map_name, players, sockets=False, seed=0):
     if sockets:
         runner, url = await serve(rooms)
         client = subprocess.Popen([sys.executable, "-m", "bonk_game.server.load_test", "--browsers", url]
-                                  + [r.code for r in made], env={**os.environ})
+                                  + [r.code for r in made] + ([] if compress else ["--no-compress"]),
+                                  env={**os.environ})
         end = time.monotonic() + 120
         while any(len(r.connected) < PEOPLE for r in made):
             if time.monotonic() > end or client.poll() is not None:
@@ -190,9 +192,12 @@ async def run_level(n_rooms, seconds, map_name, players, sockets=False, seed=0):
     }
 
 
+INTERP_DELAY_MS = 50  # the browser draws this far behind (js/core.js), so lateness under it doesn't show
+
+
 def keeps_up(r):
-    # Lag under one tick (33 ms) means ticks go out a little late, not that any are missed
-    return r["ticks_per_s"] >= TICK_HZ * 0.97 and r["loop_lag_ms_p99"] < 1000 / TICK_HZ and not r["late"]
+    return (r["ticks_per_s"] >= TICK_HZ * 0.97 and r["loop_lag_ms_p99"] < INTERP_DELAY_MS
+            and not r["late"])
 
 
 def _rate(kb):
@@ -217,16 +222,19 @@ def main(argv=None):
     p.add_argument("--players", choices=("bots", "people"), default="bots")
     p.add_argument("--sockets", action="store_true", help="send over real WebSockets")
     p.add_argument("--full", action="store_true", help="send whole states, not changes")
+    p.add_argument("--no-compress", action="store_true",
+                   help="browsers that don't ask for compression (--sockets)")
     p.add_argument("--browsers", nargs="+", help=argparse.SUPPRESS)  # (the --sockets helper)
     args = p.parse_args(argv)
     if args.browsers:
-        asyncio.run(browsers(args.browsers[0], args.browsers[1:]))
+        asyncio.run(browsers(args.browsers[0], args.browsers[1:], 0 if args.no_compress else 15))
         return
     if args.full:
         delta.KEYFRAME_EVERY = 1
     results = []
     for n in (int(x) for x in args.rooms.split(",")):
-        r = asyncio.run(run_level(n, args.seconds, args.map, args.players, args.sockets))
+        r = asyncio.run(run_level(n, args.seconds, args.map, args.players, args.sockets,
+                                  compress=not args.no_compress))
         results.append(r)
         wire = r["wire_kb_per_s_room"]
         print(f"{n:4d} rooms: CPU {r['cpu_pct']:5.1f}%  tick {r['tick_ms_avg']:.2f}/{r['tick_ms_p99']:.2f} ms  "

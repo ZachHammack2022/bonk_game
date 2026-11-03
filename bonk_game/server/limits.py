@@ -22,6 +22,9 @@ MESSAGES_PER_SECOND = _env("BONK_MESSAGES_PER_SECOND", 60.0)  # per connection, 
 MESSAGE_BURST = _env("BONK_MESSAGE_BURST", 120.0)
 # A connection that keeps sending too fast (this many dropped messages) is closed
 MAX_DROPPED = _env("BONK_MAX_DROPPED", 300)
+# Compress WebSocket messages (permessage-deflate) for browsers that ask, as
+# they all do: about 60% fewer bytes sent, for about a third more CPU
+WS_COMPRESS = os.environ.get("BONK_WS_COMPRESS", "1") not in ("", "0", "false")
 # Behind a proxy (Fly, Render, nginx...) the client's IP is in a header
 TRUST_PROXY = os.environ.get("BONK_TRUST_PROXY", "") not in ("", "0", "false")
 

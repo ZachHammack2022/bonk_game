@@ -205,9 +205,9 @@ async def websocket(request):
     rooms = request.app[ROOMS]
     conns = request.app[CONNECTIONS]
     ip = limits.client_ip(request)
-    # compress: permessage-deflate (browsers ask for it). Most of a state
-    # message is the same as the last one, so it shrinks a lot.
-    ws = web.WebSocketResponse(heartbeat=20, max_msg_size=MAX_MESSAGE, compress=True)
+    # compress: permessage-deflate, if the browser asks (they do). Costs CPU
+    # per connection; BONK_WS_COMPRESS=0 trades it for more bandwidth.
+    ws = web.WebSocketResponse(heartbeat=20, max_msg_size=MAX_MESSAGE, compress=limits.WS_COMPRESS)
     await ws.prepare(request)
     metrics.STATS.count_wire(request.transport)
     code = request.match_info["code"].upper()
