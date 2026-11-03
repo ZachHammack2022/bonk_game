@@ -35,6 +35,7 @@ CROWN_COOLDOWN = 1.0  # seconds before a crown that just changed hands can move 
 
 
 class Mode:
+    rng = random  # the match gives each mode its own (so replays come out the same)
     id = "base"
     title = ""
     description = ""
@@ -251,10 +252,11 @@ class Crown(Mode):
     goal_default = 30
     uses_round_time = False
 
-    def __init__(self, n, goal, teams=None, rng=random):
+    def __init__(self, n, goal, teams=None, rng=None):
         super().__init__(n, goal)
+        self.rng = rng or random
         self.held = [0] * n  # ticks each player has worn the crown
-        self.holder = rng.randrange(n)
+        self.holder = self.rng.randrange(n)
         self.moved_at = -CROWN_COOLDOWN * TICK_HZ
         self.ticks = 0
 
@@ -283,7 +285,7 @@ class Crown(Mode):
             by = died[self.holder]
             if by is None:
                 others = [i for i in range(self.n) if i != self.holder]
-                by = min(others, key=lambda i: (self.held[i], random.random()))
+                by = min(others, key=lambda i: (self.held[i], self.rng.random()))
             self._give(by, events)
         elif ready:
             hit = env.last_hit[self.holder]
@@ -312,11 +314,18 @@ MODES = {m.id: m for m in (FreeForAll, Teams, Lives, Knockouts, Crown)}
 DEFAULT_MODE = "ffa"
 
 
-def make_mode(mode_id, n, goal, teams=None):
+def make_mode(mode_id, n, goal, teams=None, rng=None):
+    """rng: the match's own random numbers (so replays come out the same)."""
     cls = MODES[mode_id]
     if cls is Teams:
-        return cls(n, goal, teams)
-    return cls(n, goal)
+        m = cls(n, goal, teams)
+    elif cls is Crown:
+        m = cls(n, goal, rng=rng)
+    else:
+        m = cls(n, goal)
+    if rng is not None:
+        m.rng = rng
+    return m
 
 
 def describe_modes():

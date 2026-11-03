@@ -8,6 +8,8 @@ Routes:
     GET  /static/...     client files
     POST /api/rooms      create a room -> {"room": "ABCD"}
     GET  /api/rooms/<code>   {"room": "ABCD", "players": 3} or 404
+    GET  /api/rooms/<code>/replay   the room's last match as a replay file
+    POST /api/replay     a replay file -> the match played back (replay.py)
     GET  /ws/<code>      WebSocket for one browser in a room
     GET  /healthz        "ok"
     GET  /metrics        numbers for whoever runs the server (Prometheus
@@ -62,7 +64,7 @@ import traceback
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server import limits, metrics, modes, playtest
+from bonk_game.server import delta, limits, metrics, modes, playtest, replay
 from bonk_game.server.room import RoomFull, RoomManager, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -75,6 +77,11 @@ CONNECTIONS = web.AppKey("connections", dict)
 SWEEPER = web.AppKey("sweeper", object)
 SOCKETS = web.AppKey("sockets", object)
 MAX_MESSAGE = 4096
+REPLAY_LIMIT = web.AppKey("replay_limit", object)
+REPLAY_SLOTS = web.AppKey("replay_slots", object)
+MAX_REPLAY_BYTES = 2 * 1024 * 1024
+REPLAYS_PER_IP = 6          # replays watched per IP per minute
+REPLAY_CHUNK = 30           # ticks simulated between letting the rooms run
 # Bump when a message changes in a way an old page can't handle. (Any change
 # to the client files changes VERSION anyway.)
 PROTOCOL = 1
@@ -192,6 +199,46 @@ async def room_info(request):
     if room is None:
         raise web.HTTPNotFound(text="No such room")
     return web.json_response({"room": room.code, "players": len(room.connected)})
+
+
+async def room_replay(request):
+    """The room's last finished match, as a replay file to download."""
+    room = request.app[ROOMS].get(request.match_info["code"])
+    if room is None or room.last_replay is None:
+        raise web.HTTPNotFound(text="No replay for that room")
+    rep = room.last_replay
+    name = f"bonk-replay-{room.code}-{time.strftime('%Y%m%d-%H%M', time.localtime(rep['at'] or 0))}.json"
+    return web.json_response(rep, headers={"Content-Disposition": f'attachment; filename="{name}"',
+                                           "Cache-Control": "no-store"})
+
+
+async def watch_replay(request):
+    """Play a replay file back: {"match": the match message, "states":
+    the state messages, as the players got them (delta.py), "engine":
+    whether it was made by this version's physics}."""
+    if not request.app[REPLAY_LIMIT].allow(limits.client_ip(request)):
+        return web.json_response({"error": "Too many replays at once. Try again in a minute."}, status=429)
+    if (request.content_length or 0) > MAX_REPLAY_BYTES:
+        return web.json_response({"error": "That file is too big to be a replay."}, status=413)
+    try:
+        rep = replay.check(json.loads(await request.text()))
+    except ValueError as e:  # bad JSON, or replay.BadReplay
+        msg = str(e) if isinstance(e, replay.BadReplay) else "not a bonk replay"
+        return web.json_response({"error": f"Can't play that file: {msg}."}, status=400)
+    async with request.app[REPLAY_SLOTS]:
+        match, ticks = replay.play(rep)
+        enc = delta.Encoder()
+        states = []
+        for k, (state, events) in enumerate(ticks):
+            state["events"] = events
+            states.append(enc.encode(state))
+            if k % REPLAY_CHUNK == REPLAY_CHUNK - 1:
+                await asyncio.sleep(0)  # the rooms' matches come first
+    resp = web.json_response({"match": {**match.describe(), "replay": True}, "states": states,
+                              "engine": rep.get("engine") == replay.ENGINE},
+                             headers={"Cache-Control": "no-store"})
+    resp.enable_compression()
+    return resp
 
 
 async def healthz(request):
@@ -341,9 +388,11 @@ async def _stop_background(app):
 
 
 def make_app(rooms=None):
-    app = web.Application(middlewares=[cache_headers])
+    app = web.Application(middlewares=[cache_headers], client_max_size=MAX_REPLAY_BYTES)
     app[ROOMS] = rooms or RoomManager(AgentStore())
     app[ROOM_LIMIT] = limits.PerKey(limits.ROOMS_PER_IP / 60, limits.ROOMS_PER_IP)
+    app[REPLAY_LIMIT] = limits.PerKey(REPLAYS_PER_IP / 60, REPLAYS_PER_IP)
+    app[REPLAY_SLOTS] = asyncio.Semaphore(2)  # replays being played back at once
     app[CONNECTIONS] = {}  # ip -> open WebSockets
     app[SOCKETS] = set()  # open WebSockets, closed on shutdown
     app[PAGE] = render_index()
@@ -351,6 +400,8 @@ def make_app(rooms=None):
     app.router.add_get("/r/{code}", index)
     app.router.add_post("/api/rooms", create_room)
     app.router.add_get("/api/rooms/{code}", room_info)
+    app.router.add_get("/api/rooms/{code}/replay", room_replay)
+    app.router.add_post("/api/replay", watch_replay)
     app.router.add_get("/ws/{code}", websocket)
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/metrics", metrics_page)

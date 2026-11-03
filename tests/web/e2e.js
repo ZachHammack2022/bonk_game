@@ -111,6 +111,7 @@ function check(cond, what) {
     await host.waitForFunction(() => bonkDebug.app.lobby.seats[1].color === 5);
     check(true, "picking a colour shows up for everyone");
 
+    const hostToken0 = await host.evaluate(() => me.token);
     // Host sets up a quick match
     await host.selectOption("#map", "classic");
     await host.selectOption("#first-to", "1");
@@ -171,6 +172,24 @@ function check(cond, what) {
     await guest.fill("#feel-note", "a test note");
     check(await guest.isVisible("#feel-thanks"), "and can say");
     await guest.evaluate(() => playtest.error("e2e test error", "e2e.js:1"));
+
+    // The killcam plays the final knockout in slow motion; the match can be downloaded
+    check(await host.isVisible("#killcam-btn"), "the results offer a killcam");
+    await host.click("#killcam-btn");
+    await host.waitForSelector("#killcam:not(.hidden)");
+    const k0 = await host.evaluate(() => replayer.i);
+    await host.waitForTimeout(600);
+    const k1 = await host.evaluate(() => ({ i: replayer.i, active: replayer.active, results: !document.querySelector("#results").classList.contains("hidden") }));
+    check(k1.active && k1.i > k0 && !k1.results, `the killcam plays (${k0} -> ${k1.i} ticks)`);
+    await shot(host, "killcam");
+    await host.click("#killcam");
+    await host.waitForSelector("#results:not(.hidden)");
+    check(!(await host.evaluate(() => replayer.active)), "and can be skipped back to the results");
+    const [repDownload] = await Promise.all([host.waitForEvent("download"), host.click("#replay-download")]);
+    const replayFile = await repDownload.path();
+    const repJson = JSON.parse(fs.readFileSync(replayFile, "utf8"));
+    check(repJson.format === "bonk-replay" && repJson.inputs.length > 0 && repJson.ticks > 30 && !JSON.stringify(repJson).includes(hostToken0),
+      `the match downloads as a replay file (${fs.statSync(replayFile).size} bytes, no tokens)`);
 
     // Everyone votes for a rematch
     await host.click("#vote");
@@ -315,6 +334,30 @@ function check(cond, what) {
     await fresh.setInputFiles("#stats-file", file);
     await fresh.waitForFunction(() => /Nothing new/.test(document.querySelector("#toast").textContent));
     check((await fresh.evaluate(() => profileStore.get().stats.matches)) === 2, "a saved profile can be added to another browser (once)");
+
+    // Watching a replay file: from the home screen, with pause, speed and jumping about
+    await fresh.click("#stats-close");
+    await fresh.setInputFiles("#replay-file", replayFile);
+    await fresh.waitForSelector("#game:not(.hidden)");
+    await fresh.waitForSelector("#replay-bar:not(.hidden)");
+    await fresh.waitForTimeout(800);
+    const w = await fresh.evaluate(() => ({ i: replayer.i, n: replayer.states.length, slots: app.match.slots.length }));
+    check(w.i > 10 && w.n > 100 && w.slots === repJson.slots.length, `a replay file plays back (${w.i}/${w.n} ticks)`);
+    await shot(fresh, "replay");
+    await fresh.click("#replay-play");
+    const paused = await fresh.evaluate(() => replayer.i);
+    await fresh.waitForTimeout(400);
+    check((await fresh.evaluate(() => replayer.i)) === paused, "it pauses");
+    await fresh.$eval("#replay-seek", (el, v) => { el.value = String(v); el.dispatchEvent(new Event("input")); }, Math.floor(w.n / 2));
+    check(Math.abs((await fresh.evaluate(() => replayer.i)) - Math.floor(w.n / 2)) <= 1, "and jumps to any moment");
+    await fresh.selectOption("#replay-speed", "2");
+    await fresh.click("#replay-play");
+    await fresh.waitForTimeout(500);
+    check((await fresh.evaluate(() => replayer.i)) - Math.floor(w.n / 2) > 20, "and plays faster");
+    await fresh.click("#replay-back");
+    await fresh.waitForSelector("#home:not(.hidden)");
+    const notReplay = (await fetch(base + "/api/replay", { method: "POST", body: "{}" })).status;
+    check(notReplay === 400, "a file that isn't a replay is refused");
 
     // Saved before profiles: the old settings come along
     const old = await open("old");
