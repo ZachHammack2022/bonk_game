@@ -190,8 +190,11 @@ function check(cond, what) {
     await host.waitForTimeout(500);
     const items = (await (await fetch(base + "/api/playtest")).json()).items;
     const reports = items.filter((i) => i.event === "playtest");
-    if (process.env.E2E_DEBUG) console.log(JSON.stringify(reports, null, 1));
-    check(reports.length === 2 && reports.every((r) => r.states.n > 20 && r.frames.fps > 0 && r.device.ua) && reports.some((r) => r.ping.n > 0),
+    // (The guest reloaded mid-match, so theirs may cover only a moment)
+    const ann = reports.find((r) => r.name === "Ann");
+    const full = ann && ann.ping.n > 0 && ann.states.n > 20 && ann.frames.fps > 0 && ann.device.ua;
+    if (!full || reports.length !== 2) console.log(JSON.stringify(reports));
+    check(reports.length === 2 && full && reports.every((r) => r.states.n > 0 && r.device.ua),
       `each player's report reaches the server (${reports.length}: ping, states, frame rate, device)`);
     check(reports.some((r) => r.name === "Bob" && r.feel === "laggy" && r.note === "a test note"), "with how it felt");
     check(items.some((i) => i.event === "client_error" && i.message === "e2e test error"), "browser errors reach the server too");
