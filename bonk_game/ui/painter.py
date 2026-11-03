@@ -61,6 +61,23 @@ def _edge_glow(size, thickness):
     return _edge_glows[key]
 
 
+def block_point(block, u, v):
+    """World point at (u, v) in an OrientedBlock's own frame, as fractions
+    of its width and height from the centre."""
+    wx, wy = block.to_world(u * block.w, v * block.h)
+    return block.cx + wx, block.cy + wy
+
+
+def oriented_face(block, lip):
+    """Corners of an OrientedBlock's face: the block minus `lip` at the bottom."""
+    hw, hh = block.w / 2, block.h / 2
+    pts = []
+    for x, y in ((-hw, -hh), (hw, -hh), (hw, hh - lip), (-hw, hh - lip)):
+        wx, wy = block.to_world(x, y)
+        pts.append((block.cx + wx, block.cy + wy))
+    return pts
+
+
 class Painter:
     def __init__(self, surface, scale=1.0, offset=(0, 0)):
         self.surface = surface
@@ -137,10 +154,57 @@ class Painter:
                              (r.x + rad, r.y + 1), (r.right - rad - 1, r.y + 1), max(1, self.ln(1.5)))
 
     def draw_block(self, block):
-        """Draw a bodies.Block, picking a style from what it does."""
+        """Draw a bodies.Block (or OrientedBlock / Bumper), styled by what it does."""
         kind = "hazard" if block.kill else "pad" if block.launch is not None else "solid"
         color = theme.HAZARD if block.kill else block.color
-        self.block(block.x1, block.y1, block.x2, block.y2, color, kind)
+        if hasattr(block, "radius"):
+            self.bumper(block.cx, block.cy, block.radius, color, kind)
+        elif hasattr(block, "angle"):
+            self.oriented_block(block, color, kind)
+        else:
+            self.block(block.x1, block.y1, block.x2, block.y2, color, kind)
+
+    def oriented_block(self, block, color, kind="solid"):
+        """A rotated slab: shadow, darker underside, face and a lit top edge."""
+        pts = [self.pt(x, y) for x, y in block.corners()]
+        drop = self.ln(4)
+        xs, ys = zip(*pts)
+        pad = drop + 2
+        box = pygame.Rect(min(xs) - pad, min(ys) - pad, max(xs) - min(xs) + 2 * pad, max(ys) - min(ys) + 2 * pad)
+        shadow = pygame.Surface(box.size, pygame.SRCALPHA)
+        pygame.draw.polygon(shadow, (0, 0, 0, 60), [(x - box.x, y - box.y + drop) for x, y in pts])
+        self.surface.blit(shadow, box.topleft)
+
+        pygame.draw.polygon(self.surface, darken(color, 0.28), pts)
+        # Face: the same shape pulled in a little from the bottom edge
+        lip = min(3, block.h / 3)
+        inset = oriented_face(block, lip)
+        face = [self.pt(x, y) for x, y in inset]
+        pygame.draw.polygon(self.surface, color, face)
+        if kind == "hazard":
+            pygame.draw.polygon(self.surface, darken(color, 0.18), face, max(1, self.ln(2)))
+        elif kind == "pad":
+            a, b = self.pt(*block_point(block, -0.3, 0)), self.pt(*block_point(block, 0.3, 0))
+            pygame.draw.line(self.surface, darken(color, 0.25), a, b, max(1, self.ln(2)))
+        pygame.draw.aalines(self.surface, color, True, pts)
+        top_a, top_b = face[0], face[1]
+        pygame.draw.line(self.surface, lighten(color, 0.4), top_a, top_b, max(1, self.ln(1.5)))
+
+    def bumper(self, x, y, r, color, kind="solid"):
+        """A round piece; launch bumpers get a bright ring."""
+        sx, sy = self.pt(x, y)
+        sr = r * self.scale
+        shadow = pygame.Surface((int(sr * 2.4), int(sr * 2.4)), pygame.SRCALPHA)
+        pygame.draw.circle(shadow, (0, 0, 0, 60), (int(sr * 1.2), int(sr * 1.2)), int(sr))
+        self.surface.blit(shadow, (sx - int(sr * 1.2), sy - int(sr * 1.2) + self.ln(4)))
+        self.circle(sx, sy, sr, darken(color, 0.28))
+        self.circle(sx, sy - self.ln(1.5), sr - self.ln(1.5), color)
+        if kind == "pad":
+            self.circle(sx, sy - self.ln(1.5), sr * 0.62, darken(color, 0.22))
+            self.circle(sx, sy - self.ln(1.5), sr * 0.42, color)
+        elif kind == "hazard":
+            self.circle(sx, sy - self.ln(1.5), sr * 0.5, darken(color, 0.2))
+        self.circle(sx - sr * 0.35, sy - sr * 0.4, max(1, sr * 0.2), lighten(color, 0.5))
 
     def swing(self, swing):
         sx, sy = swing.seat_pos()

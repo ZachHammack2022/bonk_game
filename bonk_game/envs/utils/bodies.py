@@ -68,8 +68,102 @@ class Block:
     def rect(self):
         return self.x1, self.y1, self.x2, self.y2
 
+    # Normal of the face a launch pad fires from (its top)
+    up = (0.0, -1.0)
+    # Attributes that change as it moves (blended when drawing)
+    motion_attrs = ("x1", "y1", "x2", "y2")
+
+    def contact(self, p, rvx, rvy):
+        return circle_rect_contact(p.x, p.y, p.r, *self.rect(), rvx, rvy)
+
     def render(self, painter):
         painter.draw_block(self)
+
+
+class OrientedBlock(Block):
+    """A rectangle rotated by `angle` degrees (clockwise on screen) about
+    its centre: slopes, ramps and leaning posts. Same options as Block."""
+
+    motion_attrs = ("cx", "cy")
+
+    def __init__(self, cx, cy, w, h, angle, color, **kwargs):
+        super().__init__(0, 0, 0, 0, color, **kwargs)
+        self.cx, self.cy, self.w, self.h = cx, cy, w, h
+        self.angle = angle
+        a = math.radians(angle)
+        self.cos, self.sin = math.cos(a), math.sin(a)
+        self.up = (self.sin, -self.cos)  # its top face's normal
+
+    @classmethod
+    def standing(cls, x, y, w, h, lean, color, **kwargs):
+        """A post whose bottom centre is at (x, y), leaning `lean` degrees
+        (positive leans right)."""
+        a = math.radians(lean)
+        return cls(x + h / 2 * math.sin(a), y - h / 2 * math.cos(a), w, h, lean, color, **kwargs)
+
+    def move(self, dx, dy):
+        self.cx += dx
+        self.cy += dy
+
+    def to_local(self, x, y):
+        """World vector -> the block's own frame (unrotated)."""
+        return x * self.cos + y * self.sin, -x * self.sin + y * self.cos
+
+    def to_world(self, x, y):
+        return x * self.cos - y * self.sin, x * self.sin + y * self.cos
+
+    def corners(self):
+        hw, hh = self.w / 2, self.h / 2
+        return [(self.cx + wx, self.cy + wy) for wx, wy in
+                (self.to_world(x, y) for x, y in ((-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)))]
+
+    def rect(self):
+        """Axis-aligned bounding box."""
+        xs, ys = zip(*self.corners())
+        return min(xs), min(ys), max(xs), max(ys)
+
+    def contact(self, p, rvx, rvy):
+        lx, ly = self.to_local(p.x - self.cx, p.y - self.cy)
+        lvx, lvy = self.to_local(rvx, rvy)
+        hw, hh = self.w / 2, self.h / 2
+        c = circle_rect_contact(lx, ly, p.r, -hw, -hh, hw, hh, lvx, lvy)
+        if c is None:
+            return None
+        nx, ny = self.to_world(c[0], c[1])
+        return nx, ny, c[2]
+
+
+class Bumper(Block):
+    """A round piece. With `launch` set it's a pinball bumper: anything
+    touching it is fired straight away from its centre at that speed."""
+
+    motion_attrs = ("cx", "cy")
+
+    def __init__(self, cx, cy, radius, color, **kwargs):
+        super().__init__(0, 0, 0, 0, color, **kwargs)
+        self.cx, self.cy, self.radius = cx, cy, radius
+        self.up = None  # launches from every side
+
+    def move(self, dx, dy):
+        self.cx += dx
+        self.cy += dy
+
+    def rect(self):
+        r = self.radius
+        return self.cx - r, self.cy - r, self.cx + r, self.cy + r
+
+    def contact(self, p, rvx, rvy):
+        dx, dy = p.x - self.cx, p.y - self.cy
+        d = math.hypot(dx, dy)
+        reach = p.r + self.radius
+        if d >= reach:
+            return None
+        if d < 1e-9:
+            # Dead centre: push back the way it came in
+            sp = math.hypot(rvx, rvy)
+            dx, dy, d = (-rvx / sp, -rvy / sp, 1.0) if sp > 1e-9 else (0.0, -1.0, 1.0)
+            return dx, dy, reach
+        return dx / d, dy / d, reach - d
 
 
 def resolve_contact(p, contact, surface_v=(0.0, 0.0), restitution=0.5,
@@ -122,7 +216,7 @@ def collide_block(p, block, body=None):
     be pushed back.
     """
     rvx, rvy = p.x_v - block.vx, p.y_v - block.vy
-    contact = circle_rect_contact(p.x, p.y, p.r, *block.rect(), rvx, rvy)
+    contact = block.contact(p, rvx, rvy)
     if contact is None:
         return False
     if block.kill:
@@ -130,10 +224,27 @@ def collide_block(p, block, body=None):
     resolve_contact(p, contact, (block.vx, block.vy), block.restitution,
                     block.friction, body=body)
     nx, ny, _ = contact
-    if block.launch is not None and ny < -0.5:
-        # Landed on top of a launch pad: fire straight up
-        p.y_v = min(p.y_v, block.vy - block.launch)
+    if block.launch is not None:
+        up = block.up
+        if up is None:
+            # Bumper: fire away from it along the contact normal
+            launch(p, block, nx, ny)
+        elif nx * up[0] + ny * up[1] > 0.5:
+            # Landed on the pad's top face: fire out of it
+            launch(p, block, *up)
     return False
+
+
+def launch(p, block, nx, ny):
+    """Make the player leave the block along (nx, ny) at least at block.launch."""
+    if (nx, ny) == (0.0, -1.0):
+        # Flat pad (the common case): straight up, exactly as before
+        p.y_v = min(p.y_v, block.vy - block.launch)
+        return
+    vn = (p.x_v - block.vx) * nx + (p.y_v - block.vy) * ny
+    if vn < block.launch:
+        p.x_v += (block.launch - vn) * nx
+        p.y_v += (block.launch - vn) * ny
 
 
 class SlidingPlatform:
@@ -186,7 +297,8 @@ class SlidingPlatform:
         return any([collide_block(p, block, body=self) for block in self.blocks])
 
     def render(self, painter):
-        for block in self.blocks:
+        # Angled pieces first, so flat ones cover their feet
+        for block in sorted(self.blocks, key=lambda b: not hasattr(b, "angle")):
             painter.draw_block(block)
 
 

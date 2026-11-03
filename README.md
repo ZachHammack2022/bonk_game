@@ -25,7 +25,7 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 
 **Floating Platform**: one platform, nothing else. Knock your opponent off.
 
-**Sliding Platform**: a platform with a bumper post at each end that slides left and right on a rail. Every hit and every roll shoves it, so you can rock it back and forth to build momentum and fling your opponent. Going heavy shoves it much harder. Jump over a post to leave (or get thrown over one).
+**Sliding Platform**: a platform with an outward-leaning bumper post at each end that slides left and right on a rail. Every hit and every roll shoves it, so you can rock it back and forth to build momentum and fling your opponent. Going heavy shoves it much harder. Jump over a post to leave (or get thrown over one).
 
 **Sinking Swing**: a floor with a hole in the middle, a launch pad at the bottom of the hole, and a swing hanging above it all.
 - After about 5 seconds the floor (with the hole and pad) starts sinking, and eventually drops off the screen.
@@ -35,7 +35,7 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 **Round timer**: rounds last 45 seconds. On Classic, which has no rounds, you get 30 seconds to score. When time runs out it's **sudden death**: red walls close in from both sides, and touching one kills you. Whoever gets pushed into a wall first loses. Change the limit with `round_time` on the map class (0 turns it off).
 
 ### Adding a map
-Subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. It then shows up in the main menu, in `tournament.py --map <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. `bonk_game/envs/utils/bodies.py` has building blocks: rectangles that can move, bounce, have friction or launch players, a platform that slides when pushed, and a swing.
+Subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. It then shows up in the main menu, in `tournament.py --map <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. `bonk_game/envs/utils/bodies.py` has building blocks: rectangles (`Block`), rotated rectangles for slopes and leaning posts (`OrientedBlock`), round bumpers (`Bumper`), a platform that slides when pushed, and a swing. Pieces can move, bounce, have friction, kill, or launch players (pinball-style for bumpers).
 
 ## To run
 1. Install Python 3.10 or newer

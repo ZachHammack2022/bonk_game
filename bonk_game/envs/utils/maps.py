@@ -7,7 +7,7 @@ It is automatically available in the main menu, the tournament
 import numpy as np
 
 from bonk_game.envs.utils import arena
-from bonk_game.envs.utils.bodies import Block, SlidingPlatform, Swing, collide_block
+from bonk_game.envs.utils.bodies import Block, OrientedBlock, SlidingPlatform, Swing, collide_block
 from bonk_game.envs.utils.mechanics import env_collision, handle_env_collision
 from bonk_game.envs.utils.player import player
 from bonk_game.ui import theme
@@ -202,7 +202,7 @@ class SliderMap(OpenMap):
 
     Every hit and every roll shoves the platform the other way, so players
     can rock it back and forth to build momentum and fling each other off.
-    Posts at both ends act as bumpers you can bounce off.
+    Outward-leaning posts at both ends act as bumpers you can bounce off.
     """
 
     name = "slider"
@@ -213,6 +213,7 @@ class SliderMap(OpenMap):
     TOP = 300
     THICKNESS = 16
     POST_WIDTH, POST_HEIGHT = 10, 46
+    POST_LEAN = 18  # degrees the posts lean outward
     TRAVEL = 140  # how far it can slide either way
 
     spawn_box = (LEFT + 10, RIGHT - 10, 200, TOP - 2)
@@ -229,8 +230,12 @@ class SliderMap(OpenMap):
         top, pw, ph = self.TOP, self.POST_WIDTH, self.POST_HEIGHT
         self.platform = SlidingPlatform([
             Block(self.LEFT, top, self.RIGHT, top + self.THICKNESS, self.PLATFORM_COLOR, **surface),
-            Block(self.LEFT, top - ph, self.LEFT + pw, top, self.POST_COLOR, **post),
-            Block(self.RIGHT - pw, top - ph, self.RIGHT, top, self.POST_COLOR, **post),
+            # Posts lean outward, so they catch you like the lip of a bowl.
+            # Their feet sit a little into the platform so there's no gap.
+            OrientedBlock.standing(self.LEFT + pw / 2, top + 3, pw, ph + 3, -self.POST_LEAN,
+                                   self.POST_COLOR, **post),
+            OrientedBlock.standing(self.RIGHT - pw / 2, top + 3, pw, ph + 3, self.POST_LEAN,
+                                   self.POST_COLOR, **post),
         ], mass=6.0, travel=self.TRAVEL)
         self.bodies = [self.platform]
 
