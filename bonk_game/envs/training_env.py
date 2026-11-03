@@ -4,45 +4,47 @@ import gym
 import numpy as np
 
 from bonk_game.envs.utils import arena
-from bonk_game.envs.utils.mechanics import env_collision_gym, player_collision
-
-BAD_AGENT_PATH = "./agents/bad"
+from bonk_game.envs.utils.maps import DEFAULT_MAP, agent_dir, make_map
+from bonk_game.envs.utils.mechanics import player_collision
 
 
 class BonkEnv(gym.Env):
     """Single-agent training env.
 
     The learning agent controls player 1. Player 2 is controlled by the
-    "bad" agent from ./agents/bad.zip if it exists, otherwise it just falls
-    under gravity. An episode ends as soon as either player hits a wall.
+    map's "bad" agent (e.g. ./agents/bad.zip) if it exists, otherwise it is
+    left to physics. An episode ends as soon as either player dies.
     """
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
 
-    def __init__(self, render_mode=None, opponent_path=BAD_AGENT_PATH):
+    def __init__(self, render_mode=None, map_name=DEFAULT_MAP, opponent_path="default"):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
-        self.p1, self.p2 = arena.make_players()
+        self.map = make_map(map_name)
+        self.p1, self.p2 = self.map.make_players()
         self.players = [self.p1, self.p2]
-        self.env_objects = arena.make_platforms()
 
-        self.observation_space = gym.spaces.Box(-1, 1, shape=(arena.OBS_SIZE,), dtype=np.float64)
+        self.observation_space = gym.spaces.Box(-1, 1, shape=(self.map.obs_size,), dtype=np.float64)
         self.action_space = gym.spaces.Discrete(arena.N_ACTIONS)
 
         # Load the opponent if it has been trained. Imported lazily so the
         # env (and its physics) can be used without stable-baselines3.
+        if opponent_path == "default":
+            opponent_path = f"{agent_dir(map_name)}/bad"
         self.bad_agent = None
         if opponent_path and os.path.exists(f"{opponent_path}.zip"):
             from stable_baselines3 import PPO
             self.bad_agent = PPO.load(opponent_path)
 
-        self.renderer = arena.Renderer(render_mode, self.metadata["render_fps"], "Bonk Training")
+        self.renderer = arena.Renderer(render_mode, self.metadata["render_fps"],
+                                       f"Bonk Training - {self.map.title}")
 
     def _get_obs(self, bad_agent=False):
         """Observation from player 1's view, or player 2's if bad_agent."""
         me, them = (self.p2, self.p1) if bad_agent else (self.p1, self.p2)
-        return np.concatenate((me.get_obs(), them.get_obs()), axis=0)
+        return np.concatenate((me.get_obs(), them.get_obs(), self.map.extra_obs()), axis=0)
 
     def seed(self, seed=None):
         # Players spawn using numpy's global RNG
@@ -50,14 +52,15 @@ class BonkEnv(gym.Env):
         return [seed]
 
     def check_collisions(self):
-        for env_obj in self.env_objects:
-            for p in self.players:
-                env_collision_gym(p, env_obj)
+        for p in self.players:
+            if self.map.collide(p):
+                p.dies()
         player_collision(self.p1, self.p2)
 
     def reset(self, seed=None, options=None):
         if seed is not None:
             self.seed(seed)
+        self.map.reset()
         arena.reset_players(self.players)
         if self.render_mode == "human":
             self._render_frame()
@@ -71,6 +74,7 @@ class BonkEnv(gym.Env):
 
         arena.apply_action(self.p1, action)
 
+        self.map.step()
         self.check_collisions()
         self.p1.update()
         self.p2.update()
@@ -92,7 +96,7 @@ class BonkEnv(gym.Env):
             return self._render_frame()
 
     def _render_frame(self):
-        return self.renderer.draw(self.players, self.env_objects)
+        return self.renderer.draw(self.players, self.map)
 
     def close(self):
         self.renderer.close()

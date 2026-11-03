@@ -28,11 +28,10 @@ BOTTOM = 420
 RADIUS = 20
 FORCE = 2  # change in velocity a player gets from one input
 
-P1_COLOR = (255, 102, 102)
-P2_COLOR = (0, 102, 204)
-FLOOR_COLOR = (255, 204, 204)
-WALL_COLOR = (32, 32, 32)
-BACKGROUND = (255, 255, 255)
+P1_COLOR = (255, 107, 107)
+P2_COLOR = (77, 171, 247)
+FLOOR_COLOR = (126, 214, 170)
+WALL_COLOR = (239, 83, 80)
 
 # Observation length for a single agent: own 6 values + opponent's 6 values
 OBS_SIZE = 12
@@ -70,7 +69,11 @@ def apply_action(agent, action):
     """Apply a discrete action (0-15) to a player."""
     dx, dy, heavy = ACTIONS[int(action)]
     agent.move_right(dx * FORCE)
-    agent.move_down(dy * FORCE)
+    # Go through move_up so maps where "up" is a jump work for agents too
+    if dy < 0:
+        agent.move_up(FORCE)
+    elif dy > 0:
+        agent.move_down(FORCE)
     if heavy:
         agent.make_heavy()
 
@@ -105,28 +108,31 @@ class Renderer:
     def _ensure_init(self):
         if self.font is None:
             pygame.init()
-            self.font = pygame.font.SysFont("Comic Sans MS", 20)
+            from bonk_game.ui import theme
+            self.font = theme.font(20)
         if self.render_mode == "human" and self.window is None:
             pygame.display.init()
             self.window = pygame.display.set_mode((WIDTH, HEIGHT))
             pygame.display.set_caption(self.caption)
             self.clock = pygame.time.Clock()
 
-    def draw(self, players, platforms, scores=None):
+    def draw(self, players, game_map, scores=None):
         self._ensure_init()
-        canvas = pygame.Surface((WIDTH, HEIGHT))
-        canvas.fill(BACKGROUND)
+        from bonk_game.ui.painter import Painter
+        from bonk_game.ui import theme
 
+        canvas = pygame.Surface((WIDTH, HEIGHT))
+        painter = Painter(canvas)
+        painter.background()
+        game_map.render(painter)
         for p in players:
-            p.render(canvas)
-        for obj in platforms:
-            obj.render(canvas)
+            painter.player(p)
 
         if scores is not None:
-            label1 = self.font.render(f"Score {scores[0]}", True, (0, 0, 0))
-            label2 = self.font.render(f"Score {scores[1]}", True, (0, 0, 0))
-            canvas.blit(label1, (50, 20))
-            canvas.blit(label2, (470, 20))
+            label1 = self.font.render(str(scores[0]), True, theme.P1)
+            label2 = self.font.render(str(scores[1]), True, theme.P2)
+            canvas.blit(label1, (20, 12))
+            canvas.blit(label2, (WIDTH - 20 - label2.get_width(), 12))
 
         if self.render_mode == "human":
             self.window.blit(canvas, canvas.get_rect())

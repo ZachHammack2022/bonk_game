@@ -1,8 +1,7 @@
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 from bonk_game.envs.testing_env import TestEnv
-
-AGENT_DIR = "./agents"
+from bonk_game.envs.utils.maps import DEFAULT_MAP, MAPS, agent_dir
 
 
 def model_classes():
@@ -18,35 +17,36 @@ def model_classes():
     }
 
 
-def load_agents(models):
-    """Load every agent in `models` that has a saved file in ./agents."""
+def load_agents(models, map_name=DEFAULT_MAP):
+    """Load every agent in `models` that has been trained on `map_name`."""
     loaded_agents = {}
     for key, model in models.items():
-        file_name = f"{AGENT_DIR}/{key}"
+        file_name = f"{agent_dir(map_name)}/{key}"
         if os.path.exists(f"{file_name}.zip"):
             loaded_agents[key] = model.load(file_name)
     return loaded_agents
 
 
-def create_env(model1, model2, render_mode):
+def create_env(model1, model2, render_mode, map_name=DEFAULT_MAP):
     # User input will not work with no display initialized
     if model1 == "user" or model2 == "user":
         assert render_mode == "human", "keyboard players need a window"
-    return TestEnv(model1, model2, render_mode)
+    return TestEnv(model1, model2, render_mode, map_name=map_name)
 
 
 def run_test(model1, model2, env, steps):
     obs = env.reset()
+    n = env.obs_size
     for _ in range(steps):
         if model1 == "user" and model2 == "user":
             actions = None
         elif model1 == "user":
-            actions, _states = model2.predict(obs[12:])
+            actions, _states = model2.predict(obs[n:])
         elif model2 == "user":
-            actions, _states = model1.predict(obs[:12])
+            actions, _states = model1.predict(obs[:n])
         else:
-            action1, _states = model1.predict(obs[:12])
-            action2, _states = model2.predict(obs[12:])
+            action1, _states = model1.predict(obs[:n])
+            action2, _states = model2.predict(obs[n:])
             actions = [action1, action2]
         obs, done, info = env.step(actions)
         if done:
@@ -57,8 +57,8 @@ def run_test(model1, model2, env, steps):
 
 
 CONTROLS = {
-    "first": "wasd + caps lock to go heavy",
-    "second": "the arrow keys + space to go heavy",
+    "first": "wasd + left shift to go heavy",
+    "second": "the arrow keys + space or right shift to go heavy",
 }
 
 
@@ -97,6 +97,20 @@ def pick_agent(choices, num):
     return choices[pick]
 
 
+def pick_map():
+    """Ask which map to play on and return its name."""
+    names = list(MAPS)
+    if len(names) == 1:
+        return names[0]
+    statement = "Choose a map:\n"
+    for i, name in enumerate(names):
+        statement += f"{i}: {MAPS[name].title} - {MAPS[name].description}\n"
+    statement += "Please enter the integer for your selected map: "
+    pick = read_int(statement, valid=range(len(names)))
+    print("-----------------")
+    return names[pick]
+
+
 def get_steps():
     return read_int(
         "Enter an integer for how many steps (30 per second) you would like to simulate: ",
@@ -104,8 +118,8 @@ def get_steps():
     )
 
 
-def test():
-    agents = load_agents(model_classes())
+def test(map_name=DEFAULT_MAP):
+    agents = load_agents(model_classes(), map_name)
     # Menu numbers come from this list, so they always match what is printed
     choices = list(agents.keys()) + ["user"]
 
@@ -116,5 +130,5 @@ def test():
     agent2 = "user" if pick2 == "user" else agents[pick2]
 
     steps = get_steps()
-    env = create_env(agent1, agent2, render_mode="human")
+    env = create_env(agent1, agent2, render_mode="human", map_name=map_name)
     run_test(agent1, agent2, env, steps=steps)

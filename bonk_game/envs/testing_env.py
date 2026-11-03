@@ -6,42 +6,47 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
 from bonk_game.envs.utils import arena
-from bonk_game.envs.utils.mechanics import env_collision_game, player_collision
+from bonk_game.envs.utils.maps import DEFAULT_MAP, make_map
+from bonk_game.envs.utils.mechanics import player_collision
 
-WINNING_SCORE = 100
-
-# (up, left, down, right, heavy) keys for each human player
-P1_KEYS = (pygame.K_w, pygame.K_a, pygame.K_s, pygame.K_d, pygame.K_CAPSLOCK)
-P2_KEYS = (pygame.K_UP, pygame.K_LEFT, pygame.K_DOWN, pygame.K_RIGHT, pygame.K_SPACE)
+# (up, left, down, right, heavy) keys for each human player; any key in a
+# group works. Caps Lock isn't used: on macOS it reads as held while toggled.
+P1_KEYS = ((pygame.K_w,), (pygame.K_a,), (pygame.K_s,), (pygame.K_d,), (pygame.K_LSHIFT,))
+P2_KEYS = ((pygame.K_UP,), (pygame.K_LEFT,), (pygame.K_DOWN,), (pygame.K_RIGHT,),
+           (pygame.K_RSHIFT, pygame.K_SPACE))
 
 
 class TestEnv():
-    __test__ = False  # not a pytest test class
     """Two-player env for playing/watching matches.
 
     Each player is either a trained model or the string "user" for keyboard
-    control. Hitting a wall gives the opponent a point and respawns you; the
-    first to WINNING_SCORE wins.
+    control. When a player dies the opponent scores; depending on the map
+    either the dead player respawns or the whole round restarts. The first
+    to the winning score (the map's default unless given) wins.
     """
+
+    __test__ = False  # not a pytest test class
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
-    def __init__(self, model1, model2, render_mode=None, winning_score=WINNING_SCORE):
+    def __init__(self, model1, model2, render_mode=None, winning_score=None, map_name=DEFAULT_MAP):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-        self.winning_score = winning_score
+        self.map = make_map(map_name)
+        self.winning_score = winning_score or self.map.winning_score
+        self.obs_size = self.map.obs_size
 
         self.user1 = model1 == "user"
         self.user2 = model2 == "user"
         self.model1 = None if self.user1 else model1
         self.model2 = None if self.user2 else model2
 
-        self.p1, self.p2 = arena.make_players()
+        self.p1, self.p2 = self.map.make_players()
         self.players = [self.p1, self.p2]
         self.scores = [0, 0]
-        self.env_objects = arena.make_platforms()
 
-        self.renderer = arena.Renderer(render_mode, self.metadata["render_fps"], "Bonk")
+        self.renderer = arena.Renderer(render_mode, self.metadata["render_fps"],
+                                       f"Bonk - {self.map.title}")
 
     @property
     def quit_requested(self):
@@ -49,30 +54,55 @@ class TestEnv():
         return self.renderer.quit_requested
 
     def _get_obs(self):
-        """Both players' observations stacked: [p1 view (12), p2 view (12)]."""
+        """Both players' observations stacked: [p1 view, p2 view].
+
+        Each view is obs_size long; slice with obs[:env.obs_size] and
+        obs[env.obs_size:].
+        """
         p1, p2 = self.p1.get_obs(), self.p2.get_obs()
-        return np.concatenate((p1, p2, p2, p1), axis=0)
+        extra = self.map.extra_obs()
+        return np.concatenate((p1, p2, extra, p2, p1, extra), axis=0)
 
     def check_collisions(self):
-        for env_obj in self.env_objects:
-            for p, opponent in ((self.p1, self.p2), (self.p2, self.p1)):
-                if env_collision_game(p, env_obj):
-                    opponent.score += 1
-                    # Don't respawn on top of the opponent
-                    arena.respawn_apart(p, [opponent])
+        died1, died2 = self.map.collide(self.p1), self.map.collide(self.p2)
+        if died1:
+            self.p2.score += 1
+        if died2:
+            self.p1.score += 1
+
+        if self.map.reset_round_on_kill:
+            # Last one standing takes the round (both dying at once is a
+            # double point); then everything restarts.
+            if died1 or died2:
+                self.new_round()
+                return
+        else:
+            # Respawn just the dead player, away from the opponent
+            if died1:
+                arena.respawn_apart(self.p1, [self.p2])
+            if died2:
+                arena.respawn_apart(self.p2, [self.p1])
         player_collision(self.p1, self.p2)
+
+    def new_round(self):
+        self.map.reset()
+        arena.reset_players(self.players)
 
     def check_keydown(self, keys, agent):
         up, left, down, right, heavy = P2_KEYS if agent is self.p2 else P1_KEYS
-        if keys[up]:
+
+        def held(group):
+            return any(keys[k] for k in group)
+
+        if held(up):
             agent.move_up(arena.FORCE)
-        if keys[left]:
+        if held(left):
             agent.move_left(arena.FORCE)
-        if keys[down]:
+        if held(down):
             agent.move_down(arena.FORCE)
-        if keys[right]:
+        if held(right):
             agent.move_right(arena.FORCE)
-        if keys[heavy]:
+        if held(heavy):
             agent.make_heavy()
 
     def apply_forces(self, actions):
@@ -97,13 +127,14 @@ class TestEnv():
         for p in self.players:
             p.score = 0
         self.scores = [0, 0]
-        arena.reset_players(self.players)
+        self.new_round()
         if self.render_mode == "human":
             self._render_frame()
         return self._get_obs()
 
     def step(self, actions):
         self.apply_forces(actions)
+        self.map.step()
         self.check_collisions()
         self.p1.update()
         self.p2.update()
@@ -122,7 +153,7 @@ class TestEnv():
             return self._render_frame()
 
     def _render_frame(self):
-        return self.renderer.draw(self.players, self.env_objects, self.scores)
+        return self.renderer.draw(self.players, self.map, self.scores)
 
     def close(self):
         self.renderer.close()

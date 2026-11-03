@@ -1,8 +1,8 @@
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
-import bonk_game  # noqa: F401  (registers the gym env)
-from bonk_game.envs.utils.testing import AGENT_DIR
+import bonk_game  # noqa: F401  (registers the gym envs)
+from bonk_game.envs.utils.maps import DEFAULT_MAP, agent_dir, env_id
 
 BAD_STEPS = 50_000
 AGENT_STEPS = 500_000
@@ -10,9 +10,9 @@ N_ENVS = 4
 AGENT_NAMES = ["ppo", "a2c", "dqn", "ars"]
 
 
-def make_env():
+def make_env(map_name=DEFAULT_MAP):
     from stable_baselines3.common.env_util import make_vec_env
-    return make_vec_env("bonk_game/bonk-v0", n_envs=N_ENVS)
+    return make_vec_env(env_id(map_name), n_envs=N_ENVS)
 
 
 def create_models(env, verbose):
@@ -26,16 +26,16 @@ def create_models(env, verbose):
     }
 
 
-def train_bad_agent(verbose=0):
+def train_bad_agent(map_name=DEFAULT_MAP, verbose=0):
     """Train the sparring partner that the other agents learn against."""
     from stable_baselines3 import PPO
     print("Training the bad agent.")
-    model = PPO("MlpPolicy", make_env(), verbose=verbose)
+    model = PPO("MlpPolicy", make_env(map_name), verbose=verbose)
     model.learn(total_timesteps=BAD_STEPS, progress_bar=True)
-    model.save(f"{AGENT_DIR}/bad")
+    model.save(f"{agent_dir(map_name)}/bad")
 
 
-def train(models):
+def train(models, map_name=DEFAULT_MAP):
     """Train and save each model.
 
     Args:
@@ -44,34 +44,34 @@ def train(models):
     for key, model in models.items():
         print(f"Training the {key} agent.")
         model.learn(total_timesteps=AGENT_STEPS, progress_bar=True)
-        model.save(f"{AGENT_DIR}/{key}")
+        model.save(f"{agent_dir(map_name)}/{key}")
 
 
-def delete_models(names):
+def delete_models(names, map_name=DEFAULT_MAP):
     for key in names:
-        path = f"{AGENT_DIR}/{key}.zip"
+        path = f"{agent_dir(map_name)}/{key}.zip"
         if os.path.exists(path):
             os.remove(path)
 
 
-def check_agents():
-    """True if at least one trained agent already exists."""
-    return any(os.path.exists(f"{AGENT_DIR}/{key}.zip") for key in AGENT_NAMES)
+def check_agents(map_name=DEFAULT_MAP):
+    """True if at least one trained agent already exists for this map."""
+    return any(os.path.exists(f"{agent_dir(map_name)}/{key}.zip") for key in AGENT_NAMES)
 
 
-def train_models():
-    os.makedirs(AGENT_DIR, exist_ok=True)
+def train_models(map_name=DEFAULT_MAP):
+    os.makedirs(agent_dir(map_name), exist_ok=True)
 
     # Delete old agents from files
-    delete_models(["bad"] + AGENT_NAMES)
+    delete_models(["bad"] + AGENT_NAMES, map_name)
 
     # Train the bad agent first...
-    train_bad_agent()
+    train_bad_agent(map_name)
 
     # ...then build fresh envs. BonkEnv loads ./agents/bad.zip when it's
     # constructed, so these envs must be made *after* the bad agent is saved
     # or every agent would train against an opponent that never moves.
-    env = make_env()
-    train(create_models(env, verbose=0))
+    env = make_env(map_name)
+    train(create_models(env, verbose=0), map_name)
 
     print("All agents have been trained!")
