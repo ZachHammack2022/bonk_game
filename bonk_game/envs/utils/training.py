@@ -26,16 +26,16 @@ def create_models(env, verbose):
     }
 
 
-def train_bad_agent(map_name=DEFAULT_MAP, verbose=0):
+def train_bad_agent(map_name=DEFAULT_MAP, verbose=0, steps=BAD_STEPS):
     """Train the sparring partner that the other agents learn against."""
     from stable_baselines3 import PPO
     print("Training the bad agent.")
     model = PPO("MlpPolicy", make_env(map_name), verbose=verbose)
-    model.learn(total_timesteps=BAD_STEPS, progress_bar=True)
+    model.learn(total_timesteps=steps, progress_bar=True)
     model.save(f"{agent_dir(map_name)}/bad")
 
 
-def train(models, map_name=DEFAULT_MAP):
+def train(models, map_name=DEFAULT_MAP, steps=AGENT_STEPS):
     """Train and save each model.
 
     Args:
@@ -43,7 +43,7 @@ def train(models, map_name=DEFAULT_MAP):
     """
     for key, model in models.items():
         print(f"Training the {key} agent.")
-        model.learn(total_timesteps=AGENT_STEPS, progress_bar=True)
+        model.learn(total_timesteps=steps, progress_bar=True)
         model.save(f"{agent_dir(map_name)}/{key}")
 
 
@@ -59,19 +59,23 @@ def check_agents(map_name=DEFAULT_MAP):
     return any(os.path.exists(f"{agent_dir(map_name)}/{key}.zip") for key in AGENT_NAMES)
 
 
-def train_models(map_name=DEFAULT_MAP):
+def train_models(map_name=DEFAULT_MAP, steps=AGENT_STEPS):
+    """Train the bad agent, then every agent against it.
+
+    `steps` is per agent; the bad agent gets a tenth of it.
+    """
     os.makedirs(agent_dir(map_name), exist_ok=True)
 
     # Delete old agents from files
     delete_models(["bad"] + AGENT_NAMES, map_name)
 
     # Train the bad agent first...
-    train_bad_agent(map_name)
+    train_bad_agent(map_name, steps=max(1000, steps // 10))
 
     # ...then build fresh envs. BonkEnv loads ./agents/bad.zip when it's
     # constructed, so these envs must be made *after* the bad agent is saved
     # or every agent would train against an opponent that never moves.
     env = make_env(map_name)
-    train(create_models(env, verbose=0), map_name)
+    train(create_models(env, verbose=0), map_name, steps=steps)
 
     print("All agents have been trained!")

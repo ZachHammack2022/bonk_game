@@ -2,4 +2,4 @@
 pytest
 numpy
 pygame
-gym
+gymnasium

@@ -172,14 +172,14 @@ def test_swing_match_resets_the_round_on_each_kill():
 
 
 def test_swing_training_env():
-    pytest.importorskip("gym")
+    pytest.importorskip("gymnasium")
     from bonk_game.envs.training_env import BonkEnv
     env = BonkEnv(map_name="swing", opponent_path=None)
-    obs = env.reset(seed=2)
+    obs, _ = env.reset(seed=2)
     assert obs.shape == env.observation_space.shape == (15,)
     done = False
     for _ in range(15000):
-        obs, reward, done, _ = env.step(env.action_space.sample())
+        obs, reward, done, _, _ = env.step(env.action_space.sample())
         assert env.observation_space.contains(obs)
         if done:
             break

@@ -1,6 +1,6 @@
 """Fast tests for the game physics. Run with `python -m pytest`.
 
-These only need numpy and pygame, not gym or stable-baselines3.
+These only need numpy and pygame, not gymnasium or stable-baselines3.
 """
 import os
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -127,14 +127,14 @@ def test_match_ends_at_winning_score():
 
 
 def test_training_env_episode_runs_and_ends_with_valid_reward():
-    pytest.importorskip("gym")
+    pytest.importorskip("gymnasium")
     from bonk_game.envs.training_env import BonkEnv
     env = BonkEnv(opponent_path=None)
-    obs = env.reset(seed=1)
+    obs, _ = env.reset(seed=1)
     assert env.observation_space.contains(obs)
     done = False
     for _ in range(5000):
-        obs, reward, done, info = env.step(env.action_space.sample())
+        obs, reward, done, _, info = env.step(env.action_space.sample())
         assert env.observation_space.contains(obs)
         if done:
             assert reward in (-1.0, 0.0, 1.0)

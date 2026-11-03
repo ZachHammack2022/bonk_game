@@ -125,13 +125,13 @@ def test_every_map_plays_a_full_match_with_valid_observations(name):
 
 @pytest.mark.parametrize("name", list(MAPS))
 def test_every_map_has_a_training_env(name):
-    pytest.importorskip("gym")
+    pytest.importorskip("gymnasium")
     from bonk_game.envs.training_env import BonkEnv
     env = BonkEnv(map_name=name, opponent_path=None)
-    obs = env.reset(seed=3)
+    obs, _ = env.reset(seed=3)
     assert env.observation_space.contains(obs)
     for _ in range(15000):
-        obs, reward, done, _ = env.step(env.action_space.sample())
+        obs, reward, done, _, _ = env.step(env.action_space.sample())
         assert env.observation_space.contains(obs)
         if done:
             break
