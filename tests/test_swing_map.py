@@ -184,3 +184,14 @@ def test_swing_training_env():
         if done:
             break
     assert done
+
+
+def test_agent_up_actions_jump_on_jump_maps():
+    from bonk_game.envs.utils import arena
+    m = make_map("swing")
+    p, _ = m.make_players()
+    place(p, 200, m.FLOOR_Y - p.r + 1)  # resting on the floor
+    m.collide(p)
+    assert p.grounded
+    arena.apply_action(p, 3)  # up
+    assert p.y_v == -m.jump_speed

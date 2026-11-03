@@ -17,16 +17,19 @@ You pick a map when you run `main.py`. Agents are trained separately for each ma
 
 **Classic**: a box with a bouncy floor and ceiling and deadly side walls. "Up" is a thrust, so you can fly. Push your opponent into a wall to score; a point respawns only the player who died. First to 100 wins.
 
+The other maps float in open space, bonk-style. There are no walls: you die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top. You can't fly on them either: "up" is a jump, and it only works while you're standing on something. Each death gives the other player a point and restarts the round, and the first to 5 wins.
+
+**Floating Platform**: one platform, nothing else. Knock your opponent off.
+
+**Sliding Platform**: a platform with a bumper post at each end that slides left and right on a rail. Every hit and every roll shoves it, so you can rock it back and forth to build momentum and fling your opponent. Going heavy shoves it much harder. Jump over a post to leave (or get thrown over one).
+
 **Sinking Swing**: a floor with a hole in the middle, a launch pad at the bottom of the hole, and a swing hanging above it all.
 - After about 5 seconds the floor (with the hole and pad) starts sinking, and eventually drops off the screen.
-- You can't fly here: "up" is a jump, and it only works while you're standing on the floor, the pad, or the swing seat.
 - Fall through the hole and the pad fires you back up.
 - Jump into the swing to survive once the floor is gone. Kick the swing (going heavy kicks much harder) or jump out and knock your opponent off it.
-- You die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top.
-- Each death gives the other player a point and restarts the round. First to 5 wins.
 
 ### Adding a map
-Subclass `Map` in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. It then shows up in the main menu, in `tournament.py --map <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. `bonk_game/envs/utils/bodies.py` has building blocks: rectangles that can move, bounce, have friction or launch players, and a swing.
+Subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. It then shows up in the main menu, in `tournament.py --map <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. `bonk_game/envs/utils/bodies.py` has building blocks: rectangles that can move, bounce, have friction or launch players, a platform that slides when pushed, and a swing.
 
 ## To run
 1. Install python 3.9
@@ -37,9 +40,9 @@ Subclass `Map` in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bot
 6. Run "pip install -e ." to make the gym environment
 7. Run "defaults write org.python.python ApplePersistenceIgnoreState NO" if on macOS.
 8. Run "python3 main.py". This will train your agents and allow you to begin testing.
-9. Once you have trained your agents, you can run a tournament. Run "python3 tournament.py". This will put your trained agents against one another to find the winner! Add `--map swing` to hold it on the Sinking Swing map.
+9. Once you have trained your agents, you can run a tournament. Run "python3 tournament.py". This will put your trained agents against one another to find the winner! Add `--map platform`, `--map slider` or `--map swing` to hold it on another map.
 
-To retrain from scratch, delete the map's agent folder (`agents` for Classic, `agents/swing` for Sinking Swing) and run `python3 main.py` again.
+To retrain from scratch, delete the map's agent folder (`agents` for Classic, `agents/<map>` for the others) and run `python3 main.py` again.
 
 ## How training works
 A weak PPO "bad" agent is trained first. The PPO, A2C, DQN and ARS agents are then each trained against it (it controls the blue player in `BonkEnv`). Agents are saved to `./agents/<name>.zip` (Classic) or `./agents/<map>/<name>.zip` (other maps).
@@ -57,7 +60,7 @@ python -m pytest
 ## Code layout
 - `bonk_game/envs/utils/arena.py`: arena size, action table, spawning and rendering shared by every env
 - `bonk_game/envs/utils/maps.py`: the maps
-- `bonk_game/envs/utils/bodies.py`: moving/bouncy blocks and the swing
+- `bonk_game/envs/utils/bodies.py`: moving/bouncy blocks, the sliding platform and the swing
 - `bonk_game/envs/utils/mechanics.py`: classic collision physics and player-vs-player collisions
 - `bonk_game/envs/training_env.py`: the gym env agents train on
 - `bonk_game/envs/testing_env.py`: the two-player env used for playing and for tournament matches

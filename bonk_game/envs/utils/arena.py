@@ -70,7 +70,11 @@ def apply_action(agent, action):
     """Apply a discrete action (0-15) to a player."""
     dx, dy, heavy = ACTIONS[int(action)]
     agent.move_right(dx * FORCE)
-    agent.move_down(dy * FORCE)
+    # Go through move_up so maps where "up" is a jump work for agents too
+    if dy < 0:
+        agent.move_up(FORCE)
+    elif dy > 0:
+        agent.move_down(FORCE)
     if heavy:
         agent.make_heavy()
 

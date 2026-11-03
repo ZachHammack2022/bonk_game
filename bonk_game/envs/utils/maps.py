@@ -7,7 +7,7 @@ It is automatically available in the main menu, the tournament
 import numpy as np
 
 from bonk_game.envs.utils import arena
-from bonk_game.envs.utils.bodies import Block, Swing, collide_block
+from bonk_game.envs.utils.bodies import Block, SlidingPlatform, Swing, collide_block
 from bonk_game.envs.utils.mechanics import env_collision, handle_env_collision
 from bonk_game.envs.utils.player import player
 
@@ -94,19 +94,149 @@ class ClassicMap(Map):
             obj.render(canvas)
 
 
-class SwingMap(Map):
+class OpenMap(Map):
+    """Base for bonk-style maps floating in open space.
+
+    No walls: you die if you fall off the bottom of the screen, leave it to
+    the left or right, or get launched way above the top. Players can't fly:
+    "up" is a jump that only works while standing on something. Each death
+    gives the other player a point and restarts the round.
+
+    Subclasses fill in `self.blocks` (static Blocks) and/or `self.bodies`
+    (moving things like a Swing or SlidingPlatform, which need step(),
+    collide(p) and render(canvas)).
+    """
+
+    KILL_TOP = -120  # "way too high": well above the top of the screen
+
+    obs_bounds = (0, arena.WIDTH, KILL_TOP, arena.HEIGHT)
+    clamp_bottom = False
+    max_speed = 28
+    can_fly = False
+    jump_speed = 22
+    winning_score = 5
+    reset_round_on_kill = True
+
+    PLATFORM_COLOR = (130, 200, 160)
+    POST_COLOR = (90, 90, 110)
+
+    def __init__(self):
+        self.blocks = []
+        self.bodies = []
+        self.reset()
+
+    def reset(self):
+        self.steps = 0
+
+    def step(self):
+        self.steps += 1
+        for body in self.bodies:
+            body.step()
+
+    def out_of_bounds(self, p):
+        return (p.y - p.r > self.height
+                or p.x + p.r < 0
+                or p.x - p.r > self.width
+                or p.y < self.KILL_TOP)
+
+    def collide(self, p):
+        p.grounded = False
+        killed = False
+        for block in self.blocks:
+            killed |= collide_block(p, block)
+        for body in self.bodies:
+            killed |= bool(body.collide(p))
+        return killed or self.out_of_bounds(p)
+
+    def render(self, canvas):
+        for body in self.bodies:
+            body.render(canvas)
+        for block in self.blocks:
+            block.render(canvas)
+
+
+class PlatformMap(OpenMap):
+    """One floating platform. Knock your opponent off it."""
+
+    name = "platform"
+    title = "Floating Platform"
+    description = "A single platform in open space. Last one on it wins."
+
+    LEFT, RIGHT = 200, 480
+    TOP = 300
+    THICKNESS = 16
+
+    spawn_box = (LEFT, RIGHT, 200, TOP - 2)
+
+    def __init__(self):
+        super().__init__()
+        self.blocks = [Block(self.LEFT, self.TOP, self.RIGHT, self.TOP + self.THICKNESS,
+                             self.PLATFORM_COLOR, restitution=0.3, friction=0.04)]
+
+
+class SliderMap(OpenMap):
+    """A heavy platform on a rail that players push around.
+
+    Every hit and every roll shoves the platform the other way, so players
+    can rock it back and forth to build momentum and fling each other off.
+    Posts at both ends act as bumpers you can bounce off.
+    """
+
+    name = "slider"
+    title = "Sliding Platform"
+    description = "Hits push the platform. Rock it to build momentum and fling your opponent."
+
+    LEFT, RIGHT = 200, 480
+    TOP = 300
+    THICKNESS = 16
+    POST_WIDTH, POST_HEIGHT = 10, 46
+    TRAVEL = 140  # how far it can slide either way
+
+    spawn_box = (LEFT + 10, RIGHT - 10, 200, TOP - 2)
+    n_extra_obs = 2  # platform offset and velocity
+
+    RAIL_COLOR = (170, 170, 185)
+
+    def __init__(self):
+        super().__init__()
+
+    def reset(self):
+        super().reset()
+        surface = dict(restitution=0.3, friction=0.08)
+        post = dict(restitution=0.6, friction=0.0)
+        top, pw, ph = self.TOP, self.POST_WIDTH, self.POST_HEIGHT
+        self.platform = SlidingPlatform([
+            Block(self.LEFT, top, self.RIGHT, top + self.THICKNESS, self.PLATFORM_COLOR, **surface),
+            Block(self.LEFT, top - ph, self.LEFT + pw, top, self.POST_COLOR, **post),
+            Block(self.RIGHT - pw, top - ph, self.RIGHT, top, self.POST_COLOR, **post),
+        ], mass=6.0, travel=self.TRAVEL)
+        self.bodies = [self.platform]
+
+    def extra_obs(self):
+        return np.clip(np.array([
+            self.platform.offset / self.TRAVEL,
+            self.platform.vx / self.platform.max_speed,
+        ]), -1, 1)
+
+    def render(self, canvas):
+        import pygame
+        # The rail the platform slides along
+        y = self.TOP + self.THICKNESS + 6
+        x1 = self.LEFT - self.TRAVEL
+        x2 = self.RIGHT + self.TRAVEL
+        pygame.draw.line(canvas, self.RAIL_COLOR, (x1, y), (x2, y), 3)
+        for x in (x1, x2):
+            pygame.draw.line(canvas, self.RAIL_COLOR, (x, y - 6), (x, y + 6), 3)
+        super().render(canvas)
+
+
+class SwingMap(OpenMap):
     """Sinking floor with a pit and a launch pad, and a swing to escape to.
 
     After a short grace period the whole floor (including the pit and its
     launch pad) starts sinking, and eventually drops off the bottom of the
     screen. The swing hanging in the middle is the only safe spot left, but
     it can be kicked and players can knock each other out of it.
-
-    Players can't fly on this map: "up" is a jump that only works while
-    standing on the floor, the launch pad, or the swing seat.
-
-    You die if you fall off the bottom of the screen, leave it to the left
-    or right, or get launched way above the top.
     """
 
     name = "swing"
@@ -124,18 +254,8 @@ class SwingMap(Map):
     SINK_SPEED = 0.35  # pixels per step
     LAUNCH_SPEED = 25  # enough to fly from the pit up to the swing
 
-    KILL_TOP = -120  # "way too high": well above the top of the screen
-
-    obs_bounds = (0, arena.WIDTH, KILL_TOP, arena.HEIGHT)
     spawn_box = (FLOOR_LEFT + 20, FLOOR_RIGHT - 20, 290, FLOOR_Y - 2)
-    clamp_bottom = False
-    max_speed = 28  # higher than classic so the launch pad can reach the swing
-    # No hovering here, or the sinking floor wouldn't matter: up = jump
-    can_fly = False
-    jump_speed = 22  # high enough to jump from the floor into the swing
     n_extra_obs = 3  # floor depth, swing angle, swing angular velocity
-    winning_score = 5
-    reset_round_on_kill = True
 
     FLOOR_COLOR = (255, 204, 204)
     PIT_COLOR = (200, 160, 160)
@@ -143,7 +263,7 @@ class SwingMap(Map):
 
     def __init__(self):
         self.swing = Swing(pivot_x=arena.WIDTH / 2, pivot_y=24, length=245)
-        self.reset()
+        super().__init__()
 
     def _build_floor(self):
         top, t = self.FLOOR_Y, self.FLOOR_THICKNESS
@@ -163,33 +283,24 @@ class SwingMap(Map):
                   launch=self.LAUNCH_SPEED),
         ]
 
+    @property
+    def floor(self):
+        return self.blocks
+
     def reset(self):
-        self.steps = 0
+        super().reset()
         self.sink = 0.0  # how far the floor has dropped
-        self.floor = self._build_floor()
+        self.blocks = self._build_floor()
         self.swing.reset()
+        self.bodies = [self.swing]
 
     def step(self):
-        self.steps += 1
+        super().step()
         speed = self.SINK_SPEED if self.steps > self.SINK_DELAY else 0.0
         self.sink += speed
-        for block in self.floor:
+        for block in self.blocks:
             block.vy = speed
             block.move(0, speed)
-        self.swing.step()
-
-    def out_of_bounds(self, p):
-        return (p.y - p.r > self.height
-                or p.x + p.r < 0
-                or p.x - p.r > self.width
-                or p.y < self.KILL_TOP)
-
-    def collide(self, p):
-        p.grounded = False
-        for block in self.floor:
-            collide_block(p, block)
-        self.swing.collide(p)
-        return self.out_of_bounds(p)
 
     def extra_obs(self):
         depth = min(self.sink / (self.height - self.FLOOR_Y + self.PIT_DEPTH), 1.0)
@@ -199,17 +310,8 @@ class SwingMap(Map):
             self.swing.omega / self.swing.max_omega,
         ]), -1, 1)
 
-    def render(self, canvas):
-        import pygame
-        # Danger line marks how high is "too high" (only visible if it's on screen)
-        if self.KILL_TOP >= 0:
-            pygame.draw.line(canvas, (220, 0, 0), (0, self.KILL_TOP), (self.width, self.KILL_TOP), 2)
-        self.swing.render(canvas)
-        for block in self.floor:
-            block.render(canvas)
 
-
-MAPS = {m.name: m for m in (ClassicMap, SwingMap)}
+MAPS = {m.name: m for m in (ClassicMap, PlatformMap, SliderMap, SwingMap)}
 DEFAULT_MAP = "classic"
 
 

@@ -102,31 +102,97 @@ def resolve_contact(p, contact, surface_v=(0.0, 0.0), restitution=0.5,
     p.x_v += j * inv_p * nx
     p.y_v += j * inv_p * ny
 
-    if friction:
-        tx, ty = -ny, nx
-        vt = rvx * tx + rvy * ty
-        p.x_v -= friction * vt * tx
-        p.y_v -= friction * vt * ty
-
     if body is not None:
         body.apply_impulse(-j * nx, -j * ny)
+
+    if friction:
+        # Friction drags the player's sliding speed toward the surface's.
+        # A movable body gets dragged the other way, which is what lets
+        # players shove a sliding platform around by rolling on it.
+        tx, ty = -ny, nx
+        vt = rvx * tx + rvy * ty
+        inv_bt = body.inv_mass_along(tx, ty) if body is not None else 0.0
+        jt = friction * vt / (inv_p + inv_bt)  # tangential impulse size
+        p.x_v -= jt * inv_p * tx
+        p.y_v -= jt * inv_p * ty
+        if body is not None:
+            body.apply_impulse(jt * tx, jt * ty)
     return j
 
 
-def collide_block(p, block):
-    """Collide a player with a Block. Returns True if the player is killed."""
+def collide_block(p, block, body=None):
+    """Collide a player with a Block. Returns True if the player is killed.
+
+    `body` is the movable object the block belongs to, if any, so it can
+    be pushed back.
+    """
     rvx, rvy = p.x_v - block.vx, p.y_v - block.vy
     contact = circle_rect_contact(p.x, p.y, p.r, *block.rect(), rvx, rvy)
     if contact is None:
         return False
     if block.kill:
         return True
-    resolve_contact(p, contact, (block.vx, block.vy), block.restitution, block.friction)
+    resolve_contact(p, contact, (block.vx, block.vy), block.restitution,
+                    block.friction, body=body)
     nx, ny, _ = contact
     if block.launch is not None and ny < -0.5:
         # Landed on top of a launch pad: fire straight up
         p.y_v = min(p.y_v, block.vy - block.launch)
     return False
+
+
+class SlidingPlatform:
+    """A group of blocks that slides left/right as one heavy body.
+
+    It only moves horizontally (as if on a rail): players hitting it or
+    rolling on it push it, and it pushes them back. It slowly comes to a
+    stop and bounces softly off the ends of its rail.
+
+    Args:
+        blocks: the Blocks that make up the platform, at their start positions
+        mass: compared to a player's mass of 1 (5 when heavy)
+        travel: how far it may slide either way from where it starts
+    """
+
+    def __init__(self, blocks, mass=6.0, travel=150, damping=0.992,
+                 max_speed=12, end_bounce=0.5):
+        self.blocks = blocks
+        self.mass = mass
+        self.travel = travel
+        self.damping = damping
+        self.max_speed = max_speed
+        self.end_bounce = end_bounce
+        self.offset = 0.0  # how far it has slid from the start (right is +)
+        self.vx = 0.0
+
+    def inv_mass_along(self, nx, ny):
+        # Only the horizontal part of a push can move it
+        return nx * nx / self.mass
+
+    def apply_impulse(self, jx, jy):
+        self.vx += jx / self.mass
+        self.vx = max(-self.max_speed, min(self.max_speed, self.vx))
+
+    def step(self):
+        self.vx *= self.damping
+        new_offset = self.offset + self.vx
+        if abs(new_offset) > self.travel:
+            # Hit the end of the rail: stop there and bounce back a little
+            new_offset = math.copysign(self.travel, new_offset)
+            self.vx = -self.vx * self.end_bounce
+        dx = new_offset - self.offset
+        self.offset = new_offset
+        for block in self.blocks:
+            block.move(dx, 0)
+            block.vx = self.vx
+
+    def collide(self, p):
+        """Collide a player with every part. True if a kill block was hit."""
+        return any([collide_block(p, block, body=self) for block in self.blocks])
+
+    def render(self, canvas):
+        for block in self.blocks:
+            block.render(canvas)
 
 
 class Swing:
