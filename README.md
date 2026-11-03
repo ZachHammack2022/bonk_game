@@ -2,17 +2,19 @@
 
 This is a working version of bonk.io, a popular online physics-based platform game. This was created using pygame, mostly from scratch aside from the collision functions. This environment supports single agent RL using Gymnasium and Stable Baselines 3.
 
-Currently, only one bonk.io env exists, but multiple envs could easily be created. There are options for multiplayer, AI agent vs user, and AI vs AI (same or different training algorithms). Tournaments are supported for AI agents only. User cannot interact in tournament yet.
+There are several maps, and up to four players: any mix of humans on one keyboard, the built-in bot, and trained AI agents. Tournaments are supported for AI agents only.
 
 ## How it plays
-Run `python3 main.py` to open the game. Pick a map, choose who's playing (a human, the built-in bot at Easy, Medium or Hard, or any AI agents you've trained for that map), and pick how many points win.
+Run `python3 main.py` to open the game. Pick a map, choose who's playing (2-4 players, each a human, the built-in bot at Easy, Medium or Hard, or any AI agents you've trained for that map), and pick how many points win.
 
-Two balls fight to knock each other out. Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
+Balls fight to knock each other out. With 3 or 4 players it's a free-for-all: a ball that's knocked out sits out the rest of the round, and the last one standing takes it. (On Classic, where you respawn, the point goes to whoever last touched you.) Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
 
 | | Move / jump | Go heavy |
 |---|---|---|
 | Red | W A S D | Left Shift |
 | Blue | Arrow keys | Space or Right Shift |
+| Purple | I J K L | H |
+| Yellow | Numpad 8 4 5 6 | Numpad 0 |
 
 Esc pauses, M mutes. Everything works with the mouse too.
 
