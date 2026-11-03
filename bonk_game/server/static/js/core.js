@@ -4,6 +4,7 @@
 //
 // The client is a few plain scripts that share one global scope, loaded in
 // order by index.html (no build step):
+//   report.js    playtest reports: ping, late states, rubber-banding, errors
 //   core.js      colours, helpers, app state, your profile, home screen, connection
 //   lobby.js     the lobby and the ball pickers
 //   results.js   the results screen
@@ -212,6 +213,7 @@ function connect() {
   ws.onclose = () => {
     if (app.ws !== ws || app.fatal) return;
     app.retry = Math.min(app.retry + 1, 5);
+    playtest.reconnect();
     status(app.restoring !== null || $("status").textContent.includes("restarting")
       ? "The server is restarting. Reconnecting…" : "Connection lost. Reconnecting…");
     setTimeout(connect, 500 * 2 ** app.retry);
@@ -238,6 +240,8 @@ function onMessage(msg) {
       app.retry = 0;
       status("");
       fillMapOptions();
+      playtest.on = !!msg.playtest;
+      playtest.sendErrors();
       // Bring your profile along
       if (me.pattern !== "plain") send({ type: "pattern", pattern: me.pattern });
       if (me.color !== null) send({ type: "color", color: me.color, auto: true });
@@ -250,13 +254,14 @@ function onMessage(msg) {
         if (isHost()) send({ type: "settings", ...app.restoring });
         app.restoring = null;
       }
-      if (msg.phase === "lobby") { app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
+      if (msg.phase === "lobby") { playtest.flush(); $("feel").classList.add("hidden"); app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
       break;
     case "match":
       app.match = msg;
       app.states = [];
       app.last = null;
       app.results = null;
+      playtest.start(!msg.slots.some((x) => x.id === me.token));
       fx.reset();
       $("results").classList.add("hidden");
       // Emotes are for players, not people watching
@@ -267,12 +272,14 @@ function onMessage(msg) {
     case "pong": {
       const sample = performance.now() - msg.t;
       net.rtt = net.rtt === null ? sample : net.rtt * 0.8 + sample * 0.2;
+      playtest.ping(sample);
       break;
     }
     case "state":
     case "d": {
       // Mostly deltas: just what changed since the last tick
       const S = msg.type === "state" ? msg : BonkDelta.apply(app.last, msg);
+      playtest.state(!!S);
       if (!S) break;  // missed the state it builds on: wait for the next full one
       app.last = S;
       app.states.push([performance.now(), S]);
@@ -287,6 +294,7 @@ function onMessage(msg) {
       if (!app.match) { show("lobby"); break; }  // joined after the match ended
       app.results = msg;
       showResults(msg);
+      playtest.finish();
       break;
     case "notice":
       toast(msg.message);

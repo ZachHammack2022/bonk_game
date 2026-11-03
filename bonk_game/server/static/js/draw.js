@@ -436,10 +436,12 @@ function drawHud(st, now) {
 let lastFrame = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  const ms = now - lastFrame;
+  const dt = Math.min(0.1, ms / 1000);
   lastFrame = now;
   fx.update(dt);
   if ($("game").classList.contains("hidden") || !app.match) return;
+  playtest.frame(ms);
   let st = blendedState(now);
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
   if (!st) { drawBackground(); text("Get ready…", 24, T.dim, W / 2, H / 2); return; }

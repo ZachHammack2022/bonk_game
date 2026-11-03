@@ -164,8 +164,15 @@ function check(cond, what) {
     const shown = await host.$$eval("#awards li", (els) => els.length);
     check(shown === res.awards.length, `the awards are on the results screen (${shown})`);
 
-    // Everyone votes for a rematch
+    // Playtest reports: how did it feel? (sent when the next match starts)
     await guest.waitForSelector("#results:not(.hidden)");
+    check(await host.isVisible("#feel"), "players are asked how the match felt");
+    await guest.click('#feel button[data-feel="laggy"]');
+    await guest.fill("#feel-note", "a test note");
+    check(await guest.isVisible("#feel-thanks"), "and can say");
+    await guest.evaluate(() => playtest.error("e2e test error", "e2e.js:1"));
+
+    // Everyone votes for a rematch
     await host.click("#vote");
     await guest.waitForFunction(() => /1\/2/.test(document.querySelector("#vote").textContent));
     // The guest votes with the controller's A button. (Gamepads are read
@@ -180,6 +187,17 @@ function check(cond, what) {
     await host.waitForSelector("#results.hidden", { state: "attached" });
     await host.waitForFunction(() => bonkDebug.app.match && !bonkDebug.app.results);
     check(true, "a rematch starts once everyone votes (the guest with a controller)");
+    await host.waitForTimeout(500);
+    const items = (await (await fetch(base + "/api/playtest")).json()).items;
+    const reports = items.filter((i) => i.event === "playtest");
+    // (The guest reloaded mid-match, so theirs may cover only a moment)
+    const ann = reports.find((r) => r.name === "Ann");
+    const full = ann && ann.ping.n > 0 && ann.states.n > 20 && ann.frames.fps > 0 && ann.device.ua;
+    if (!full || reports.length !== 2) console.log(JSON.stringify(reports));
+    check(reports.length === 2 && full && reports.every((r) => r.states.n > 0 && r.device.ua),
+      `each player's report reaches the server (${reports.length}: ping, states, frame rate, device)`);
+    check(reports.some((r) => r.name === "Bob" && r.feel === "laggy" && r.note === "a test note"), "with how it felt");
+    check(items.some((i) => i.event === "client_error" && i.message === "e2e test error"), "browser errors reach the server too");
     await host.waitForSelector("#results:not(.hidden)", { timeout: 120000 });
     await host.click("#to-lobby");
     await host.waitForSelector("#lobby:not(.hidden)");

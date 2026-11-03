@@ -110,6 +110,17 @@
         <div id="winner"></div>
         <ol id="standings"></ol>
         <ul id="awards" class="awards hidden"></ul>
+        <div id="feel" class="feel hidden">
+          <p class="dim small">How did that match feel? (Helps us tune the game.)</p>
+          <div class="feel-buttons">
+            <button data-feel="smooth">😀 Smooth</button>
+            <button data-feel="ok">🙂 OK</button>
+            <button data-feel="laggy">😕 Laggy</button>
+            <button data-feel="unplayable">😣 Unplayable</button>
+          </div>
+          <input id="feel-note" maxlength="500" placeholder="Anything else? (optional)" aria-label="Anything else about that match">
+          <p id="feel-thanks" class="dim small hidden">Thanks!</p>
+        </div>
         <button id="vote" class="primary">Play again</button>
         <button id="again" class="host-only">Start now</button>
         <button id="to-lobby" class="host-only">Back to lobby</button>
@@ -154,6 +165,7 @@
 
   <div id="status" class="status hidden"></div>
   <div id="toast" class="toast hidden"></div>
+  <script src="/static/js/report.js"></script>
   <script src="/static/predict.js"></script>
   <script src="/static/delta.js"></script>
   <script src="/static/js/core.js"></script>
