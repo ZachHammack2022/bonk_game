@@ -1,13 +1,66 @@
 name: tests
 
+# Pull requests run only the jobs their changes need (see "changes" below).
+# Everything runs:
+#   - on main, after every merge
+#   - on a pull request labelled "full-ci" (add it just before merging)
+#   - in a merge queue, if one is turned on
+#   - when started by hand (Actions -> tests -> Run workflow)
 on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  merge_group:
   workflow_dispatch:
 
+# A new push to a pull request cancels its older run (never on main)
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    # Which jobs this change needs. Opinionated on purpose: when unsure, the
+    # test job runs (it's quick); the full set runs before merging anyway.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      test: ${{ steps.pick.outputs.test }}
+      web: ${{ steps.pick.outputs.web }}
+      training: ${{ steps.pick.outputs.training }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          FULL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ] || [ "$FULL" = "true" ]; then
+            echo "Running everything ($EVENT, full-ci: $FULL)"
+            printf 'test=true\nweb=true\ntraining=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(git diff --name-only "$BASE...$HEAD")"
+          echo "Changed:"; echo "$files" | sed 's/^/  /'
+          has() { echo "$files" | grep -Eq "$1" && echo true || echo false; }
+          ci='^\.github/workflows/'
+          # The physics, maps and bots are shared by everything
+          physics='^bonk_game/(envs|maps)/|^bonk_game/ui/bot\.py$'
+          test=$(has "$ci|$physics|\.py$|^tests/|^requirements|^bonk_game/server/static/")
+          web=$(has "$ci|$physics|^bonk_game/server/|^bonk_game/ui/theme\.py$|^tests/web/|^requirements-server\.txt$")
+          training=$(has "$ci|$physics|^main\.py$|^requirements\.txt$|^setup\.py$")
+          echo "test=$test web=$web training=$training"
+          printf 'test=%s\nweb=%s\ntraining=%s\n' "$test" "$web" "$training" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -32,6 +85,8 @@ jobs:
 
   training:
     # Makes sure the full training stack installs and can actually train.
+    needs: changes
+    if: needs.changes.outputs.training == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -46,6 +101,12 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements.txt
+
+      # The installed packages themselves (PyTorch is most of the time)
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.pythonLocation }}
+          key: training-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('requirements.txt', 'setup.py') }}
 
       - name: Install training stack (CPU-only torch keeps this fast)
         run: |
@@ -70,6 +131,8 @@ jobs:
   web:
     # The web version in a real browser: two players, a full match,
     # a reload mid-match, results and a phone-sized lobby.
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -88,6 +151,11 @@ jobs:
         with:
           node-version: "20"
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.48.2-${{ runner.os }}
+
       - name: Install Playwright and Chromium
         run: |
           npm install --no-save playwright@1.48.2
@@ -104,3 +172,19 @@ jobs:
           name: e2e-screenshots
           path: e2e-shots
           if-no-files-found: ignore
+
+  done:
+    # One check that says whether everything this change needed passed
+    # (skipped jobs count as passed), for branch protection to require.
+    needs: [changes, test, training, web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All needed jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "A job $r"; exit 1 ;; esac
+          done

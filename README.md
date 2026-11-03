@@ -241,7 +241,7 @@ A weak PPO "bad" agent is trained first. The PPO, A2C, DQN and ARS agents are th
 On maps with extra moving parts, agents also see a few map values: for Sinking Swing, how far the floor has sunk and the swing's angle and speed.
 
 ## Tests
-The tests only need a few packages, and run on every push and pull request via GitHub Actions:
+The tests only need a few packages:
 
 ```
 pip install -r requirements-test.txt
@@ -254,6 +254,8 @@ CI also plays the web version in a real browser (two players, a full match, a re
 npm install --no-save playwright && npx playwright install chromium
 node tests/web/e2e.js
 ```
+
+**CI** (GitHub Actions) has three jobs: `test` (pytest, about a minute), `web` (the browser test) and `training` (installs the full training stack and trains for a moment, the slowest). A pull request runs only the jobs its changes need: a server or browser change runs `test` and `web`; a change to the physics, maps or bots runs all three; a change to just the README runs none. **Everything runs before merging**: add the `full-ci` label to the pull request, merge once it's green, and everything runs again on `main` after the merge. A single `done` check says whether all the needed jobs passed, so it's the one to require in branch protection.
 
 ## Code layout
 - `bonk_game/ui/`: the game window: screens and HUD (`app.py`), the visual style (`painter.py`, `theme.py`), sound effects (`sound.py`) and the built-in Bot (`bot.py`)
