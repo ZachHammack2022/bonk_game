@@ -33,6 +33,8 @@ NAME_LEN = 16
 FIRST_TO_RANGE = (1, 100)
 EMOTES = 4               # emote ids 0-3 (the client picks the pictures)
 EMOTE_GAP = 0.8          # seconds between one person's emotes
+# Ball patterns people can pick (the client draws them)
+PATTERNS = ("plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes")
 DEFAULT_MAP = "platform"
 # Room settings besides the map, mode and goal
 ROUND_TIMES = (None, 0, 20, 30, 45, 60, 90)   # seconds before sudden death; None: the map's own
@@ -61,6 +63,7 @@ class Member:
         self.left_at = None
         self.color = None       # colour they picked (index), if any
         self.team = None        # team they picked (0 or 1) in the teams mode, if any
+        self.pattern = "plain"  # pattern on their ball (PATTERNS)
         self.last_emote = 0.0
 
 
@@ -169,6 +172,7 @@ class Room:
             "max_players": arena.MAX_PLAYERS,
             "colors": ["#%02x%02x%02x" % c for c in theme.PLAYER_COLORS],
             "color_names": list(theme.PLAYER_NAMES),
+            "patterns": list(PATTERNS),
             "maps": [{"name": n, "title": MAPS[n].title, "description": MAPS[n].description,
                       "first_to": min(MAPS[n].winning_score, 10), "round_time": MAPS[n].round_time,
                       "respawn_ok": MAPS[n].respawn_ok}
@@ -231,9 +235,15 @@ class Room:
             return
         if kind == "color":
             problem = self.pick_color(token, msg.get("color"))
-            if problem:
+            # "auto": the browser asking for your saved colour; if it's taken, never mind
+            if problem and not msg.get("auto"):
                 await self.error(token, problem)
             await self.broadcast_lobby()
+            return
+        if kind == "pattern":
+            if msg.get("pattern") in PATTERNS:
+                self.members[token].pattern = msg["pattern"]
+                await self.broadcast_lobby()
             return
         if kind == "team":
             problem = self.pick_team(token, msg.get("team"))
@@ -422,7 +432,8 @@ class Room:
         teams = self.teams_for(humans, len(bots))
         colors = self.colors_for(humans, len(bots), teams)
         team = lambda k: None if teams is None else teams[k]
-        seats = [{"id": t, "name": self.members[t].name, "kind": "human", "color": c, "team": team(k)}
+        seats = [{"id": t, "name": self.members[t].name, "kind": "human", "color": c, "team": team(k),
+                  "pattern": self.members[t].pattern}
                  for k, (t, c) in enumerate(zip(humans, colors))]
         seats += [{"id": None, "kind": b, "bot": k, "color": c, "team": team(len(humans) + k)}
                   for k, (b, c) in enumerate(zip(bots, colors[len(humans):]))]
@@ -437,7 +448,8 @@ class Room:
             return
         teams = self.teams_for(humans, len(bots))
         colors = self.colors_for(humans, len(bots), teams)
-        slots = [{"kind": "human", "name": self.members[t].name, "id": t, "color": c}
+        slots = [{"kind": "human", "name": self.members[t].name, "id": t, "color": c,
+                  "pattern": self.members[t].pattern}
                  for t, c in zip(humans, colors)]
         # Bots are named by colour ("Green bot"), which is easier to follow than
         # five "Medium bot"s

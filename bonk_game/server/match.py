@@ -231,6 +231,7 @@ class Match:
             "slots": [
                 {"name": s["name"], "kind": s["kind"], "id": s.get("id"),
                  "team": self.env.teams[i] if self.mode.id == "teams" else None,
+                 "pattern": s.get("pattern", "plain"),
                  "color": theme_color(self.colors[i]), "color_name": theme.PLAYER_NAMES[self.colors[i]]}
                 for i, s in enumerate(self.slots)
             ],

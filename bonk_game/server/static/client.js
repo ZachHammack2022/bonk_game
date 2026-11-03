@@ -12,6 +12,14 @@ const T = {
   panel: "rgba(19,27,43,0.78)", danger: "#ef5350",
   rope: "#b08e68", rail: "#7888aa", hazard: "#ef5350",
 };
+// Ball colours, in the server's order (bonk_game/ui/theme.py PLAYER_COLORS;
+// tests/test_profile.py checks they match)
+const PALETTE = [
+  ["Red", "#ff6b6b"], ["Blue", "#4dabf7"], ["Yellow", "#ffd43b"], ["Purple", "#b197fc"], ["Orange", "#ff922b"],
+  ["Green", "#40c057"], ["Pink", "#faa2c1"], ["Cyan", "#3bc9db"], ["White", "#f1f3f5"], ["Brown", "#9c6644"],
+];
+const PATTERNS = ["plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes"];
+const PATTERN_NAMES = { plain: "Plain", stripes: "Stripes", dots: "Dots", ring: "Ring", split: "Split", star: "Star", zigzag: "Zigzag", eyes: "Eyes" };
 const W = 680, H = 480;
 const TICK_MS = 1000 / 30;
 const INTERP_DELAY = 50;   // ms behind the newest state we draw at
@@ -70,10 +78,19 @@ function show(screen) {
 // ---------------------------------------------------------------------------
 // App state
 // ---------------------------------------------------------------------------
+// Your profile: name, favourite colour and pattern. Kept in this browser
+// (no sign-up); sent to each room you join.
 const me = {
   token: store.get("bonk.token") || randomToken(),
   name: store.get("bonk.name", ""),
+  color: store.get("bonk.color", "") === "" ? null : +store.get("bonk.color"),
+  pattern: PATTERNS.includes(store.get("bonk.pattern")) ? store.get("bonk.pattern") : "plain",
 };
+function saveProfile() {
+  store.set("bonk.color", me.color === null ? "" : String(me.color));
+  store.set("bonk.pattern", me.pattern);
+  renderHomeBall();
+}
 store.set("bonk.token", me.token);
 
 const app = {
@@ -183,6 +200,9 @@ function onMessage(msg) {
       app.retry = 0;
       status("");
       fillMapOptions();
+      // Bring your profile along
+      if (me.pattern !== "plain") send({ type: "pattern", pattern: me.pattern });
+      if (me.color !== null) send({ type: "color", color: me.color, auto: true });
       break;
     case "lobby":
       app.lobby = msg;
@@ -260,7 +280,7 @@ function fillSelect(sel, pairs) {
   }
 }
 
-const roundTimeLabel = (t, map) => (t === null ? `Map's (${map ? map.round_time || "off" : "?"}${map && map.round_time ? " s" : ""})` : t === 0 ? "Off" : `${t} s`);
+const roundTimeLabel = (t, map) => (t === null ? (map && map.round_time ? `${map.round_time}s (map)` : "Map's") : t === 0 ? "Off" : `${t}s`);
 const modeInfo = (id) => app.welcome.modes.find((m) => m.id === id);
 
 function botLabel(kind) {
@@ -323,7 +343,7 @@ function renderLobby() {
     }
     if (seatInfo.kind === "human") {
       const you = seatInfo.id === me.token;
-      const li = seat(seatInfo.color, seatInfo.name + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you);
+      const li = seat(seatInfo.color, seatInfo.name + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you, seatInfo.pattern);
       if (you) {
         const ball = li.querySelector(".ball");
         ball.classList.add("pick");
@@ -412,18 +432,92 @@ function colorPicker(current) {
     b.title = app.welcome.color_names[i];
     b.setAttribute("aria-label", app.welcome.color_names[i]);
     b.disabled = taken.has(i) || (allowed !== null && !allowed.has(i));
-    b.addEventListener("click", () => { picker.open = false; send({ type: "color", color: i }); });
+    b.addEventListener("click", () => {
+      me.color = i; saveProfile();
+      send({ type: "color", color: i });
+    });
     li.appendChild(b);
   });
+  li.appendChild(patternRow(mine ? mine.pattern : me.pattern, mine ? app.welcome.colors[mine.color] : T.faint, (p) => {
+    me.pattern = p; saveProfile();
+    send({ type: "pattern", pattern: p });
+  }));
   return li;
 }
 
-function seat(color, label, tag, you) {
+// A row of buttons, one per pattern, drawn on a ball of `color`
+function patternRow(current, color, onPick) {
+  const row = document.createElement("div");
+  row.className = "patterns";
+  for (const p of PATTERNS) {
+    const b = document.createElement("button");
+    b.className = "pattern" + (p === current ? " on" : "");
+    b.title = PATTERN_NAMES[p];
+    b.setAttribute("aria-label", PATTERN_NAMES[p]);
+    b.dataset.pattern = p;
+    b.appendChild(ballCanvas(30, color, p));
+    b.addEventListener("click", () => onPick(p));
+    row.appendChild(b);
+  }
+  return row;
+}
+
+// A little canvas with a ball on it (lobby seats, pickers)
+function ballCanvas(size, color, pattern) {
+  const c = document.createElement("canvas");
+  const dpr = window.devicePixelRatio || 1;
+  c.width = c.height = Math.round(size * dpr);
+  c.style.width = c.style.height = size + "px";
+  c.className = "ball-canvas";
+  const g = c.getContext("2d");
+  g.scale(dpr, dpr);
+  drawBall(g, size / 2, size / 2, size / 2, 0, color, pattern, false);
+  return c;
+}
+
+// Home screen: your ball, and the editor for it
+function renderHomeBall() {
+  const color = me.color === null ? PALETTE[0][1] : PALETTE[me.color][1];
+  const el = $("home-ball");
+  el.innerHTML = "";
+  el.appendChild(ballCanvas(40, color, me.pattern));
+  $("home-ball-label").textContent = `${me.color === null ? "Any colour" : PALETTE[me.color][0]}, ${PATTERN_NAMES[me.pattern].toLowerCase()}`;
+}
+function renderProfileEditor() {
+  const box = $("profile-colors");
+  box.innerHTML = "";
+  const any = document.createElement("button");
+  any.className = "swatch any" + (me.color === null ? " on" : "");
+  any.title = "Any colour"; any.textContent = "?";
+  any.setAttribute("aria-label", "Any colour");
+  any.addEventListener("click", () => { me.color = null; saveProfile(); renderProfileEditor(); });
+  box.appendChild(any);
+  PALETTE.forEach(([name, hex], i) => {
+    const b = document.createElement("button");
+    b.className = "swatch" + (i === me.color ? " on" : "");
+    b.style.background = hex;
+    b.title = name;
+    b.setAttribute("aria-label", name);
+    b.addEventListener("click", () => { me.color = i; saveProfile(); renderProfileEditor(); });
+    box.appendChild(b);
+  });
+  const pat = $("profile-patterns");
+  pat.innerHTML = "";
+  pat.appendChild(patternRow(me.pattern, me.color === null ? PALETTE[0][1] : PALETTE[me.color][1], (p) => {
+    me.pattern = p; saveProfile(); renderProfileEditor();
+  }));
+  $("profile-preview").innerHTML = "";
+  $("profile-preview").appendChild(ballCanvas(72, me.color === null ? PALETTE[0][1] : PALETTE[me.color][1], me.pattern));
+}
+$("edit-ball").addEventListener("click", () => { renderProfileEditor(); $("profile").classList.remove("hidden"); });
+$("profile-close").addEventListener("click", () => $("profile").classList.add("hidden"));
+$("profile").addEventListener("click", (e) => { if (e.target === $("profile")) $("profile").classList.add("hidden"); });
+
+function seat(color, label, tag, you, pattern = "plain") {
   const li = document.createElement("li");
   li.className = "seat" + (you ? " you" : "");
-  const ball = document.createElement("span");
-  ball.className = "ball";
-  ball.style.background = color === null ? T.faint : app.welcome.colors[color];
+  const ball = ballCanvas(22, color === null ? T.faint : app.welcome.colors[color], pattern);
+  ball.classList.add("ball");
   const who = document.createElement("span");
   who.className = "who";
   who.textContent = label;
@@ -562,12 +656,126 @@ function renderAwards(msg, slots) {
 }
 
 // ---------------------------------------------------------------------------
-// Input: WASD or arrows, Space/Shift for heavy; touch buttons on phones
+// Settings (the ⚙ menu): sound, screen shake, ping and controls. Kept in
+// this browser only.
 // ---------------------------------------------------------------------------
-const KEYMAP = {
-  KeyW: 0, ArrowUp: 0, KeyA: 1, ArrowLeft: 1, KeyS: 2, ArrowDown: 2, KeyD: 3, ArrowRight: 3,
-  Space: 4, ShiftLeft: 4, ShiftRight: 4,
-};
+const ACTIONS = ["up", "left", "down", "right", "heavy"];
+const ACTION_LABELS = { up: "Jump / up", left: "Left", down: "Down", right: "Right", heavy: "Go heavy" };
+const DEFAULT_KEYS = { up: "KeyW", left: "KeyA", down: "KeyS", right: "KeyD", heavy: "Space" };
+// Always work, whatever you rebind
+const FIXED_KEYS = { ArrowUp: 0, ArrowLeft: 1, ArrowDown: 2, ArrowRight: 3, ShiftLeft: 4, ShiftRight: 4 };
+// Taken by something else (emotes, mute, the menu)
+const RESERVED_KEYS = new Set(["Digit1", "Digit2", "Digit3", "Digit4", "KeyM", "Escape", "Tab", "Enter"]);
+
+const prefs = (() => {
+  const d = { volume: 0.8, shake: true, ping: true, keys: { ...DEFAULT_KEYS } };
+  try {
+    const saved = JSON.parse(store.get("bonk.prefs", "{}"));
+    return { ...d, ...saved, keys: { ...d.keys, ...(saved.keys || {}) } };
+  } catch (e) { return d; }
+})();
+const savePrefs = () => store.set("bonk.prefs", JSON.stringify(prefs));
+
+let KEYMAP = {};
+function buildKeymap() {
+  KEYMAP = { ...FIXED_KEYS };
+  ACTIONS.forEach((a, i) => { KEYMAP[prefs.keys[a]] = i; });
+}
+buildKeymap();
+
+function keyName(code) {
+  if (!code) return "—";
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Digit")) return code.slice(5);
+  if (code.startsWith("Arrow")) return { ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→" }[code];
+  return code.replace(/(Left|Right)$/, " $1").replace("Numpad", "Num ");
+}
+
+const menu = { capture: null };  // the action waiting for a key press
+
+function openSettings() {
+  renderSettings();
+  $("settings").classList.remove("hidden");
+  held.keys.clear(); sendInput();
+}
+function closeSettings() {
+  menu.capture = null;
+  $("settings").classList.add("hidden");
+}
+const settingsOpen = () => !$("settings").classList.contains("hidden");
+
+function renderSettings() {
+  $("set-volume").value = Math.round(prefs.volume * 100);
+  $("set-volume-out").textContent = sound.muted ? "muted" : `${Math.round(prefs.volume * 100)}%`;
+  $("set-mute").checked = sound.muted;
+  $("set-shake").checked = prefs.shake;
+  $("set-ping").checked = prefs.ping;
+  const ul = $("set-keys");
+  ul.innerHTML = "";
+  for (const a of ACTIONS) {
+    const li = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = ACTION_LABELS[a];
+    const b = document.createElement("button");
+    b.className = "key" + (menu.capture === a ? " waiting" : "");
+    b.dataset.action = a;
+    b.textContent = menu.capture === a ? "Press a key…" : keyName(prefs.keys[a]);
+    b.addEventListener("click", () => { menu.capture = menu.capture === a ? null : a; renderSettings(); });
+    const also = document.createElement("span");
+    also.className = "dim small";
+    also.textContent = { up: "or ↑", left: "or ←", down: "or ↓", right: "or →", heavy: "or Shift" }[a];
+    li.append(label, b, also);
+    ul.appendChild(li);
+  }
+}
+
+// A key press while waiting to rebind. Returns true if it was used.
+function captureKey(e) {
+  if (!menu.capture) return false;
+  e.preventDefault();
+  if (e.code === "Escape") { menu.capture = null; renderSettings(); return true; }
+  if (RESERVED_KEYS.has(e.code) || e.code in FIXED_KEYS) {
+    toast(`${keyName(e.code)} is already used for something else.`, true);
+    return true;
+  }
+  // Swap if another action had this key
+  const other = ACTIONS.find((a) => prefs.keys[a] === e.code);
+  if (other) prefs.keys[other] = prefs.keys[menu.capture];
+  prefs.keys[menu.capture] = e.code;
+  menu.capture = null;
+  savePrefs(); buildKeymap(); renderSettings(); updateHelp();
+  return true;
+}
+
+function updateHelp() {
+  const k = prefs.keys;
+  const moves = [k.up, k.left, k.down, k.right].map(keyName).join(" ");
+  $("controls-help").textContent = `Move with ${moves} or the arrow keys. ${keyName(k.heavy)} or Shift goes heavy. 1–4 for emotes. Esc for settings.`;
+}
+
+for (const id of ["open-settings-home", "open-settings-lobby", "open-settings-game"]) {
+  $(id).addEventListener("click", (e) => { e.currentTarget.blur(); openSettings(); });
+}
+$("settings-close").addEventListener("click", closeSettings);
+$("settings").addEventListener("click", (e) => { if (e.target === $("settings")) closeSettings(); });
+$("set-volume").addEventListener("input", () => {
+  prefs.volume = +$("set-volume").value / 100;
+  if (sound.muted && prefs.volume > 0) sound.setMuted(false);
+  savePrefs(); renderSettings();
+});
+$("set-volume").addEventListener("change", () => sound.play("point"));
+$("set-mute").addEventListener("change", () => { sound.setMuted($("set-mute").checked); renderSettings(); });
+$("set-shake").addEventListener("change", () => { prefs.shake = $("set-shake").checked; savePrefs(); });
+$("set-ping").addEventListener("change", () => { prefs.ping = $("set-ping").checked; savePrefs(); });
+$("set-reset-keys").addEventListener("click", () => {
+  prefs.keys = { ...DEFAULT_KEYS }; menu.capture = null;
+  savePrefs(); buildKeymap(); renderSettings(); updateHelp();
+});
+
+// ---------------------------------------------------------------------------
+// Input: WASD (or your keys) or arrows, Space/Shift for heavy; touch buttons
+// on phones
+// ---------------------------------------------------------------------------
 const held = { keys: new Set(), touch: [0, 0, 0, 0, 0] };
 let lastSent = "";
 
@@ -599,6 +807,12 @@ for (const b of document.querySelectorAll("#emotes button")) {
 }
 
 window.addEventListener("keydown", (e) => {
+  if (settingsOpen()) {
+    if (captureKey(e)) return;
+    if (e.code === "Escape") closeSettings();
+    return;
+  }
+  if (e.code === "Escape" && !e.target.matches("input")) { openSettings(); return; }
   if (e.code === "KeyM" && !e.target.matches("input")) { sound.toggle(); return; }
   const digit = /^Digit([1-4])$/.exec(e.code);
   if (digit && playing()) { sendEmote(+digit[1] - 1); return; }
@@ -642,13 +856,17 @@ const sound = {
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
   },
+  setMuted(m) {
+    this.muted = m;
+    store.set("bonk.muted", m ? "1" : "0");
+  },
   toggle() {
-    this.muted = !this.muted;
-    store.set("bonk.muted", this.muted ? "1" : "0");
+    this.setMuted(!this.muted);
     toast(this.muted ? "Sound off" : "Sound on");
   },
   tone(freq, dur, type = "sine", vol = 0.15, slide = 0) {
-    if (this.muted || !this.ctx) return;
+    if (this.muted || !this.ctx || prefs.volume <= 0) return;
+    vol *= prefs.volume;
     const t = this.ctx.currentTime;
     const o = this.ctx.createOscillator(), g = this.ctx.createGain();
     o.type = type;
@@ -688,7 +906,7 @@ const fx = {
     }
   },
   ring(x, y, color, life = 0.45) { this.rings.push({ x, y, color, life, age: 0 }); },
-  kick(n) { this.shake = Math.max(this.shake, n); },
+  kick(n) { if (prefs.shake) this.shake = Math.max(this.shake, n); },
   say(text, color, big = false) { this.banner = { text, color, big, at: performance.now() }; },
   // A smaller line under the main banner ("Green is out")
   tell(text, color) { this.note = { text, color, at: performance.now() }; },
@@ -1062,14 +1280,82 @@ function drawWalls(walls, t) {
   for (const x of [left, right]) line([x, -40], [x, H + 40], lighten(T.danger, 0.25 + 0.25 * pulse), 3);
 }
 
-function drawPlayer(x, y, r, heavy, color) {
-  circle(x, y + 4, r, "rgba(0,0,0,0.215)");
+function drawPlayer(x, y, r, heavy, color, pattern) {
+  drawBall(ctx, x, y, r, heavy, color, pattern, true);
+}
+
+// A ball on any canvas context `g`: rim, fill, pattern, shine
+function drawBall(g, x, y, r, heavy, color, pattern = "plain", shadow = true) {
+  const dot = (cx, cy, rr, c) => { g.beginPath(); g.arc(cx, cy, Math.max(0.5, rr), 0, Math.PI * 2); g.fillStyle = c; g.fill(); };
+  if (shadow) dot(x, y + 4, r, "rgba(0,0,0,0.215)");
+  else r -= 1;
   const rim = darken(color, 0.5);
   const fill = mix(color, darken(color, 0.3), heavy);
-  const rimW = 2.5 + heavy * r * 0.35;
-  circle(x, y, r, rim);
-  circle(x, y, r - rimW, fill);
-  circle(x - r * 0.32, y - r * 0.34, Math.max(1, r * 0.22), lighten(fill, 0.55));
+  const rimW = Math.max(1.5, r * 0.18) + heavy * r * 0.35;
+  dot(x, y, r, rim);
+  const ri = r - rimW;
+  dot(x, y, ri, fill);
+  if (pattern && pattern !== "plain") {
+    g.save();
+    g.beginPath(); g.arc(x, y, ri, 0, Math.PI * 2); g.clip();
+    drawPattern(g, x, y, ri, pattern, fill);
+    g.restore();
+  }
+  if (pattern !== "eyes") dot(x - r * 0.32, y - r * 0.34, Math.max(1, r * 0.22), lighten(fill, 0.55));
+}
+
+function drawPattern(g, x, y, r, pattern, fill) {
+  const ink = darken(fill, 0.28);
+  const dot = (cx, cy, rr, c) => { g.beginPath(); g.arc(cx, cy, Math.max(0.5, rr), 0, Math.PI * 2); g.fillStyle = c; g.fill(); };
+  g.fillStyle = ink; g.strokeStyle = ink;
+  switch (pattern) {
+    case "stripes":
+      g.lineWidth = r * 0.32;
+      for (let k = -3; k <= 3; k++) {
+        const o = k * r * 0.75;
+        g.beginPath(); g.moveTo(x - r + o, y + r); g.lineTo(x + r + o, y - r); g.stroke();
+      }
+      break;
+    case "dots":
+      dot(x, y, r * 0.2, ink);
+      for (let k = 0; k < 6; k++) {
+        const a = k * Math.PI / 3 + Math.PI / 6;
+        dot(x + Math.cos(a) * r * 0.62, y + Math.sin(a) * r * 0.62, r * 0.16, ink);
+      }
+      break;
+    case "ring":
+      g.lineWidth = r * 0.22;
+      g.beginPath(); g.arc(x, y, r * 0.55, 0, Math.PI * 2); g.stroke();
+      break;
+    case "split":
+      g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y - r); g.lineTo(x + r, y + r); g.lineTo(x, y + r); g.closePath(); g.fill();
+      break;
+    case "star": {
+      g.beginPath();
+      for (let k = 0; k < 10; k++) {
+        const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r * 0.3 : r * 0.72;
+        const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr + r * 0.06;
+        if (k) g.lineTo(px, py); else g.moveTo(px, py);
+      }
+      g.closePath(); g.fill();
+      break;
+    }
+    case "zigzag":
+      g.lineWidth = r * 0.24; g.lineJoin = "round";
+      g.beginPath();
+      for (let k = 0; k <= 6; k++) {
+        const px = x - r + k * r / 3, py = y + (k % 2 ? -r * 0.22 : r * 0.22);
+        if (k) g.lineTo(px, py); else g.moveTo(px, py);
+      }
+      g.stroke();
+      break;
+    case "eyes":
+      for (const s of [-1, 1]) {
+        dot(x + s * r * 0.36, y - r * 0.12, r * 0.27, "#ffffff");
+        dot(x + s * r * 0.36 + r * 0.07, y - r * 0.08, r * 0.13, "#1d2433");
+      }
+      break;
+  }
 }
 
 function drawYouMarker(x, y, r, color) {
@@ -1251,7 +1537,7 @@ function drawHud(st, now) {
 
   drawFeed(now);
 
-  if (net.rtt !== null) {
+  if (net.rtt !== null && prefs.ping) {
     text(`${Math.round(net.rtt)} ms`, 10, T.faint, W - 8, H - 10, { align: "right", weight: 600, shadow: false });
   }
 
@@ -1302,7 +1588,7 @@ function frame(now) {
   st.players.forEach((p, i) => {
     if (!p[3]) return;
     const slot = app.match.slots[i];
-    drawPlayer(p[0], p[1], R, p[2], slot.color);
+    drawPlayer(p[0], p[1], R, p[2], slot.color, slot.pattern);
   });
   if (mine >= 0) debug.drawn = { x: st.players[mine][0], y: st.players[mine][1], t: now };
   st.players.forEach((p, i) => {
@@ -1333,4 +1619,6 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
+updateHelp();
+renderHomeBall();
 route();

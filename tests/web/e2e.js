@@ -61,14 +61,27 @@ function check(cond, what) {
       return page;
     };
 
-    // Host makes a room
+    // Host sets up their ball and controls, then makes a room
     const host = await open("host");
     await host.goto(base + "/");
     await host.fill("#name", "Ann");
+    await host.click("#edit-ball");
+    await host.click("#profile-colors [title=Purple]");
+    await host.click("#profile-patterns [data-pattern=stripes]");
+    await host.click("#profile-close");
+    check((await host.textContent("#home-ball-label")).includes("Purple"), "you can pick a favourite colour and pattern");
+    await host.keyboard.press("Escape");
+    await host.waitForSelector("#settings:not(.hidden)");
+    await host.click("#set-keys [data-action=heavy]");
+    await host.keyboard.press("KeyH");
+    await host.keyboard.press("Escape");
+    check(await host.evaluate(() => JSON.parse(localStorage.getItem("bonk.prefs")).keys.heavy === "KeyH"), "keys can be rebound in settings");
     await host.click("#create");
     await host.waitForSelector("#lobby:not(.hidden)");
     const url = host.url();
     check(/\/r\/[A-Z]{4}$/.test(url), "creating a room opens its link");
+    await host.waitForFunction(() => bonkDebug.app.lobby && bonkDebug.app.lobby.seats[0].color === 3 && bonkDebug.app.lobby.seats[0].pattern === "stripes");
+    check(true, "your ball's colour and pattern come with you into the room");
 
     // A friend opens the link: asked for a name, then joins
     const guest = await open("guest");
