@@ -184,3 +184,13 @@ body.is-host .guest-only { display: none !important; }
 .status { top: 12px; }
 .toast { bottom: 16px; }
 .toast.error { border-color: var(--danger); }
+
+.seat .ball.pick { cursor: pointer; outline: 2px dashed rgba(255, 209, 102, 0.6); outline-offset: 2px; }
+.picker { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--panel-light); border-radius: 10px; }
+.swatch { width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 50%; border: 2px solid rgba(0, 0, 0, 0.35); }
+.swatch.on { outline: 3px solid var(--accent); outline-offset: 1px; }
+.swatch:disabled { opacity: 0.2; }
+
+#emotes { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 6px; }
+#emotes button { min-height: 40px; width: 44px; padding: 0; font-size: 20px; background: rgba(19, 27, 43, 0.6); border-color: rgba(160, 174, 198, 0.35); }
+body.touch #emotes { bottom: auto; top: 12px; }

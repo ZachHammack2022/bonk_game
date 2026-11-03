@@ -48,15 +48,19 @@ class Map:
         """Length of one agent's observation."""
         return arena.OBS_SIZE + self.n_extra_obs
 
-    def make_players(self, n=2):
-        """`n` players (2-10), each in its own colour."""
+    def make_players(self, n=2, colors=None):
+        """`n` players (2-10), each in its own colour. `colors`: an index into
+        theme.PLAYER_COLORS per player (default: the first n, in order)."""
         if not arena.MIN_PLAYERS <= n <= arena.MAX_PLAYERS:
             raise ValueError(f"{n} players: need {arena.MIN_PLAYERS}-{arena.MAX_PLAYERS}")
+        colors = list(range(n)) if colors is None else list(colors)
+        if len(colors) != n or len(set(colors)) != n:
+            raise ValueError("need a different colour for each player")
         left, right, top, bottom = self.obs_bounds
         players = tuple(
-            player(arena.RADIUS, left, right, top, bottom, color,
+            player(arena.RADIUS, left, right, top, bottom, theme.PLAYER_COLORS[c],
                    spawn=self.spawn_box, clamp_bottom=self.clamp_bottom)
-            for color in theme.PLAYER_COLORS[:n]
+            for c in colors
         )
         for p in players:
             p.v_range = self.max_speed

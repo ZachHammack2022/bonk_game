@@ -196,6 +196,8 @@ function onMessage(msg) {
       app.results = null;
       fx.reset();
       $("results").classList.add("hidden");
+      // Emotes are for players, not people watching
+      $("emotes").classList.toggle("hidden", !msg.slots.some((x) => x.id === me.token));
       show("game");
       resize();
       break;
@@ -209,6 +211,9 @@ function onMessage(msg) {
       if (app.states.length > 8) app.states.shift();
       for (const ev of msg.events || []) onEvent(ev, msg);
       break;
+    case "emote":
+      fx.emotes.push({ slot: msg.slot, id: msg.id, at: performance.now() });
+      break;
     case "results":
       if (!app.match) { show("lobby"); break; }  // joined after the match ended
       app.results = msg;
@@ -218,6 +223,7 @@ function onMessage(msg) {
       toast(msg.message, true);
       if (msg.fatal) {
         app.fatal = true;
+        if (app.ws) app.ws.close();
         history.replaceState({}, "", "/");
         show("home");
       }
@@ -252,6 +258,8 @@ function botLabel(kind) {
   return kind.toUpperCase() + " agent";
 }
 
+const picker = { open: false };
+
 function renderLobby() {
   const L = app.lobby, Wm = app.welcome;
   if (!Wm) return;
@@ -272,63 +280,110 @@ function renderLobby() {
   $("first-to").value = s.first_to;
   $("first-to").disabled = !host;
 
-  // Seats: connected people first (that's the match order), then bots
+  // Seats, in match order, as the server says they'd be right now
   const ul = $("seats");
   ul.innerHTML = "";
-  const people = L.members.filter((m) => m.connected).slice(0, Wm.max_players);
-  const away = L.members.filter((m) => !m.connected);
-  const bots = s.bots.slice(0, Math.max(0, Wm.max_players - people.length));
-  let i = 0;
-  for (const m of people) {
-    ul.appendChild(seat(i++, m.name + (m.id === L.host ? "  ★" : ""), m.id === me.token ? "you" : "", m.id === me.token));
-  }
-  bots.forEach((kind, b) => {
-    const li = seat(i++, botLabel(kind), "", false);
-    if (host) {
-      const sel = document.createElement("select");
-      for (const opt of L.bot_options) {
-        const o = document.createElement("option");
-        o.value = opt; o.textContent = botLabel(opt);
-        sel.appendChild(o);
+  for (const seatInfo of L.seats) {
+    if (seatInfo.kind === "human") {
+      const you = seatInfo.id === me.token;
+      const li = seat(seatInfo.color, seatInfo.name + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you);
+      if (you) {
+        const ball = li.querySelector(".ball");
+        ball.classList.add("pick");
+        ball.title = "Pick your colour";
+        ball.setAttribute("role", "button");
+        ball.tabIndex = 0;
+        const toggle = () => { picker.open = !picker.open; renderLobby(); };
+        ball.addEventListener("click", toggle);
+        ball.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      } else if (host) {
+        li.appendChild(removeButton("Remove from room", () => {
+          if (confirm(`Remove ${seatInfo.name} from the room?`)) send({ type: "kick", id: seatInfo.id });
+        }));
       }
-      sel.value = kind;
-      sel.addEventListener("change", () => {
-        const next = s.bots.slice(); next[b] = sel.value;
-        send({ type: "settings", bots: next });
-      });
-      const rm = document.createElement("button");
-      rm.className = "remove"; rm.textContent = "✕"; rm.title = "Remove bot";
-      rm.addEventListener("click", () => {
-        const next = s.bots.slice(); next.splice(b, 1);
-        send({ type: "settings", bots: next });
-      });
-      li.querySelector(".who").textContent = "";
-      li.insertBefore(sel, li.querySelector(".tag"));
-      li.appendChild(rm);
+      ul.appendChild(li);
+      if (you && picker.open) ul.appendChild(colorPicker(seatInfo.color));
+    } else {
+      const b = seatInfo.bot;
+      const li = seat(seatInfo.color, botLabel(seatInfo.kind), "", false);
+      if (host) {
+        const sel = document.createElement("select");
+        sel.setAttribute("aria-label", "Bot type");
+        for (const opt of L.bot_options) {
+          const o = document.createElement("option");
+          o.value = opt; o.textContent = botLabel(opt);
+          sel.appendChild(o);
+        }
+        sel.value = seatInfo.kind;
+        sel.addEventListener("change", () => {
+          const next = s.bots.slice(); next[b] = sel.value;
+          send({ type: "settings", bots: next });
+        });
+        li.querySelector(".who").textContent = "";
+        li.insertBefore(sel, li.querySelector(".tag"));
+        li.appendChild(removeButton("Remove bot", () => {
+          const next = s.bots.slice(); next.splice(b, 1);
+          send({ type: "settings", bots: next });
+        }));
+      }
+      ul.appendChild(li);
     }
-    ul.appendChild(li);
-  });
-  for (const m of away) {
+  }
+  for (const m of L.members.filter((m) => !m.connected)) {
     const li = seat(null, m.name, "reconnecting…", false);
     li.classList.add("away");
     ul.appendChild(li);
   }
-  $("seat-count").textContent = `${i} / ${Wm.max_players}`;
-  $("add-bot").disabled = i >= Wm.max_players;
+  const n = L.seats.length;
+  $("seat-count").textContent = `${n} / ${Wm.max_players}`;
+  $("add-bot").disabled = n >= Wm.max_players;
   const extra = L.members.filter((m) => m.connected).length - Wm.max_players;
   $("spectators").textContent = extra > 0 ? `${extra} more watching (the match is full).` : "";
-  $("start").disabled = i < 2;
+  $("start").disabled = n < 2;
+
+  // Rematch votes on the results screen
+  if (L.phase === "results") {
+    const here = L.members.filter((m) => m.connected).length;
+    const voted = L.votes.includes(me.token);
+    $("vote").textContent = voted ? `Waiting for others… ${L.votes.length}/${here}` : `Play again  ${L.votes.length}/${here}`;
+    $("vote").classList.toggle("primary", !voted);
+  }
 
   // Joined during a match: watch it
   if (L.phase === "match" && !app.match) status("A match is on. You'll play in the next one.");
 }
 
-function seat(i, label, tag, you) {
+function removeButton(title, onClick) {
+  const rm = document.createElement("button");
+  rm.className = "remove"; rm.textContent = "✕"; rm.title = title;
+  rm.setAttribute("aria-label", title);
+  rm.addEventListener("click", onClick);
+  return rm;
+}
+
+function colorPicker(current) {
+  const li = document.createElement("li");
+  li.className = "picker";
+  const taken = new Set(app.lobby.seats.filter((x) => x.kind === "human" && x.id !== me.token).map((x) => x.color));
+  app.welcome.colors.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.className = "swatch" + (i === current ? " on" : "");
+    b.style.background = c;
+    b.title = app.welcome.color_names[i];
+    b.setAttribute("aria-label", app.welcome.color_names[i]);
+    b.disabled = taken.has(i);
+    b.addEventListener("click", () => { picker.open = false; send({ type: "color", color: i }); });
+    li.appendChild(b);
+  });
+  return li;
+}
+
+function seat(color, label, tag, you) {
   const li = document.createElement("li");
   li.className = "seat" + (you ? " you" : "");
   const ball = document.createElement("span");
   ball.className = "ball";
-  ball.style.background = i === null ? T.faint : app.welcome.colors[i];
+  ball.style.background = color === null ? T.faint : app.welcome.colors[color];
   const who = document.createElement("span");
   who.className = "who";
   who.textContent = label;
@@ -344,6 +399,7 @@ $("first-to").addEventListener("change", () => send({ type: "settings", first_to
 $("add-bot").addEventListener("click", () => send({ type: "settings", bots: [...app.lobby.settings.bots, "bot:medium"] }));
 $("start").addEventListener("click", () => send({ type: "start" }));
 $("again").addEventListener("click", () => send({ type: "start" }));
+$("vote").addEventListener("click", () => send({ type: "vote" }));
 $("to-lobby").addEventListener("click", () => send({ type: "lobby" }));
 $("copy-link").addEventListener("click", async () => {
   const link = `${location.origin}/r/${app.room}`;
@@ -385,6 +441,7 @@ function showResults(msg) {
     ol.appendChild(li);
   }
   $("results").classList.remove("hidden");
+  $("emotes").classList.add("hidden");
   if (w !== null && w !== undefined) fx.confetti(slots[w] ? slots[w].color : T.accent);
 }
 
@@ -419,8 +476,16 @@ function sendInput(force) {
 }
 const playing = () => !$("game").classList.contains("hidden") && !app.results;
 
+const EMOTES = ["👋", "😂", "😮", "😤"];
+const sendEmote = (id) => { if (playing()) send({ type: "emote", id }); };
+for (const b of document.querySelectorAll("#emotes button")) {
+  b.addEventListener("click", () => { sendEmote(+b.dataset.e); b.blur(); });
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.code === "KeyM" && !e.target.matches("input")) { sound.toggle(); return; }
+  const digit = /^Digit([1-4])$/.exec(e.code);
+  if (digit && playing()) { sendEmote(+digit[1] - 1); return; }
   if (!(e.code in KEYMAP) || !playing()) return;
   e.preventDefault();
   held.keys.add(e.code);
@@ -436,6 +501,7 @@ window.addEventListener("blur", () => { held.keys.clear(); held.touch.fill(0); s
 setInterval(() => { if (playing()) sendInput(true); }, 1000);
 
 if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
+  document.body.classList.add("touch");
   $("touch").classList.remove("hidden");
   for (const btn of $("touch").querySelectorAll("button")) {
     const i = +btn.dataset.b;
@@ -496,8 +562,8 @@ window.addEventListener("keydown", () => sound.unlock());
 // Effects: particles, rings, screen shake, banners
 // ---------------------------------------------------------------------------
 const fx = {
-  parts: [], rings: [], shake: 0, banner: null,
-  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; },
+  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [],
+  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; },
   burst(x, y, color, n = 26, speed = 7, size = 4.5, life = 0.7, gravity = true) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.9);
@@ -508,6 +574,8 @@ const fx = {
   ring(x, y, color, life = 0.45) { this.rings.push({ x, y, color, life, age: 0 }); },
   kick(n) { this.shake = Math.max(this.shake, n); },
   say(text, color, big = false) { this.banner = { text, color, big, at: performance.now() }; },
+  // A smaller line under the main banner ("Green is out")
+  tell(text, color) { this.note = { text, color, at: performance.now() }; },
   confetti(color) {
     for (let k = 0; k < 3; k++) {
       this.burst(150 + Math.random() * 380, 120 + Math.random() * 80, color, 25, 8, 4.5, 1.6);
@@ -554,6 +622,10 @@ function onEvent(ev, state) {
       if (app.match && !app.match.reset_round_on_kill) {
         const p = state.players[ev.i];
         fx.ring(p[0], p[1], c);
+      } else if (app.match && !(state.events || []).some((e) => e.e === "round")) {
+        // Knocked out but the round goes on
+        const name = slotName(ev.i);
+        fx.tell(name === "You" ? "You're out!" : `${name} is out`, c);
       }
       break;
     }
@@ -592,7 +664,7 @@ function buttonsAt(t) {
 
 const own = { tick: null, base: null, offX: 0, offY: 0 };
 // For tests and poking around in the console
-const debug = (window.bonkDebug = { app, net, own, drawn: null });
+const debug = (window.bonkDebug = { app, net, own, drawn: null, get fx() { return fx; } });
 
 function predictFrom(entry, now) {
   const [arrived, S] = entry;
@@ -949,6 +1021,12 @@ function drawHud(st, now) {
     }
   }
 
+  const note = fx.note;
+  if (note) {
+    const age = (now - note.at) / 1000;
+    if (age < 1.6) text(note.text, 18, note.color, W / 2, 124, { alpha: clamp((1.6 - age) * 3, 0, 1) });
+  }
+
   if (net.rtt !== null) {
     text(`${Math.round(net.rtt)} ms`, 10, T.faint, W - 8, H - 10, { align: "right", weight: 600, shadow: false });
   }
@@ -1010,6 +1088,20 @@ function frame(now) {
     else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 10, "rgba(241,245,249,0.75)", p[0], p[1] - R - 9, { weight: 700 });
     drawOffscreen(p[0], p[1], R, slot.color);
   });
+  // Emote bubbles over balls
+  fx.emotes = fx.emotes.filter((e) => now - e.at < 2000);
+  for (const e of fx.emotes) {
+    const p = st.players[e.slot];
+    if (!p || !p[3]) continue;
+    const age = (now - e.at) / 1000;
+    const pop = easeOutBack(age * 5);
+    const x = clamp(p[0], 20, W - 20), y = Math.max(22, p[1] - R - 30);
+    ctx.globalAlpha = clamp((2 - age) * 3, 0, 1);
+    ctx.fillStyle = "rgba(241,245,249,0.95)";
+    roundRect(x - 17 * pop, y - 15 * pop, 34 * pop, 30 * pop, 12 * pop); ctx.fill();
+    ctx.globalAlpha = 1;
+    text(EMOTES[e.id] || "?", 18 * pop, T.text, x, y + 1, { shadow: false, alpha: clamp((2 - age) * 3, 0, 1) });
+  }
 
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
   drawHud(st, now);

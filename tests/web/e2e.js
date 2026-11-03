@@ -80,6 +80,12 @@ function check(cond, what) {
     check(true, "the guest shows up in the host's lobby");
     check(await guest.isHidden("#start"), "only the host sees Start");
 
+    // The guest picks green
+    await guest.click("#seats .seat.you .ball");
+    await guest.click(".picker .swatch[title=Green]");
+    await host.waitForFunction(() => bonkDebug.app.lobby.seats[1].color === 5);
+    check(true, "picking a colour shows up for everyone");
+
     // Host sets up a quick match
     await host.selectOption("#map", "classic");
     await host.selectOption("#first-to", "1");
@@ -95,9 +101,13 @@ function check(cond, what) {
     check(true, "both players go to the match");
     await host.waitForTimeout(2200);
     await guest.keyboard.down("ArrowRight");
-    await host.waitForTimeout(400);
+    await guest.keyboard.press("Digit2");
+    await host.waitForFunction(() => bonkDebug.fx.emotes.some((e) => e.slot === 1 && e.id === 1), null, { timeout: 3000 });
+    check(true, "an emote reaches the other player");
+    await host.waitForTimeout(150);
     await shot(guest, "match");
     await guest.keyboard.up("ArrowRight");
+    check(await guest.evaluate(() => bonkDebug.app.match.slots[1].color_name) === "Green", "the match uses the picked colour");
 
     // The guest reloads mid-match and gets their seat back
     await guest.reload();
@@ -109,6 +119,16 @@ function check(cond, what) {
     const winner = await host.textContent("#winner");
     check(/wins?!|Draw!/.test(winner), `results show a winner (${winner.trim()})`);
     await shot(host, "results");
+
+    // Everyone votes for a rematch
+    await guest.waitForSelector("#results:not(.hidden)");
+    await host.click("#vote");
+    await guest.waitForFunction(() => /1\/2/.test(document.querySelector("#vote").textContent));
+    await guest.click("#vote");
+    await host.waitForSelector("#results.hidden", { state: "attached" });
+    await host.waitForFunction(() => bonkDebug.app.match && !bonkDebug.app.results);
+    check(true, "a rematch starts once everyone votes");
+    await host.waitForSelector("#results:not(.hidden)", { timeout: 120000 });
     await host.click("#to-lobby");
     await host.waitForSelector("#lobby:not(.hidden)");
     await guest.waitForSelector("#lobby:not(.hidden)");
@@ -124,6 +144,18 @@ function check(cond, what) {
     const wide = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     check(!wide, "the lobby fits a phone screen");
     await shot(phone, "phone-lobby");
+
+    // The host removes the phone
+    host.once("dialog", (d) => d.accept());
+    await host.waitForFunction(() => document.querySelectorAll("#seats .remove").length >= 2);
+    await host.evaluate(() => {
+      const seat = [...document.querySelectorAll("#seats .seat")].find((li) => li.textContent.includes("Cat"));
+      seat.querySelector(".remove").click();
+    });
+    await phone.waitForSelector("#home:not(.hidden)");
+    check((await phone.textContent("#toast")).includes("removed"), "a removed player is sent away");
+    await host.waitForFunction(() => !document.querySelector("#seats").textContent.includes("Cat"));
+    check(true, "and disappears from the lobby");
 
     // A room that doesn't exist
     const lost = await open("lost");

@@ -30,11 +30,13 @@ LEAVE_GRACE = 30.0       # seconds a disconnected member keeps their place
 EMPTY_ROOM_TTL = 600.0   # seconds an empty room is kept around
 NAME_LEN = 16
 FIRST_TO_RANGE = (1, 100)
+EMOTES = 4               # emote ids 0-3 (the client picks the pictures)
+EMOTE_GAP = 0.8          # seconds between one person's emotes
 DEFAULT_MAP = "platform"
 
 
 class RoomFull(Exception):
-    pass
+    """Can't join: the room is full, or the host removed you."""
 
 
 class ServerFull(Exception):
@@ -53,6 +55,8 @@ class Member:
         self.send = send
         self.connected = True
         self.left_at = None
+        self.color = None       # colour they picked (index), if any
+        self.last_emote = 0.0
 
 
 class Room:
@@ -67,6 +71,8 @@ class Room:
         self.match_tokens = []     # slot -> member token (None for bots)
         self.results = None
         self.task = None
+        self.banned = set()        # tokens the host removed
+        self.votes = set()         # tokens that want a rematch (on the results screen)
         self.created = time.monotonic()
         self.empty_since = time.monotonic()
 
@@ -77,6 +83,8 @@ class Room:
 
     async def join(self, token, name, send):
         """Add (or reconnect) a member. Returns the Member."""
+        if token in self.banned:
+            raise RoomFull("The host removed you from this room.")
         m = self.members.get(token)
         if m is None:
             if len(self.members) >= limits.MAX_MEMBERS:
@@ -114,7 +122,9 @@ class Room:
             self._pick_host()
         if not self.connected:
             self.empty_since = time.monotonic()
+        self.votes.discard(token)
         await self.broadcast_lobby()
+        await self._maybe_rematch()
 
     def _pick_host(self):
         """Hand the host role to the first connected member (if any)."""
@@ -169,6 +179,8 @@ class Room:
             "bot_options": self.bot_options(),
             "phase": "match" if self.match is not None else "results" if self.results else "lobby",
             "playing": list(self.match_tokens) if self.match is not None else [],
+            "seats": self.lineup(),
+            "votes": sorted(self.votes),
         }
 
     async def broadcast(self, msg):
@@ -203,6 +215,21 @@ class Room:
             self.members[token].name = clean_name(msg.get("name"))
             await self.broadcast_lobby()
             return
+        if kind == "color":
+            problem = self.pick_color(token, msg.get("color"))
+            if problem:
+                await self.error(token, problem)
+            await self.broadcast_lobby()
+            return
+        if kind == "emote":
+            await self.emote(token, msg.get("id"))
+            return
+        if kind == "vote":
+            if self.match is None and self.results is not None:
+                self.votes.symmetric_difference_update({token})
+                await self.broadcast_lobby()
+                await self._maybe_rematch()
+            return
         if token != self.host:
             await self.error(token, "Only the host can do that.")
             return
@@ -216,7 +243,54 @@ class Room:
         elif kind == "lobby":
             if self.match is None:
                 self.results = None
+                self.votes.clear()
                 await self.broadcast_lobby()
+        elif kind == "kick":
+            await self.kick(str(msg.get("id")))
+
+    # --- people -------------------------------------------------------------
+    def pick_color(self, token, color):
+        """Someone picks their colour (an index), or None for "any"."""
+        if color is not None:
+            if not isinstance(color, int) or not 0 <= color < arena.MAX_PLAYERS:
+                return "Unknown colour."
+            if any(m.color == color for t, m in self.members.items() if t != token):
+                return "Someone else has that colour."
+        self.members[token].color = color
+        return None
+
+    async def emote(self, token, emote):
+        """Show an emote over someone's ball (during a match)."""
+        m = self.members.get(token)
+        if (self.match is None or token not in self.match_tokens or not isinstance(emote, int)
+                or not 0 <= emote < EMOTES):
+            return
+        now = time.monotonic()
+        if now - m.last_emote < EMOTE_GAP:
+            return
+        m.last_emote = now
+        await self.broadcast({"type": "emote", "slot": self.match_tokens.index(token), "id": emote})
+
+    async def kick(self, token):
+        """The host removes someone. They can't come back to this room."""
+        m = self.members.get(token)
+        if m is None or token == self.host:
+            return
+        self.banned.add(token)
+        if m.connected:
+            await m.send({"type": "error", "message": "The host removed you from this room.",
+                          "fatal": True})
+        if self.match is not None and token in self.match_tokens:
+            self.match.stand_in(self.match_tokens.index(token))
+        del self.members[token]
+        self.votes.discard(token)
+        await self.broadcast_lobby()
+
+    async def _maybe_rematch(self):
+        """On the results screen, start again once everyone here has voted."""
+        live = {m.token for m in self.connected}
+        if self.match is None and self.results is not None and live and live <= self.votes:
+            await self.start()
 
     def update_settings(self, msg):
         """Apply the host's changes. Returns an error message or None."""
@@ -253,6 +327,28 @@ class Room:
         bots = self.settings["bots"][:arena.MAX_PLAYERS - len(humans)]
         return humans, bots
 
+    def colors_for(self, humans, n_bots):
+        """A colour index per seat: people get the colour they picked (first
+        come, first served), everyone else the free colours in order."""
+        out, taken = [], set()
+        for t in humans:
+            c = self.members[t].color
+            out.append(c if c is not None and c not in taken else None)
+            taken.add(c)
+        out += [None] * n_bots
+        free = iter(c for c in range(arena.MAX_PLAYERS) if c not in taken)
+        return [c if c is not None else next(free) for c in out]
+
+    def lineup(self):
+        """The seats as they'd be if the match started now, for the lobby."""
+        humans, bots = self.seats()
+        colors = self.colors_for(humans, len(bots))
+        seats = [{"id": t, "name": self.members[t].name, "kind": "human", "color": c}
+                 for t, c in zip(humans, colors)]
+        seats += [{"id": None, "kind": b, "bot": k, "color": c}
+                  for k, (b, c) in enumerate(zip(bots, colors[len(humans):]))]
+        return seats
+
     async def start(self):
         if self.match is not None:
             return
@@ -260,11 +356,14 @@ class Room:
         if len(humans) + len(bots) < arena.MIN_PLAYERS:
             await self.error(self.host, "Add a bot or invite someone: a match needs 2 players.")
             return
-        slots = [{"kind": "human", "name": self.members[t].name, "id": t} for t in humans]
+        colors = self.colors_for(humans, len(bots))
+        slots = [{"kind": "human", "name": self.members[t].name, "id": t, "color": c}
+                 for t, c in zip(humans, colors)]
         # Bots are named by colour ("Green bot"), which is easier to follow than
         # five "Medium bot"s
-        slots += [{"kind": b, "name": f"{theme.PLAYER_NAMES[len(humans) + k]} {bot_label(b, short=True)}"}
-                  for k, b in enumerate(bots)]
+        slots += [{"kind": b, "color": c,
+                   "name": f"{theme.PLAYER_NAMES[c]} {bot_label(b, short=True)}"}
+                  for b, c in zip(bots, colors[len(humans):])]
         agents = {}
         agent_kinds = [b for b in bots if not is_bot(b)]
         if agent_kinds:
@@ -272,6 +371,7 @@ class Room:
         self.match = Match(self.settings["map"], slots, self.settings["first_to"], agents)
         self.match_tokens = humans + [None] * len(bots)
         self.results = None
+        self.votes.clear()
         await self.broadcast(self.match.describe())
         await self.broadcast_lobby()
         self.task = asyncio.ensure_future(self.run_match())

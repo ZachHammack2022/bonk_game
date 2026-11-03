@@ -40,14 +40,15 @@ def is_bot(kind):
 class Match:
     def __init__(self, map_name, slots, first_to, agents=None):
         """slots: one dict per player, {"kind": "human" | "bot:<level>" | agent
-        name, "name": display name}. agents: name -> trained model, for any
-        agent kinds."""
+        name, "name": display name, "color": optional colour index}. agents:
+        name -> trained model, for any agent kinds."""
         agents = agents or {}
         self.map_name = map_name
         self.slots = [dict(s) for s in slots]
         self.first_to = first_to
         kinds = [s["kind"] for s in self.slots]
-        self.env = TestEnv(*kinds, winning_score=first_to, map_name=map_name)
+        self.colors = [s.get("color", i) for i, s in enumerate(self.slots)]
+        self.env = TestEnv(*kinds, winning_score=first_to, map_name=map_name, colors=self.colors)
         self.controllers = []
         for i, kind in enumerate(kinds):
             if kind == "human":
@@ -200,7 +201,7 @@ class Match:
             "physics": self.physics(),
             "slots": [
                 {"name": s["name"], "kind": s["kind"], "id": s.get("id"),
-                 "color": theme_color(i), "color_name": theme.PLAYER_NAMES[i]}
+                 "color": theme_color(self.colors[i]), "color_name": theme.PLAYER_NAMES[self.colors[i]]}
                 for i, s in enumerate(self.slots)
             ],
         }

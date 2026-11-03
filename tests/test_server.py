@@ -359,3 +359,119 @@ def test_flooding_messages_gets_you_disconnected(monkeypatch):
         finally:
             await client.close()
     run(go())
+
+
+# ---------------------------------------------------------------------------
+# Party features: colours, kick, rematch votes, emotes
+# ---------------------------------------------------------------------------
+def test_people_pick_colours_and_bots_take_the_rest():
+    async def go():
+        room = Room("ABCD")
+        a, b = Inbox(), Inbox()
+        await room.join("a", "Ann", a)
+        await room.join("b", "Bob", b)
+        await room.handle("a", {"type": "settings", "bots": ["bot:easy", "bot:easy"]})
+        await room.handle("b", {"type": "color", "color": 0})   # Bob wants red
+        await room.handle("a", {"type": "color", "color": 0})   # taken
+        assert "Someone else" in a.last("error")["message"]
+        await room.handle("a", {"type": "color", "color": 7})
+        await room.handle("a", {"type": "color", "color": 99})
+        assert "Unknown colour" in a.last("error")["message"]
+        seats = a.last("lobby")["seats"]
+        assert [s["color"] for s in seats] == [7, 0, 1, 2]
+        await room.start()
+        slots = a.last("match")["slots"]
+        assert [s["color_name"] for s in slots] == ["Cyan", "Red", "Blue", "Yellow"]
+        assert slots[2]["name"] == "Blue bot"
+        assert room.match.env.players[0].color == (59, 201, 219)
+        await room.stop()
+    run(go())
+
+
+def test_host_can_remove_someone_for_good():
+    async def go():
+        room = Room("ABCD")
+        a, b = Inbox(), Inbox()
+        await room.join("a", "Ann", a)
+        await room.join("b", "Bob", b)
+        await room.handle("b", {"type": "kick", "id": "a"})   # not the host
+        assert "a" in room.members
+        await room.handle("a", {"type": "kick", "id": "a"})   # can't remove yourself
+        assert "a" in room.members
+        await room.handle("a", {"type": "kick", "id": "b"})
+        assert "b" not in room.members
+        assert b.last("error")["fatal"]
+        with pytest.raises(room_mod.RoomFull, match="removed"):
+            await room.join("b", "Bob", Inbox())
+    run(go())
+
+
+def test_kicking_a_player_mid_match_hands_their_ball_to_a_bot():
+    async def go():
+        room = Room("ABCD")
+        await room.join("a", "Ann", Inbox())
+        await room.join("b", "Bob", Inbox())
+        await room.start()
+        await room.handle("a", {"type": "kick", "id": "b"})
+        assert 1 in room.match.stand_ins
+        await room.stop()
+    run(go())
+
+
+def test_rematch_starts_when_everyone_votes(monkeypatch):
+    monkeypatch.setattr(room_mod, "TICK_HZ", 3000)
+
+    async def go():
+        room = Room("ABCD")
+        a, b = Inbox(), Inbox()
+        await room.join("a", "Ann", a)
+        await room.join("b", "Bob", b)
+        await room.handle("a", {"type": "settings", "map": "classic", "first_to": 1,
+                                "bots": ["bot:hard"] * 3})
+        await room.start()
+        await room.task
+        assert room.results is not None and room.match is None
+        await room.handle("b", {"type": "vote"})
+        assert a.last("lobby")["votes"] == ["b"] and room.match is None
+        await room.handle("b", {"type": "vote"})   # changed their mind
+        assert room.votes == set()
+        await room.handle("b", {"type": "vote"})
+        await room.handle("a", {"type": "vote"})
+        assert room.match is not None and room.votes == set()
+        await room.stop()
+    run(go())
+
+
+def test_votes_from_people_who_left_dont_block_a_rematch(monkeypatch):
+    monkeypatch.setattr(room_mod, "TICK_HZ", 3000)
+
+    async def go():
+        room = Room("ABCD")
+        a, b = Inbox(), Inbox()
+        await room.join("a", "Ann", a)
+        await room.join("b", "Bob", b)
+        await room.handle("a", {"type": "settings", "map": "classic", "first_to": 1})
+        await room.start()
+        await room.task
+        await room.handle("a", {"type": "vote"})
+        await room.disconnect("b", b)   # Bob leaves: Ann is the only one here, and voted
+        assert room.match is not None
+        await room.stop()
+    run(go())
+
+
+def test_emotes_reach_everyone_but_not_too_often():
+    async def go():
+        room = Room("ABCD")
+        a, b = Inbox(), Inbox()
+        await room.join("a", "Ann", a)
+        await room.join("b", "Bob", b)
+        await room.handle("a", {"type": "emote", "id": 0})   # no match yet: ignored
+        await room.start()
+        await room.handle("b", {"type": "emote", "id": 2})
+        await room.handle("b", {"type": "emote", "id": 1})   # too soon
+        await room.handle("b", {"type": "emote", "id": 9})   # not an emote
+        emotes = [m for m in a.msgs if m["type"] == "emote"]
+        assert emotes == [{"type": "emote", "slot": 1, "id": 2}]
+        await room.stop()
+    run(go())
