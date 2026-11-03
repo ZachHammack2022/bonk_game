@@ -6,8 +6,16 @@ import numpy as np
 
 class player():
     
-    def __init__(self,radius,left,right,top,bottom,color) -> None:
-        """Create a player that spawns at a random spot inside the given bounds."""
+    def __init__(self,radius,left,right,top,bottom,color,spawn=None,clamp_bottom=True) -> None:
+        """Create a player.
+
+        Args:
+            left/right/top/bottom: area used to normalize observations
+            spawn: (left, right, top, bottom) box to spawn in; defaults to the
+                observation area
+            clamp_bottom: never let the player sink below `bottom` (the
+                classic map's floor). Maps where you can fall out turn it off.
+        """
         # store env bounds
         self.left = left
         self.right = right
@@ -20,6 +28,14 @@ class player():
         self.max_m = 5
         self.min_m = 1
         self.score = 0
+        self.spawn = spawn if spawn is not None else (left, right, top, bottom)
+        self.clamp_bottom = clamp_bottom
+        # Classic players fly: "up" is a constant thrust stronger than gravity.
+        # Maps can turn that off so "up" is a jump that only works when the
+        # player is standing on something (set grounded during collisions).
+        self.can_fly = True
+        self.jump_speed = 0
+        self.grounded = False
         self.reset()
         self.normalize_obs()
 
@@ -41,7 +57,8 @@ class player():
 
         self.x += self.x_v
         self.y += self.y_v
-        self.y = min(self.bottom-self.r,self.y)
+        if self.clamp_bottom:
+            self.y = min(self.bottom-self.r,self.y)
     
     def update_mass(self):
         if self.m > self.min_m:
@@ -79,16 +96,18 @@ class player():
     
     def reset(self)->None:
         """Respawn at a random spot inside the arena with no velocity."""
-        start_width = (self.right-self.left-2*self.r-2)
-        start_height = (self.bottom-self.top-2*self.r-2)
+        left, right, top, bottom = self.spawn
+        start_width = (right-left-2*self.r-2)
+        start_height = (bottom-top-2*self.r-2)
 
         self.alive = 1.0
-        self.x = self.left+ self.r+1+ np.random.random()*start_width
-        self.y = self.top+ self.r+1+ np.random.random()*start_height
+        self.x = left+ self.r+1+ np.random.random()*start_width
+        self.y = top+ self.r+1+ np.random.random()*start_height
         self.x_v = 0
         self.y_v = 0
         self.y_a = 0
         self.m = self.min_m
+        self.grounded = False
 
     def get_obs(self):
         self.normalize_obs()
@@ -101,7 +120,11 @@ class player():
         self.alive = 0
     
     def move_up(self,force):
-        self.y_v -= force/self.m
+        if self.can_fly:
+            self.y_v -= force/self.m
+        elif self.grounded:
+            self.y_v = min(self.y_v, -self.jump_speed)
+            self.grounded = False
     
     def move_down(self,force):
         self.y_v += force/self.m

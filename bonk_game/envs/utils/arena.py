@@ -112,15 +112,14 @@ class Renderer:
             pygame.display.set_caption(self.caption)
             self.clock = pygame.time.Clock()
 
-    def draw(self, players, platforms, scores=None):
+    def draw(self, players, game_map, scores=None):
         self._ensure_init()
         canvas = pygame.Surface((WIDTH, HEIGHT))
         canvas.fill(BACKGROUND)
 
+        game_map.render(canvas)
         for p in players:
             p.render(canvas)
-        for obj in platforms:
-            obj.render(canvas)
 
         if scores is not None:
             label1 = self.font.render(f"Score {scores[0]}", True, (0, 0, 0))
