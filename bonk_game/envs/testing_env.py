@@ -1,3 +1,5 @@
+import itertools
+import math
 import os
 
 import numpy as np
@@ -15,16 +17,30 @@ from bonk_game.envs.utils.timer import RoundTimer
 P1_KEYS = ((pygame.K_w,), (pygame.K_a,), (pygame.K_s,), (pygame.K_d,), (pygame.K_LSHIFT,))
 P2_KEYS = ((pygame.K_UP,), (pygame.K_LEFT,), (pygame.K_DOWN,), (pygame.K_RIGHT,),
            (pygame.K_RSHIFT, pygame.K_SPACE))
+P3_KEYS = ((pygame.K_i,), (pygame.K_j,), (pygame.K_k,), (pygame.K_l,), (pygame.K_h,))
+P4_KEYS = ((pygame.K_KP8,), (pygame.K_KP4,), (pygame.K_KP5, pygame.K_KP2), (pygame.K_KP6,),
+           (pygame.K_KP0,))
+PLAYER_KEYS = (P1_KEYS, P2_KEYS, P3_KEYS, P4_KEYS)
+
+# On maps where players respawn, a death scores for whoever last touched the
+# victim within this many steps (4 s). With two players it's always the other.
+CREDIT_STEPS = 120
 
 
 class TestEnv():
-    """Two-player env for playing/watching matches.
+    """The game's env: 2-4 players for playing and watching matches.
 
     Each player is either a trained model or the string "user" for keyboard
-    control. When a player dies the opponent scores; depending on the map
-    either the dead player respawns or the whole round restarts. The first
-    to the winning score (the map's default unless given) wins.
+    control. Pass players 3 and 4 in `more`.
 
+    - On maps that restart the round on a death, a player who dies is out
+      until the round ends, and the last one standing scores. (If everyone
+      left dies at once, they each score.) With two players this is simply
+      "a death scores for the other player".
+    - On maps that respawn players (Classic), the dead player respawns and
+      whoever last touched them scores.
+
+    The first to the winning score (the map's default unless given) wins.
     Rounds have a time limit (the map's round_time unless given; 0 turns it
     off). When it runs out, sudden death walls close in from the sides.
     """
@@ -34,8 +50,11 @@ class TestEnv():
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(self, model1, model2, render_mode=None, winning_score=None, map_name=DEFAULT_MAP,
-                 round_time=None):
+                 round_time=None, more=()):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
+        kinds = [model1, model2, *more]
+        if not 2 <= len(kinds) <= arena.MAX_PLAYERS:
+            raise ValueError(f"2 to {arena.MAX_PLAYERS} players, got {len(kinds)}")
         self.render_mode = render_mode
         self.map = make_map(map_name)
         self.winning_score = winning_score or self.map.winning_score
@@ -43,14 +62,19 @@ class TestEnv():
         self.timer = RoundTimer(self.map.round_time if round_time is None else round_time,
                                 self.map.sudden_death_start)
 
-        self.user1 = model1 == "user"
-        self.user2 = model2 == "user"
-        self.model1 = None if self.user1 else model1
-        self.model2 = None if self.user2 else model2
+        self.n = len(kinds)
+        self.users = [k == "user" for k in kinds]
+        self.models = [None if u else k for u, k in zip(self.users, kinds)]
+        self.user1, self.user2 = self.users[:2]
+        self.model1, self.model2 = self.models[:2]
 
-        self.p1, self.p2 = self.map.make_players()
-        self.players = [self.p1, self.p2]
-        self.scores = [0, 0]
+        self.players = list(self.map.make_players(self.n))
+        self.p1, self.p2 = self.players[:2]
+        self.scores = [0] * self.n
+        self.out = [False] * self.n  # knocked out for the rest of the round
+        self.last_touch = [None] * self.n  # (who, step) that last touched each player
+        self.steps = 0
+        self.events = []  # what happened on the last step, for the game to show
 
         self.renderer = arena.Renderer(render_mode, self.metadata["render_fps"],
                                        f"Bonk - {self.map.title}")
@@ -60,47 +84,87 @@ class TestEnv():
         """True once the user has closed the game window."""
         return self.renderer.quit_requested
 
-    def _get_obs(self):
-        """Both players' observations stacked: [p1 view, p2 view].
+    def active(self):
+        """Indices of the players still in this round."""
+        return [i for i in range(self.n) if not self.out[i]]
 
-        Each view is obs_size long; slice with obs[:env.obs_size] and
-        obs[env.obs_size:].
+    def opponent_of(self, i):
+        """The opponent player i watches: the nearest one still in the round."""
+        me = self.players[i]
+        others = [j for j in self.active() if j != i] or [j for j in range(self.n) if j != i]
+        j = min(others, key=lambda j: math.dist((me.x, me.y), (self.players[j].x, self.players[j].y)))
+        return self.players[j]
+
+    def _get_obs(self):
+        """Every player's observation, stacked: [p1 view, p2 view, ...].
+
+        Each view is obs_size long: [me, opponent, map extras], where the
+        opponent is the nearest player still in the round. Slice player i's
+        with obs[i * env.obs_size:(i + 1) * env.obs_size].
         """
-        p1, p2 = self.p1.get_obs(), self.p2.get_obs()
         extra = self.map.extra_obs()
-        return np.concatenate((p1, p2, extra, p2, p1, extra), axis=0)
+        views = []
+        for i, p in enumerate(self.players):
+            views += [p.get_obs(), self.opponent_of(i).get_obs(), extra]
+        return np.concatenate(views, axis=0)
+
+    def credit(self, victim):
+        """Who scores for a death on a respawn map (None for nobody)."""
+        if self.n == 2:
+            return 1 - victim
+        touch = self.last_touch[victim]
+        if touch is not None and self.steps - touch[1] <= CREDIT_STEPS:
+            return touch[0]
+        return None
 
     def check_collisions(self):
-        died1 = self.map.collide(self.p1) or self.timer.kills(self.p1)
-        died2 = self.map.collide(self.p2) or self.timer.kills(self.p2)
-        if died1:
-            self.p2.score += 1
-        if died2:
-            self.p1.score += 1
+        P = self.players
+        died = [i for i in self.active() if self.map.collide(P[i]) or self.timer.kills(P[i])]
+        for i in died:
+            self.events.append(("death", i, (P[i].x, P[i].y)))
 
-        if self.map.reset_round_on_kill:
-            # Last one standing takes the round (both dying at once is a
-            # double point); then everything restarts.
-            if died1 or died2:
+        if died and self.map.reset_round_on_kill:
+            for i in died:
+                self.out[i] = True
+                P[i].alive = 0
+            alive = self.active()
+            if len(alive) <= 1:
+                # Last one standing takes the round; if everyone left died
+                # at once, they each get the point.
+                for i in alive or died:
+                    P[i].score += 1
+                    self.events.append(("point", i))
+                self.events.append(("round_over",))
                 self.new_round()
                 return
-        else:
-            # Respawn just the dead player, away from the opponent
-            if died1 or died2:
-                self.timer.reset()
-            if died1:
-                arena.respawn_apart(self.p1, [self.p2])
-            if died2:
-                arena.respawn_apart(self.p2, [self.p1])
-        player_collision(self.p1, self.p2)
+        elif died:
+            for i in died:
+                scorer = self.credit(i)
+                if scorer is not None:
+                    P[scorer].score += 1
+                    self.events.append(("point", scorer))
+            self.timer.reset()
+            for i in died:
+                arena.respawn_apart(P[i], [P[j] for j in range(self.n) if j != i])
+                self.last_touch[i] = None
+
+        for a, b in itertools.combinations(self.active(), 2):
+            pa, pb = P[a], P[b]
+            if math.hypot(pa.x - pb.x, pa.y - pb.y) < pa.r + pb.r:
+                self.last_touch[a] = (b, self.steps)
+                self.last_touch[b] = (a, self.steps)
+            player_collision(pa, pb)
 
     def new_round(self):
         self.map.reset()
         self.timer.reset()
+        self.out = [False] * self.n
+        self.last_touch = [None] * self.n
         arena.reset_players(self.players)
 
     def check_keydown(self, keys, agent):
-        up, left, down, right, heavy = P2_KEYS if agent is self.p2 else P1_KEYS
+        idx = self.players.index(agent)
+        up, left, down, right, heavy = PLAYER_KEYS[idx]
 
         def held(group):
             return any(keys[k] for k in group)
@@ -119,39 +183,43 @@ class TestEnv():
     def apply_forces(self, actions):
         """Apply this step's inputs.
 
-        `actions` is [action1, action2] when both players are models, a single
-        action when exactly one is a model, and ignored when both are users.
+        `actions` holds one action per model-controlled player, in player
+        order. With exactly one model it's that model's action on its own
+        (not in a list). Keyboard players read the keys.
         """
-        keys = pygame.key.get_pressed() if (self.user1 or self.user2) else None
-
-        if self.user1:
-            self.check_keydown(keys, self.p1)
-        else:
-            arena.apply_action(self.p1, actions if self.user2 else actions[0])
-
-        if self.user2:
-            self.check_keydown(keys, self.p2)
-        else:
-            arena.apply_action(self.p2, actions if self.user1 else actions[1])
+        keys = pygame.key.get_pressed() if any(self.users) else None
+        model_idx = [i for i in range(self.n) if not self.users[i]]
+        acts = [actions] if len(model_idx) == 1 else list(actions) if model_idx else []
+        for i, p in enumerate(self.players):
+            if self.out[i]:
+                continue
+            if self.users[i]:
+                self.check_keydown(keys, p)
+            else:
+                arena.apply_action(p, acts[model_idx.index(i)])
 
     def reset(self):
         for p in self.players:
             p.score = 0
-        self.scores = [0, 0]
+        self.scores = [0] * self.n
+        self.steps = 0
         self.new_round()
         if self.render_mode == "human":
             self._render_frame()
         return self._get_obs()
 
     def step(self, actions):
+        self.events = []
         self.apply_forces(actions)
         self.map.step()
         self.timer.step()
         self.check_collisions()
-        self.p1.update()
-        self.p2.update()
+        for i, p in enumerate(self.players):
+            if not self.out[i]:
+                p.update()
+        self.steps += 1
 
-        self.scores = [self.p1.score, self.p2.score]
+        self.scores = [p.score for p in self.players]
         terminated = max(self.scores) >= self.winning_score
 
         if self.render_mode == "human":
@@ -165,7 +233,8 @@ class TestEnv():
             return self._render_frame()
 
     def _render_frame(self):
-        return self.renderer.draw(self.players, self.map, self.scores, self.timer)
+        shown = [p for i, p in enumerate(self.players) if not self.out[i]]
+        return self.renderer.draw(shown, self.map, self.scores, self.timer)
 
     def close(self):
         self.renderer.close()

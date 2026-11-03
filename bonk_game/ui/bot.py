@@ -68,7 +68,11 @@ class Bot:
 
     @property
     def them(self):
-        return self.env.players[1 - self.index]
+        """The opponent to go after: the nearest one still in the round."""
+        players = self.env.players
+        if len(players) == 2:
+            return players[1 - self.index]
+        return self.env.opponent_of(self.index)
 
     def predict(self, obs, *args, **kwargs):
         if random.random() > self.reaction:

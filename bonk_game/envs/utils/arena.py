@@ -30,6 +30,10 @@ FORCE = 2  # change in velocity a player gets from one input
 
 P1_COLOR = (255, 107, 107)
 P2_COLOR = (77, 171, 247)
+P3_COLOR = (177, 132, 255)
+P4_COLOR = (255, 202, 58)
+PLAYER_COLORS = (P1_COLOR, P2_COLOR, P3_COLOR, P4_COLOR)
+MAX_PLAYERS = len(PLAYER_COLORS)
 FLOOR_COLOR = (126, 214, 170)
 WALL_COLOR = (239, 83, 80)
 
@@ -131,10 +135,14 @@ class Renderer:
             painter.player(p)
 
         if scores is not None:
-            label1 = self.font.render(str(scores[0]), True, theme.P1)
-            label2 = self.font.render(str(scores[1]), True, theme.P2)
-            canvas.blit(label1, (20, 12))
-            canvas.blit(label2, (WIDTH - 20 - label2.get_width(), 12))
+            # Scores across the top, in each player's colour
+            labels = [self.font.render(str(s), True, c) for s, c in zip(scores, theme.PLAYER_COLORS)]
+            if len(labels) == 2:
+                canvas.blit(labels[0], (20, 12))
+                canvas.blit(labels[1], (WIDTH - 20 - labels[1].get_width(), 12))
+            else:
+                for i, label in enumerate(labels):
+                    canvas.blit(label, (20 + i * 50, 12))
 
         if self.render_mode == "human":
             self.window.blit(canvas, canvas.get_rect())

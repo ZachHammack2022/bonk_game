@@ -49,12 +49,12 @@ class Map:
         """Length of one agent's observation."""
         return arena.OBS_SIZE + self.n_extra_obs
 
-    def make_players(self):
+    def make_players(self, n=2):
         left, right, top, bottom = self.obs_bounds
         players = tuple(
             player(arena.RADIUS, left, right, top, bottom, color,
                    spawn=self.spawn_box, clamp_bottom=self.clamp_bottom)
-            for color in (arena.P1_COLOR, arena.P2_COLOR)
+            for color in arena.PLAYER_COLORS[:n]
         )
         for p in players:
             p.v_range = self.max_speed

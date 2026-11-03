@@ -20,7 +20,10 @@ PANEL_BORDER = (64, 84, 120)
 # Players
 P1 = (255, 107, 107)
 P2 = (77, 171, 247)
-PLAYER_NAMES = ("Red", "Blue")
+P3 = (177, 132, 255)
+P4 = (255, 202, 58)
+PLAYER_COLORS = (P1, P2, P3, P4)
+PLAYER_NAMES = ("Red", "Blue", "Purple", "Yellow")
 
 # Level pieces
 PLATFORM = (126, 214, 170)
