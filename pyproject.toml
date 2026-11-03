@@ -1,0 +1,13 @@
+# Linting only (setup.py still does the packaging). CI runs `ruff check .`.
+[tool.ruff]
+line-length = 130
+extend-exclude = ["agents"]
+
+[tool.ruff.lint]
+# pycodestyle errors and warnings, pyflakes (unused names, undefined
+# names...), and bugbear (likely bugs)
+select = ["E", "W", "F", "B"]
+ignore = [
+    "B905",  # zip() without strict=: zipping things of different lengths is often on purpose here
+    "E731",  # a lambda assigned to a name: fine for small helpers
+]

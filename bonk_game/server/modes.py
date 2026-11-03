@@ -125,7 +125,7 @@ class Teams(Mode):
                 if len(won) == 1:
                     self._point(won.pop(), events)
         else:
-            for victim, by, _ in info["kos"]:
+            for victim, _by, _ in info["kos"]:
                 # Knocked out by the other side, or fell: a point for the other side
                 self._point(1 - self.teams[victim], events)
         return events

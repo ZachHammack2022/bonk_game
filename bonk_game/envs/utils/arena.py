@@ -157,7 +157,6 @@ class Renderer:
 
         self._ensure_init()
         from bonk_game.ui.painter import Painter
-        from bonk_game.ui import theme
 
         canvas = pygame.Surface((WIDTH, HEIGHT))
         painter = Painter(canvas)
@@ -180,7 +179,7 @@ class Renderer:
         if self.render_mode == "human":
             self.window.blit(canvas, canvas.get_rect())
             # Let the user close the window instead of having to kill the process
-            for event in pygame.event.get(pygame.QUIT):
+            if pygame.event.get(pygame.QUIT):
                 self.quit_requested = True
             pygame.event.pump()
             pygame.display.update()

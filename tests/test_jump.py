@@ -86,7 +86,7 @@ def walk_off(m, p):
     """Roll off the right end of the platform; return steps since it left."""
     p.x = m.RIGHT - 2
     p.x_v = 6
-    for t in range(30):
+    for _ in range(30):
         step(m, p)
         if not p.grounded:
             return

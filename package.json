@@ -1,0 +1,15 @@
+{
+  "name": "bonk-game-dev",
+  "private": true,
+  "description": "Tools for the browser client: linting (eslint) and the browser tests (playwright). The game itself needs none of this.",
+  "scripts": {
+    "lint": "eslint .",
+    "test:web": "node tests/web/e2e.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.12.0",
+    "globals": "15.15.0",
+    "playwright": "1.48.2"
+  }
+}

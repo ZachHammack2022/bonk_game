@@ -15,7 +15,7 @@ def new_rng(seed=None):
 
 
 class player():
-    
+
     def __init__(self,radius,left,right,top,bottom,color,spawn=None,clamp_bottom=True,rng=None) -> None:
         """Create a player.
 
@@ -61,42 +61,42 @@ class player():
         self.normalize_obs()
 
     def update_velocities(self):
-        
+
         # prepare velocities for normalization
         self.y_v += self.gravity * self.gravity_mult
         cap = self.v_range * self.speed_mult
         self.x_v = max(-cap, min(cap, self.x_v))
         self.y_v = max(-cap, min(cap, self.y_v))
-            
-    
+
+
     def update_position(self):
 
         self.x += self.x_v
         self.y += self.y_v
         if self.clamp_bottom:
             self.y = min(self.bottom-self.r,self.y)
-    
+
     def update_mass(self):
         if self.m > self.min_m:
             self.m = max(self.m-0.1,self.min_m)
-    
+
     def make_heavy(self):
         # Can only go heavy again once the previous heavy has fully worn off
         if self.m == self.min_m:
             self.m = self.max_m
-        
-    
+
+
     def normalize_obs(self):
-        
+
         x = self.normalize(self.left,self.right,self.x)
         y = self.normalize(self.top,self.bottom,self.y)
         x_v = self.normalize(-self.v_range,self.v_range,self.x_v)
         y_v = self.normalize(-self.v_range,self.v_range,self.y_v)
         m = self.normalize(self.min_m,self.max_m,self.m)
-        
+
         # Clip so a player knocked briefly past a wall still fits the obs space
         self._obs = np.clip(np.array([x,y,x_v,y_v,self.alive,m]),-1,1)
-            
+
     def update(self)-> None:
         """_Update velocity and position values
         """
@@ -105,8 +105,8 @@ class player():
         self.update_velocities()
         self.update_position()
         self.update_mass()
-        
-    
+
+
     def reset(self)->None:
         """Respawn at a random spot inside the arena with no velocity."""
         left, right, top, bottom = self.spawn
@@ -128,13 +128,13 @@ class player():
     def get_obs(self):
         self.normalize_obs()
         return self._obs
-    
-        
+
+
     def dies(self):
         """Set alive attribute to False upon death
         """
         self.alive = 0
-    
+
     def move_up(self,force):
         if self.can_fly:
             self.y_v -= force*self.force_mult/self.m
@@ -168,17 +168,16 @@ class player():
         if self.jump_buffer:
             self.try_jump()
             self.jump_buffer = max(0, self.jump_buffer - 1)
-    
+
     def move_down(self,force):
         self.y_v += force*self.force_mult/self.m
-    
+
     def move_left(self,force):
         self.x_v -= force*self.force_mult/self.m
-    
+
     def move_right(self,force):
         self.x_v += force*self.force_mult/self.m
-        
+
     def normalize(self,low,high,val):
         return ((val - low)/(high-low)-0.5)*2
 
-        

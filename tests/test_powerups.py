@@ -2,7 +2,6 @@
 import json
 import random
 
-import numpy as np
 import pytest
 
 from bonk_game.envs.testing_env import TestEnv
