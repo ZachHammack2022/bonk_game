@@ -44,7 +44,7 @@ Subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.p
 6. Run "pip install -e ." to make the gym environment
 7. Run "defaults write org.python.python ApplePersistenceIgnoreState NO" if on macOS.
 8. Run "python3 main.py" to play. You can play against a friend or the built-in Bot straight away.
-9. To play against AI agents, train them for a map with "python3 main.py --train <map>" (maps: classic, platform, slider, swing). It takes 10-15 minutes per map. They then show up as players in the game. For a quick try, add "--steps 20000" (the agents will be weak).
+9. To play against AI agents, train them for a map with "python3 main.py --train <map>" (maps: classic, platform, slider, swing). It takes 10-15 minutes per map. They then show up as players in the game. For a quick try, add "--steps 20000" (the agents will be weak). Agents train against a mix of opponents: the built-in bot, the map's "bad" agent and snapshots of themselves (self-play). Add "--opponents bad" to train only against the bad agent, as older versions did.
 10. Once you have trained agents, you can run a tournament: "python3 tournament.py --map <map>". This puts your trained agents against one another to find the winner!
 
 The old text menus are still available with "python3 main.py --terminal".
