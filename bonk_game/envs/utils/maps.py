@@ -49,17 +49,27 @@ class Map:
         return arena.OBS_SIZE + self.n_extra_obs
 
     def make_players(self, n=2):
+        """`n` players (2-10), each in its own colour."""
+        if not arena.MIN_PLAYERS <= n <= arena.MAX_PLAYERS:
+            raise ValueError(f"{n} players: need {arena.MIN_PLAYERS}-{arena.MAX_PLAYERS}")
         left, right, top, bottom = self.obs_bounds
         players = tuple(
             player(arena.RADIUS, left, right, top, bottom, color,
                    spawn=self.spawn_box, clamp_bottom=self.clamp_bottom)
-            for color in arena.PLAYER_COLORS[:n]
+            for color in theme.PLAYER_COLORS[:n]
         )
         for p in players:
             p.v_range = self.max_speed
             p.can_fly = self.can_fly
             p.jump_speed = self.jump_speed
         return players
+
+    def place_players(self, players):
+        """Reset every player at the start of a round, spread over the spawn box."""
+        points = arena.spawn_points(len(players), self.spawn_box, arena.RADIUS)
+        for p, (x, y) in zip(players, points):
+            p.reset()
+            p.x, p.y = x, y
 
     def reset(self):
         """Put any moving parts back where they start."""

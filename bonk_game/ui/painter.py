@@ -266,6 +266,14 @@ class Painter:
         # Shine
         self.circle(x - r * 0.32, y - r * 0.34, max(1, r * 0.22), lighten(fill, 0.55))
 
+    def you_marker(self, p):
+        """Small arrow above the local player's ball, so you can find yourself."""
+        x, y = self.pt(p.x, p.y - p.r - 9)
+        s = self.ln(5)
+        tri = [(x, y + s), (x - s, y - s * 0.6), (x + s, y - s * 0.6)]
+        pygame.draw.polygon(self.surface, (255, 255, 255), tri)
+        pygame.draw.polygon(self.surface, darken(p.color, 0.5), tri, max(1, self.ln(1.2)))
+
     def offscreen_marker(self, p, world_w):
         """Arrow on the top edge pointing at a player who is above the screen."""
         if p.y + p.r >= 0:

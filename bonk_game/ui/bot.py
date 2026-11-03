@@ -69,10 +69,10 @@ class Bot:
     @property
     def them(self):
         """The opponent to go after: the nearest one still in the round."""
-        players = self.env.players
-        if len(players) == 2:
-            return players[1 - self.index]
-        return self.env.opponent_of(self.index)
+        env = self.env
+        if hasattr(env, "nearest_opponent"):
+            return env.players[env.nearest_opponent(self.index)]
+        return env.players[1 - self.index]  # the 1v1 training env
 
     def predict(self, obs, *args, **kwargs):
         if random.random() > self.reaction:

@@ -16,6 +16,7 @@ from bonk_game.envs.utils.maps import MAPS, make_map
 from bonk_game.ui import theme
 from bonk_game.ui.bot import LEVEL_NAMES, Bot
 from bonk_game.ui.interp import Interpolator
+from bonk_game.ui import keys as controls
 from bonk_game.ui.painter import Painter
 from bonk_game.ui.sound import Sound
 
@@ -273,11 +274,16 @@ class Effects:
 # ---------------------------------------------------------------------------
 class Sim:
     def __init__(self, map_name, controllers, first_to):
-        """controllers: per player (2-4), "human", "bot:<level>" (or "bot"
-        for medium) or a trained model."""
-        kinds = ["user" if c == "human" else "ai" for c in controllers]
-        self.env = TestEnv(kinds[0], kinds[1], None, winning_score=first_to, map_name=map_name,
-                           more=kinds[2:])
+        """controllers: per player (2-10), "human", "bot:<level>" (or "bot"
+        for medium) or a trained model.
+
+        At most one player is "human": the person at this computer, on the
+        keyboard.
+        """
+        self.humans = [i for i, c in enumerate(controllers) if c == "human"]
+        if len(self.humans) > controls.MAX_HUMANS:
+            raise ValueError(f"at most {controls.MAX_HUMANS} human player per computer")
+        self.env = TestEnv(*controllers, winning_score=first_to, map_name=map_name)
         self.controllers = [
             None if c == "human" else Bot(self.env, i, bot_level(c)) if is_bot(c) else c
             for i, c in enumerate(controllers)
@@ -290,49 +296,56 @@ class Sim:
     def map(self):
         return self.env.map
 
-    def step(self):
-        """Advance one physics step. Returns what happened, as events:
-        ("death", player, pos), ("point", player), ("round_over",),
-        ("sudden_death",) and ("hit", pos, strength)."""
-        env = self.env
-        n = env.obs_size
-        pre = [(p.x, p.y, p.x_v, p.y_v) for p in env.players]
-        acts = []
+    def inputs(self):
+        """This step's input for every player."""
+        buttons = controls.keyboard_buttons(pygame.key.get_pressed()) if self.humans else None
+        out = []
         for i, c in enumerate(self.controllers):
-            if c is not None:
-                a, _ = c.predict(self.obs[i * n:(i + 1) * n])
-                acts.append(a)
-        actions = acts[0] if len(acts) == 1 else acts or None
+            if c is None:
+                out.append(buttons)
+            elif self.env.players[i].alive:
+                out.append(c.predict(self.env.view(self.obs, i))[0])
+            else:
+                out.append(None)
+        return out
 
+    def step(self):
+        """Advance one physics step. Returns a list of events for effects:
+        ("death", i, pos), ("score", i), ("round_over",), ("sudden_death",)
+        and ("hit", pos, strength)."""
+        env = self.env
+        actions = self.inputs()
+        living = [p for p in env.players if p.alive]
+        pre = {id(p): (p.x, p.y, p.x_v, p.y_v) for p in living}
         was_sudden = env.timer.sudden_death
         self.interp.before_step()
-        self.obs, self.done, _ = env.step(actions)
+        self.obs, self.done, info = env.step(actions)
 
         events = []
         if env.timer.sudden_death and not was_sudden:
             events.append(("sudden_death",))
-        for ev in env.events:
-            if ev[0] == "death":
-                x, y = ev[2]
-                events.append(("death", ev[1], (min(max(x, 12), W - 12), min(max(y, 12), H - 12))))
-            else:
-                events.append(ev)
-            if ev[0] == "round_over":
-                self.interp.forget()  # everything was just put back for a new round
-        if not any(e[0] == "death" for e in events):
-            active = env.active()
-            for a in active:
-                for b in active:
-                    if b <= a:
+        for i, x, y in info["deaths"]:
+            events.append(("death", i, (min(max(x, 12), W - 12), min(max(y, 12), H - 12))))
+        for i in info["points"]:
+            events.append(("score", i))
+        if info["round_over"]:
+            events.append(("round_over",))
+            self.interp.forget()  # everything was just put back for a new round
+        if not info["deaths"]:
+            # The hardest hit between any two players this step
+            best = None
+            for k, p in enumerate(living):
+                for q in living[k + 1:]:
+                    if math.hypot(p.x - q.x, p.y - q.y) > p.r + q.r + 1.5:
                         continue
-                    p, q = env.players[a], env.players[b]
-                    (x1, y1, vx1, vy1), (x2, y2, vx2, vy2) = pre[a], pre[b]
-                    d = math.hypot(p.x - q.x, p.y - q.y)
-                    if d <= p.r + q.r + 1.5:
-                        dd = math.hypot(x2 - x1, y2 - y1) or 1
-                        closing = ((vx1 - vx2) * (x2 - x1) + (vy1 - vy2) * (y2 - y1)) / dd
-                        if closing > 5:
-                            events.append(("hit", ((p.x + q.x) / 2, (p.y + q.y) / 2), closing))
+                    x1, y1, vx1, vy1 = pre[id(p)]
+                    x2, y2, vx2, vy2 = pre[id(q)]
+                    dd = math.hypot(x2 - x1, y2 - y1) or 1
+                    closing = ((vx1 - vx2) * (x2 - x1) + (vy1 - vy2) * (y2 - y1)) / dd
+                    if closing > 5 and (best is None or closing > best[2]):
+                        best = ("hit", ((p.x + q.x) / 2, (p.y + q.y) / 2), closing)
+            if best:
+                events.append(best)
         return events
 
     def draw(self, surface, scale, shake=(0, 0), effects=None, alpha=1.0):
@@ -349,18 +362,22 @@ class Sim:
         painter.closing_walls(timer.walls(), W, H, timer.steps / PHYSICS_HZ)
         if effects:
             effects.draw(painter)
-        shown = [p for i, p in enumerate(self.env.players) if not self.env.out[i]]
-        for p in shown:
+        living = [p for p in self.env.players if p.alive]
+        for p in living:
             painter.player(p)
-        for p in shown:
+        for i in self.humans:
+            if self.env.players[i].alive:
+                painter.you_marker(self.env.players[i])
+        for p in living:
             painter.offscreen_marker(p, W)
 
 
 BOT_CHOICES = tuple(f"bot:{level}" for level in LEVEL_NAMES)
+DEFAULT_BOT = "bot:medium"
 BOT_BLURBS = {
-    "easy": "Slow and sloppy. Good for learning.",
-    "medium": "A fair fight.",
-    "hard": "Quick, lines up hits, braces for yours.",
+    "easy": "Slow and sloppy",
+    "medium": "A fair fight",
+    "hard": "Quick and tough",
 }
 
 
@@ -378,17 +395,6 @@ def describe(choice):
     if is_bot(choice):
         return f"{bot_level(choice).title()} bot"
     return choice.upper()
-
-
-def draw_scoreline(ui, scores, y, size, alpha=255):
-    """ "3 – 5" for two players; each score in its player's colour for more."""
-    if len(scores) == 2:
-        ui.text(f"{scores[0]}  –  {scores[1]}", size, theme.TEXT, (W / 2, y), alpha=alpha)
-        return
-    gap = size * 1.6
-    x0 = W / 2 - gap * (len(scores) - 1) / 2
-    for i, s in enumerate(scores):
-        ui.text(str(s), size, theme.PLAYER_COLORS[i], (x0 + i * gap, y), alpha=alpha)
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +418,9 @@ class Scene:
 class TitleScene(Scene):
     def __init__(self, app):
         super().__init__(app)
-        self.demo = Sim("platform", ["bot:medium", "bot:medium"], 10 ** 9)
+        self.demo = Sim("platform", [DEFAULT_BOT] * 4, 10 ** 9)
+        for c in self.demo.controllers:
+            c.reaction = 0.6
         self.effects = Effects()
         self.acc = 0.0
         self.menu = Menu(app, [
@@ -475,26 +483,25 @@ class HowToScene(Scene):
         Painter(ui.surface, ui.s).background()
         ui.text("How to play", 30, theme.TEXT, (W / 2, 42))
 
-        ui.panel((30, 72, 300, 140))
-        ui.panel((350, 72, 300, 140))
-        for i, (x, name, color, move, heavy) in enumerate([
-            (30, "Red", theme.P1, ["W", "A", "S", "D"], ["L-Shift"]),
-            (350, "Blue", theme.P2, ["up", "left", "down", "right"], ["Space", "R-Shift"]),
-        ]):
-            ui.ball(x + 30, 100, 11, color)
-            ui.text(name, 20, color, (x + 50, 100), anchor="midleft")
-            ui.text("Move / jump", 13, theme.TEXT_DIM, (x + 20, 138), anchor="midleft", bold=False, shadow=False)
-            kx = x + 130
-            for k in move:
-                kx += ui.keycap(k, kx, 127) + 5
-            ui.text("Go heavy", 13, theme.TEXT_DIM, (x + 20, 178), anchor="midleft", bold=False, shadow=False)
-            kx = x + 130
-            for k in heavy:
-                kx += ui.keycap(k, kx, 167) + 5
+        ui.panel((30, 72, 620, 140))
+        ui.ball(60, 100, 11, theme.P1)
+        ui.text("Controls", 20, theme.TEXT, (80, 100), anchor="midleft")
+        ui.text("Move / jump", 13, theme.TEXT_DIM, (50, 138), anchor="midleft", bold=False, shadow=False)
+        kx = 160
+        for k in controls.MOVE_LABELS:
+            kx += ui.keycap(k, kx, 127) + 5
+        ui.text("or", 13, theme.TEXT_DIM, (kx + 6, 138), anchor="midleft", bold=False, shadow=False)
+        kx += 30
+        for k in ("up", "left", "down", "right"):
+            kx += ui.keycap(k, kx, 127) + 5
+        ui.text("Go heavy", 13, theme.TEXT_DIM, (50, 178), anchor="midleft", bold=False, shadow=False)
+        kx = 160
+        for k in controls.HEAVY_LABELS:
+            kx += ui.keycap(k, kx, 167) + 5
 
         ui.panel((30, 226, 620, 180))
         rules = [
-            ("Knock your opponent out.", "Off the screen on open maps, into the red walls on Classic."),
+            ("Knock the others out.", "Off the screen on open maps, into the red walls on Classic. Last ball standing scores."),
             ("Go heavy to hit harder.", "You get knocked around less but move slower, and it takes a moment to recharge."),
             ("On open maps, up is a jump.", "It only works while you're standing on something. On Classic you can fly."),
             ("Esc pauses the game.", "M toggles sound."),
@@ -652,28 +659,14 @@ class MapSelectScene(Scene):
                 (W / 2, 462), bold=False, shadow=False)
 
 
-# Key hints shown for each human player: (move keys, heavy key)
-KEY_HINTS = (
-    (["W", "A", "S", "D"], ["L-Shift"]),
-    (["Arrows"], ["Space"]),
-    (["I", "J", "K", "L"], ["H"]),
-    (["Num 8 4 5 6"], ["Num 0"]),
-)
-KEY_HINT_TEXT = ("WASD + L-Shift", "Arrows + Space", "IJKL + H", "Numpad 8456 + 0")
-
-
 class PlayerSelectScene(Scene):
-    """Pick who plays (2-4 players), and how many points win.
+    """Pick how many players (2-10) and who controls each one.
 
-    Rows, top to bottom: one card per player, the player count, first-to,
-    and the start button. Up/down moves between rows; left/right changes
-    the focused row.
+    One slot can be the human at this computer; the others are Bots or
+    trained agents.
     """
-
-    MIN_PLAYERS, MAX_PLAYERS = 2, arena.MAX_PLAYERS
-    CARDS_X, CARDS_W, CARD_GAP = 40, 600, 16
-    CARD_Y, CARD_H = 76, 228
-    SELECT_Y = 372
+    COUNT_ROW, FIRST_ROW, START_ROW = "count", "first", "start"
+    SLOT_W, SLOT_H = 300, 44
 
     def __init__(self, app, map_name, picks=None, first_to=None):
         super().__init__(app)
@@ -681,99 +674,112 @@ class PlayerSelectScene(Scene):
         self.map_cls = MAPS[map_name]
         self.agents = app.load_agents(map_name)
         self.options = ["human", *BOT_CHOICES] + list(self.agents)
-        default = list(picks or ("human", "bot:medium"))[:self.MAX_PLAYERS]
-        self.picks = [self.options.index(p) if p in self.options else 0 for p in default]
+        self.bot = self.options.index(DEFAULT_BOT)
+        default = [DEFAULT_BOT if p == "bot" else p
+                   for p in list(picks or ("human", DEFAULT_BOT))[:arena.MAX_PLAYERS]]
+        self.picks = [self.options.index(p) if p in self.options else self.bot for p in default]
+        while len(self.picks) < arena.MIN_PLAYERS:
+            self.picks.append(self.bot)
+        self._limit_humans()
         default_first = first_to or min(self.map_cls.winning_score, 10)
         self.first_opts = sorted(set(FIRST_TO_OPTIONS) | {default_first})
         self.first = self.first_opts.index(default_first)
-        self.focus = self.start_row
+        self.focus = self.START_ROW
         self.start_btn = Button("Start match", (440, 418, 200, 44), self.start, primary=True, size=18)
         self.back_btn = Button("Back", (40, 418, 120, 44), self.back)
 
-    # Rows after the player cards
+    # --- state ----------------------------------------------------------
     @property
-    def n(self):
-        return len(self.picks)
+    def rows(self):
+        """Focusable rows in keyboard order."""
+        return list(range(len(self.picks))) + [self.COUNT_ROW, self.FIRST_ROW, self.START_ROW]
 
-    @property
-    def count_row(self):
-        return self.n
+    def option(self, i):
+        return self.options[self.picks[i]]
 
-    @property
-    def first_row(self):
-        return self.n + 1
+    def humans(self):
+        return [i for i in range(len(self.picks)) if self.option(i) == "human"]
 
-    @property
-    def start_row(self):
-        return self.n + 2
-
-    def card_rect(self, i):
-        w = (self.CARDS_W - self.CARD_GAP * (self.n - 1)) / self.n
-        return self.CARDS_X + i * (w + self.CARD_GAP), self.CARD_Y, w, self.CARD_H
-
-    def selectors(self):
-        """(row, centre x, y, width) of every ‹ value › selector."""
-        out = []
-        for i in range(self.n):
-            x, y, w, h = self.card_rect(i)
-            out.append((i, x + w / 2, 196, min(220, w - 16)))
-        out.append((self.count_row, W / 2 - 110, self.SELECT_Y, 170))
-        out.append((self.first_row, W / 2 + 110, self.SELECT_Y, 170))
-        return out
+    def _limit_humans(self):
+        for i in self.humans()[controls.MAX_HUMANS:]:
+            self.picks[i] = self.bot
 
     def choice(self, i):
-        o = self.options[self.picks[i]]
+        o = self.option(i)
         return o if o == "human" or is_bot(o) else self.agents[o]
 
     def back(self):
         self.app.go(MapSelectScene(self.app, self.map_name))
 
     def start(self):
-        self.app.go(MatchScene(self.app, self.map_name, [self.choice(i) for i in range(self.n)],
-                               [self.options[p] for p in self.picks], self.first_opts[self.first]))
-
-    def set_count(self, n):
-        n = max(self.MIN_PLAYERS, min(self.MAX_PLAYERS, n))
-        on_start = self.focus == self.start_row
-        while self.n < n:
-            self.picks.append(self.options.index("bot:medium"))
-        del self.picks[n:]
-        self.focus = self.start_row if on_start else self.count_row
+        n = len(self.picks)
+        self.app.go(MatchScene(self.app, self.map_name, [self.choice(i) for i in range(n)],
+                               [self.option(i) for i in range(n)], self.first_opts[self.first]))
 
     def change(self, row, d):
-        if row < self.n:
-            self.picks[row] = (self.picks[row] + d) % len(self.options)
-        elif row == self.count_row:
-            # Wraps around: 4 -> 2 and 2 -> 4
-            span = self.MAX_PLAYERS - self.MIN_PLAYERS + 1
-            self.set_count(self.MIN_PLAYERS + (self.n - self.MIN_PLAYERS + d) % span)
-        elif row == self.first_row:
+        if isinstance(row, int):
+            others = len([i for i in self.humans() if i != row])
+            for _ in range(len(self.options)):
+                self.picks[row] = (self.picks[row] + d) % len(self.options)
+                # Skip "Human" if another slot already has the human
+                if self.option(row) != "human" or others < controls.MAX_HUMANS:
+                    break
+        elif row == self.COUNT_ROW:
+            n = len(self.picks) + d
+            if not arena.MIN_PLAYERS <= n <= arena.MAX_PLAYERS:
+                return
+            if d > 0:
+                self.picks.append(self.bot)  # new players start as Medium bots
+            else:
+                self.picks.pop()
+                if self.focus not in self.rows:
+                    self.focus = self.COUNT_ROW
+        elif row == self.FIRST_ROW:
             self.first = (self.first + d) % len(self.first_opts)
         else:
             return
         self.app.sound.play("move")
 
+    # --- layout ---------------------------------------------------------
+    def slot_rect(self, i):
+        """Slots fill two columns, row by row: Red and Blue on top."""
+        return (30 + (i % 2) * 320, 74 + (i // 2) * 52, self.SLOT_W, self.SLOT_H)
+
+    def selectors(self):
+        """(row, centre x, y, width) of every ‹ value › selector."""
+        out = []
+        for i in range(len(self.picks)):
+            x, y, w, h = self.slot_rect(i)
+            out.append((i, x + 212, y + h / 2, 160))
+        out.append((self.COUNT_ROW, 210, 372, 150))
+        out.append((self.FIRST_ROW, 470, 372, 150))
+        return out
+
     def arrow_hits(self, vx, vy):
         """(row, delta) for a click on one of the ‹ › arrows, else None."""
         for row, cx, y, width in self.selectors():
             if abs(vy - y) < 18:
-                if abs(vx - (cx - width / 2 + 18)) < 20:
+                left, right = cx - width / 2 + 18, cx + width / 2 - 18
+                if abs(vx - left) < 22:
                     return row, -1
-                if abs(vx - (cx + width / 2 - 18)) < 20:
+                if abs(vx - right) < 22:
                     return row, 1
         return None
 
+    # --- input ----------------------------------------------------------
+    def move_focus(self, d):
+        rows = self.rows
+        self.focus = rows[(rows.index(self.focus) + d) % len(rows)]
+        self.app.sound.play("move")
+
     def event(self, e):
-        rows = self.start_row + 1
         if e.type == pygame.KEYDOWN:
             if e.key == pygame.K_ESCAPE:
                 self.back()
             elif e.key in (pygame.K_UP, pygame.K_w):
-                self.focus = (self.focus - 1) % rows
-                self.app.sound.play("move")
+                self.move_focus(-1)
             elif e.key in (pygame.K_DOWN, pygame.K_s, pygame.K_TAB):
-                self.focus = (self.focus + 1) % rows
-                self.app.sound.play("move")
+                self.move_focus(1)
             elif e.key in (pygame.K_LEFT, pygame.K_a):
                 self.change(self.focus, -1)
             elif e.key in (pygame.K_RIGHT, pygame.K_d):
@@ -794,79 +800,72 @@ class PlayerSelectScene(Scene):
                 self.app.sound.play("click")
                 self.back()
             else:
-                for i in range(self.n):
-                    x, y, w, h = self.card_rect(i)
+                for i in range(min(len(self.picks) + 1, arena.MAX_PLAYERS)):
+                    x, y, w, h = self.slot_rect(i)
                     if x <= vx <= x + w and y <= vy <= y + h:
-                        self.focus = i
+                        if i == len(self.picks):
+                            self.change(self.COUNT_ROW, 1)  # the "Add player" slot
+                        else:
+                            self.focus = i
+                        break
         elif e.type == pygame.MOUSEMOTION:
             vx, vy = self.app.to_virtual(e.pos)
             if self.start_btn.contains(vx, vy):
-                self.focus = self.start_row
+                self.focus = self.START_ROW
 
+    # --- drawing --------------------------------------------------------
     def draw_selector(self, ui, cx, y, label, focused, width=220, size=19):
         if focused:
-            ui.panel((cx - width / 2, y - 18, width, 36), color=theme.PANEL_LIGHT, radius=18,
+            ui.panel((cx - width / 2, y - 16, width, 32), color=theme.PANEL_LIGHT, radius=16,
                      border=theme.ACCENT, alpha=255, border_w=2)
         arrow_c = theme.ACCENT if focused else theme.TEXT_FAINT
-        ui.chevron(cx - width / 2 + 18, y, -1, 7, arrow_c, width=2.5)
-        ui.chevron(cx + width / 2 - 18, y, 1, 7, arrow_c, width=2.5)
+        ui.chevron(cx - width / 2 + 18, y, -1, 6, arrow_c, width=2.5)
+        ui.chevron(cx + width / 2 - 18, y, 1, 6, arrow_c, width=2.5)
         ui.text(label, size, theme.TEXT, (cx, y))
-
-    def draw_card(self, ui, i):
-        x, y, w, h = self.card_rect(i)
-        cx = x + w / 2
-        narrow = w < 200
-        color = theme.PLAYER_COLORS[i]
-        focused = self.focus == i
-        ui.panel((x, y, w, h), border=color if focused else theme.PANEL_BORDER,
-                 border_w=2 if focused else 1.2)
-        bob = math.sin(self.t * 3 + i) * 3 if focused else 0
-        ui.ball(cx, y + 48 + bob, 22 if narrow else 26, color)
-        ui.text(theme.PLAYER_NAMES[i], 16, color, (cx, y + 88))
-        opt = self.options[self.picks[i]]
-        label = describe(opt)
-        _, _, sel_y, sel_w = self.selectors()[i]
-        size = 19
-        while size > 13 and ui.text_width(label, size) > sel_w - 52:
-            size -= 1
-        self.draw_selector(ui, cx, sel_y, label, focused, sel_w, size)
-        if opt == "human":
-            for row, (group, word) in enumerate(zip(KEY_HINTS[i], ("move", "heavy"))):
-                ky = y + 154 + row * 32
-                kw = sum(ui.keycap_width(k, 11, 20) for k in group) + 4 * (len(group) - 1)
-                lw = ui.text_width(word, 11, bold=False)
-                show_word = kw + 10 + lw <= w - 16
-                kx = cx - (kw + (10 + lw if show_word else 0)) / 2
-                for k in group:
-                    kx += ui.keycap(k, kx, ky, h=20, size=11) + 4
-                if show_word:
-                    ui.text(word, 11, theme.TEXT_FAINT, (kx + 6, ky + 10), anchor="midleft",
-                            bold=False, shadow=False)
-        else:
-            desc = BOT_BLURBS[bot_level(opt)] if is_bot(opt) else f"Your trained {opt.upper()} agent."
-            for j, line in enumerate(ui.wrap(desc, 12.5, w - 24)[:3]):
-                ui.text(line, 12.5, theme.TEXT_DIM, (cx, y + 172 + j * 16), bold=False, shadow=False)
 
     def draw(self, ui):
         Painter(ui.surface, ui.s).background()
-        ui.text(self.map_cls.title, 26, theme.TEXT, (W / 2, 34))
-        ui.text("Who's playing?", 13, theme.TEXT_DIM, (W / 2, 58), bold=False, shadow=False)
+        ui.text(self.map_cls.title, 26, theme.TEXT, (W / 2, 32))
+        ui.text("Who's playing?", 13, theme.TEXT_DIM, (W / 2, 56), bold=False, shadow=False)
 
-        for i in range(self.n):
-            self.draw_card(ui, i)
+        for i in range(len(self.picks)):
+            x, y, w, h = self.slot_rect(i)
+            color = theme.PLAYER_COLORS[i]
+            focused = self.focus == i
+            ui.panel((x, y, w, h), border=color if focused else theme.PANEL_BORDER,
+                     border_w=2 if focused else 1.2, radius=12)
+            bob = math.sin(self.t * 3 + i) * 2 if focused else 0
+            ui.ball(x + 24, y + h / 2 + bob, 11, color)
+            opt = self.option(i)
+            if opt == "human":
+                hint = "That's you"
+            elif is_bot(opt):
+                hint = BOT_BLURBS[bot_level(opt)]
+            else:
+                hint = f"Trained {opt.upper()} agent"
+            ui.text(theme.PLAYER_NAMES[i], 14, color, (x + 44, y + 16), anchor="midleft")
+            ui.text(hint, 10, theme.TEXT_FAINT, (x + 44, y + 31), anchor="midleft",
+                    bold=False, shadow=False)
+            sx, sy = x + 212, y + h / 2
+            self.draw_selector(ui, sx, sy, describe(opt), focused, width=160, size=15)
+        if len(self.picks) < arena.MAX_PLAYERS:
+            x, y, w, h = self.slot_rect(len(self.picks))
+            ui.panel((x, y, w, h), color=theme.PANEL, alpha=90, border=theme.PANEL_BORDER,
+                     border_w=1, radius=12)
+            ui.text("+  Add player", 14, theme.TEXT_FAINT, (x + w / 2, y + h / 2), shadow=False)
 
-        for row, cx, y, width in self.selectors()[self.n:]:
-            title, value = (("Players", str(self.n)) if row == self.count_row
-                            else ("First to", str(self.first_opts[self.first])))
-            ui.text(title, 13, theme.TEXT_DIM, (cx, y - 28), bold=False, shadow=False)
-            self.draw_selector(ui, cx, y, value, self.focus == row, width=width)
+        ui.text("Players", 13, theme.TEXT_DIM, (210, 346), bold=False, shadow=False)
+        self.draw_selector(ui, 210, 372, str(len(self.picks)), self.focus == self.COUNT_ROW, width=150)
+        ui.text("First to", 13, theme.TEXT_DIM, (470, 346), bold=False, shadow=False)
+        self.draw_selector(ui, 470, 372, str(self.first_opts[self.first]), self.focus == self.FIRST_ROW,
+                           width=150)
 
         if not self.agents:
             ui.text(f"Tip: train AI agents for this map with  python3 main.py --train {self.map_name}",
                     11, theme.TEXT_FAINT, (W / 2, 404), bold=False, shadow=False)
 
         ui.button(self.back_btn.rect, self.back_btn.label, size=16)
-        ui.button(self.start_btn.rect, self.start_btn.label, focused=self.focus == self.start_row,
+        ui.button(self.start_btn.rect, self.start_btn.label, focused=self.focus == self.START_ROW,
                   primary=True, size=18)
 
 
@@ -960,27 +959,23 @@ class MatchScene(Scene):
     def handle(self, ev):
         env = self.sim.env
         if ev[0] == "death":
-            i, pos = ev[1], ev[2]
-            victim = env.players[i]
+            victim = env.players[ev[1]]
+            pos = ev[2]
             self.effects.burst(*pos, victim.color, n=34, speed=9)
             self.effects.burst(*pos, theme.TEXT, n=10, speed=5, size=3)
             self.effects.kick(10)
             self.app.sound.play("death")
-            if env.map.reset_round_on_kill:
-                if env.n > 2:
-                    self.banner = (f"{theme.PLAYER_NAMES[i]} is out!", victim.color, self.t)
-            else:
-                self.effects.ring(victim.x, victim.y, victim.color)  # where they respawned
-        elif ev[0] == "point":
-            scorer = ev[1]
-            name, color = theme.PLAYER_NAMES[scorer], env.players[scorer].color
-            self.app.sound.play("point", 0.7)
             if not env.map.reset_round_on_kill:
-                self.banner = (f"+1 {name}", color, self.t)
-            elif env.n > 2:
-                self.banner = (f"{name} wins the round!", color, self.t)
-            else:
+                self.effects.ring(victim.x, victim.y, victim.color)  # respawned
+        elif ev[0] == "score":
+            scorer = ev[1]
+            self.app.sound.play("point", 0.7)
+            name = theme.PLAYER_NAMES[scorer]
+            color = env.players[scorer].color
+            if env.map.reset_round_on_kill:
                 self.banner = (f"{name} scores!", color, self.t)
+            else:
+                self.banner = (f"+1 {name}", color, self.t)
         elif ev[0] == "round_over":
             if not self.sim.done:
                 self.set_phase("scored")
@@ -1000,10 +995,26 @@ class MatchScene(Scene):
         alpha = self.acc * PHYSICS_HZ if self.phase == "play" else 1.0
         self.sim.draw(ui.surface, ui.s, self.effects.offset(ui.s), self.effects, alpha)
 
+    def draw_scoreboard(self, ui):
+        """Compact scoreboard for 3+ players: a chip per player along the top."""
+        env = self.sim.env
+        n = env.n
+        chip_w = min(62, (W - 20) / n - 4)
+        x0 = W / 2 - (n * (chip_w + 4) - 4) / 2
+        for i, p in enumerate(env.players):
+            x = x0 + i * (chip_w + 4)
+            out = env.map.reset_round_on_kill and not p.alive
+            you = i in self.sim.humans
+            ui.panel((x, 8, chip_w, 30), alpha=120 if out else 200, radius=15,
+                     border=theme.ACCENT if you else None, border_w=2)
+            ui.ball(x + 15, 23, 8, theme.darken(p.color, 0.55) if out else p.color)
+            ui.text(str(env.scores[i]), 16, theme.TEXT_FAINT if out else theme.TEXT,
+                    (x + chip_w - 16, 23), shadow=False)
+
     def draw_hud(self, ui):
         env = self.sim.env
         if env.n > 2:
-            self.draw_compact_scores(ui)
+            self.draw_scoreboard(ui)
         for i in ((0, 1) if env.n == 2 else ()):
             color = env.players[i].color
             score = env.scores[i]
@@ -1032,48 +1043,18 @@ class MatchScene(Scene):
                 ui.text(str(score), 18, color, (sx, 24), shadow=False)
         if self.t < 5:
             ui.text(f"{MAPS[self.map_name].title}  ·  first to {self.first_to}", 11, theme.TEXT_DIM,
-                    (W / 2, 24), bold=False, shadow=False, alpha=int(255 * min(1.0, 5 - self.t)))
+                    (W / 2, 24 if env.n == 2 else 52), bold=False, shadow=False,
+                    alpha=int(255 * min(1.0, 5 - self.t)))
 
         self.draw_timer(ui)
 
-        # Control hints for human players at the start (two lines if needed)
+        # Control hints for human players at the start
         if any(self.humans) and self.t < 6:
             alpha = int(255 * min(1.0, (6 - self.t) / 1.0))
-            parts = [f"{theme.PLAYER_NAMES[i]}: {KEY_HINT_TEXT[i]}" for i, h in enumerate(self.humans) if h]
-            lines = ["   ·   ".join(parts)]
-            if ui.text_width(lines[0], 12, bold=False) > W - 60:
-                half = (len(parts) + 1) // 2
-                lines = ["   ·   ".join(parts[:half]), "   ·   ".join(parts[half:])]
-            for k, hint in enumerate(reversed(lines)):
-                y = H - 25 - k * 30
-                w = ui.text_width(hint, 12, bold=False) + 28
-                ui.panel((W / 2 - w / 2, y - 13, w, 26), alpha=int(190 * alpha / 255), radius=13, border=None)
-                ui.text(hint, 12, theme.TEXT_DIM, (W / 2, y), bold=False, shadow=False, alpha=alpha)
-
-    def draw_compact_scores(self, ui):
-        """Score pills for 3-4 players: Red and Purple top left, Blue and
-        Yellow top right."""
-        env = self.sim.env
-        labels = [describe(l) for l in self.labels]
-        widths = [64 + ui.text_width(l, 12) for l in labels]
-        xs = {}
-        x = 10
-        for i in range(0, env.n, 2):
-            xs[i] = x
-            x += widths[i] + 6
-        x = W - 10
-        for i in range(1, env.n, 2):
-            x -= widths[i]
-            xs[i] = x
-            x -= 6
-        for i in range(env.n):
-            x, w, out = xs[i], widths[i], env.out[i]
-            color = env.players[i].color
-            ui.panel((x, 8, w, 30), alpha=120 if out else 200, radius=15, border=None)
-            ui.ball(x + 16, 23, 8, theme.mix(color, theme.PANEL, 0.6) if out else color)
-            ui.text(labels[i], 12, theme.TEXT_FAINT if out else theme.TEXT, (x + 30, 23),
-                    anchor="midleft", shadow=False)
-            ui.text(str(env.scores[i]), 16, color, (x + w - 16, 23), shadow=False)
+            hint = f"You're {theme.PLAYER_NAMES[self.sim.humans[0]]}  ·  {controls.HINT}"
+            w = ui.text_width(hint, 12, bold=False) + 28
+            ui.panel((W / 2 - w / 2, H - 38, w, 26), alpha=int(190 * alpha / 255), radius=13, border=None)
+            ui.text(hint, 12, theme.TEXT_DIM, (W / 2, H - 25), bold=False, shadow=False, alpha=alpha)
 
     def draw_timer(self, ui):
         timer = self.sim.env.timer
@@ -1111,8 +1092,9 @@ class MatchScene(Scene):
                 alpha = int(255 * min(1.0, (1.1 - age) * 4))
                 ui.text(text, size, color, (W / 2, 150 if text == "GO!" else 90),
                         scale=0.5 + 0.5 * ease_out_back(age * 4), alpha=alpha)
-                if text != "GO!" and self.phase == "scored":
-                    draw_scoreline(ui, self.sim.env.scores, 126, 20, alpha)
+                if text != "GO!" and self.phase == "scored" and self.sim.env.n == 2:
+                    s = self.sim.env.scores
+                    ui.text(f"{s[0]}  –  {s[1]}", 20, theme.TEXT, (W / 2, 126), alpha=alpha)
 
     def draw(self, ui):
         self.draw_world(ui)
@@ -1171,8 +1153,24 @@ class ResultsScene(Scene):
             ui.ball(W / 2, 140 + bob, 24, color)
             ui.text(f"{theme.PLAYER_NAMES[self.winner]} wins!", 32, color, (W / 2, 196),
                     scale=0.7 + 0.3 * ease_out_back(self.t * 3))
-        draw_scoreline(ui, s, 236, 22)
+        if len(s) == 2:
+            ui.text(f"{s[0]}  –  {s[1]}", 22, theme.TEXT, (W / 2, 236))
+        else:
+            self.draw_standings(ui, s)
         self.menu.draw(ui)
+
+    def draw_standings(self, ui, scores):
+        """Everyone's score, best first, in up to two rows of five."""
+        players = self.match.sim.env.players
+        order = sorted(range(len(scores)), key=lambda i: -scores[i])
+        per_row = min(5, len(order))
+        for k, i in enumerate(order):
+            row, col = divmod(k, 5)
+            in_row = per_row if row == 0 else len(order) - 5
+            x = W / 2 + (col - (in_row - 1) / 2) * 50
+            y = 226 + row * 22
+            ui.ball(x - 9, y, 6, players[i].color)
+            ui.text(str(scores[i]), 13, theme.TEXT, (x + 5, y), anchor="midleft", shadow=False)
 
 
 # ---------------------------------------------------------------------------

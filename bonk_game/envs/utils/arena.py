@@ -14,6 +14,7 @@ import pygame
 
 from bonk_game.envs.utils.player import player
 from bonk_game.envs.utils.platform import platform
+from bonk_game.ui.theme import PLAYER_COLORS
 
 # Screen size
 WIDTH = 680
@@ -28,12 +29,9 @@ BOTTOM = 420
 RADIUS = 20
 FORCE = 2  # change in velocity a player gets from one input
 
-P1_COLOR = (255, 107, 107)
-P2_COLOR = (77, 171, 247)
-P3_COLOR = (177, 132, 255)
-P4_COLOR = (255, 202, 58)
-PLAYER_COLORS = (P1_COLOR, P2_COLOR, P3_COLOR, P4_COLOR)
-MAX_PLAYERS = len(PLAYER_COLORS)
+MIN_PLAYERS = 2
+MAX_PLAYERS = len(PLAYER_COLORS)  # 10
+P1_COLOR, P2_COLOR = PLAYER_COLORS[0], PLAYER_COLORS[1]
 FLOOR_COLOR = (126, 214, 170)
 WALL_COLOR = (239, 83, 80)
 
@@ -97,6 +95,38 @@ def reset_players(players):
         respawn_apart(p, players[:i])
 
 
+def spawn_points(n, box, radius, rng=np.random, gap=4):
+    """`n` random, non-overlapping spawn positions for balls of `radius`.
+
+    The spawn box is split into a grid of cells at least one ball (plus
+    `gap`) wide and tall; each player gets a different random cell, at a
+    random spot inside it. If the box has fewer cells than players, extra
+    rows are stacked above it, so players drop in from the air.
+    """
+    left, right, top, bottom = box
+    size = 2 * radius + gap
+    cols = max(1, int((right - left) // size))
+    rows = max(1, int((bottom - top) // size))
+    rows_needed = -(-n // cols)
+    cell_w = (right - left) / cols
+    cell_h = (bottom - top) / rows
+    cells = [(c, r) for r in range(max(rows, rows_needed)) for c in range(cols)]
+    picks = rng.permutation(len(cells))[:n]
+    out = []
+    for k in picks:
+        c, r = cells[k]
+        slack_x = max(0.0, cell_w - 2 * radius - 2)
+        x = left + (c + 0.5) * cell_w + (rng.random() - 0.5) * slack_x
+        if r < rows:
+            slack_y = max(0.0, cell_h - 2 * radius - 2)
+            y = bottom - (r + 0.5) * cell_h + (rng.random() - 0.5) * slack_y
+        else:
+            # Above the box: one ball-sized row per extra row
+            y = top - (r - rows + 0.5) * size
+        out.append((x, y))
+    return out
+
+
 class Renderer:
     """Owns the pygame window and draws the arena."""
 
@@ -132,17 +162,16 @@ class Renderer:
         if timer is not None:
             painter.closing_walls(timer.walls(), WIDTH, HEIGHT, timer.steps / 30)
         for p in players:
-            painter.player(p)
+            if p.alive:
+                painter.player(p)
 
         if scores is not None:
-            # Scores across the top, in each player's colour
-            labels = [self.font.render(str(s), True, c) for s, c in zip(scores, theme.PLAYER_COLORS)]
-            if len(labels) == 2:
-                canvas.blit(labels[0], (20, 12))
-                canvas.blit(labels[1], (WIDTH - 20 - labels[1].get_width(), 12))
-            else:
-                for i, label in enumerate(labels):
-                    canvas.blit(label, (20 + i * 50, 12))
+            # Scores in each player's colour, spread across the top
+            step = (WIDTH - 40) / max(1, len(scores) - 1)
+            for i, s in enumerate(scores):
+                label = self.font.render(str(s), True, players[i].color)
+                x = 20 + i * step - label.get_width() * i / max(1, len(scores) - 1)
+                canvas.blit(label, (x, 12))
 
         if self.render_mode == "human":
             self.window.blit(canvas, canvas.get_rect())

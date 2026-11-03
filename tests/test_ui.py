@@ -89,7 +89,7 @@ def test_bot_beats_a_player_who_does_nothing():
     env.reset()
     for _ in range(20000):
         # Player 1 is "human" but presses nothing
-        _, done, _ = env.step(bot.think())
+        _, done, _ = env.step([None, bot.think()])
         if done:
             break
     assert env.scores[1] == 3
