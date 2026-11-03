@@ -10,9 +10,23 @@ pip install -r requirements-server.txt
 python -m bonk_game.server            # http://localhost:8000 (--port to change)
 ```
 
-Open the page, pick a name and **Create a room**. You get a 4-letter room code; **Copy invite link** and send it to friends. Whoever made the room is the host (marked ★): they pick the map, how many points win, and add bots (Easy, Medium or Hard) to fill seats, up to 10 players. Then **Start match**.
+Open the page, pick a name and **Create a room**. You get a 4-letter room code; **Copy invite link** and send it to friends. Whoever made the room is the host (marked ★): they pick the mode, the map and the settings, and add bots (Easy, Medium or Hard) to fill seats, up to 10 players. Then **Start match**.
 
-It's a free-for-all. On most maps a ball that's knocked out sits out the rest of the round, and the last one standing takes it. (On Classic, where you respawn, the point goes to whoever last hit you.) Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
+| Mode | How it works |
+|---|---|
+| Free-for-all | On most maps a ball that's knocked out sits out the rest of the round, and the last one standing scores. (On Classic, where you respawn, the point goes to whoever last hit you.) First to N points. |
+| Teams | Red team against Blue team, up to 5 a side, each in its own colours. The last team standing scores the round (on Classic, every knockout scores for the other side). Bumping a teammate off doesn't count. Click **Switch to …** in the lobby to change sides. |
+| Lives | Everyone has N lives and respawns straight away until they run out. Last ball left wins. The sudden-death walls still close in when the round clock runs out. |
+| Knockouts | N minutes, respawning; the most knockouts wins. A tie goes to overtime: the next knockout wins. |
+| Crown | One player wears the crown and scores a point a second. Bump the wearer to steal it; knock them out and it's yours. First to wear it for N seconds in total wins. |
+
+The respawning modes (Lives, Knockouts and Crown) don't work on Sinking Swing, whose floor is gone by the end of a round.
+
+The host can also set the **round time** (how long before the sudden-death walls close in, or off) and **gravity** (low, normal or high).
+
+A knockout counts for whoever last hit you in the past 3 seconds; if nobody did, you just fell. The feed in the top right shows who knocked out whom, and the results screen hands out awards: most knockouts, hardest hit, butterfingers (most falls with nobody near) and survivor (knocked out the fewest times).
+
+Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
 
 | Move / jump | Go heavy |
 |---|---|
@@ -152,4 +166,4 @@ node tests/web/e2e.js
 - `bonk_game/envs/training_env.py`: the gym env agents train on
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
 - `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), running a match (`match.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), running a match (`match.py`), the game modes (`modes.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`)

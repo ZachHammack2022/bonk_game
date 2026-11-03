@@ -43,8 +43,15 @@ class TestEnv():
     HIT_CREDIT_STEPS = 90
 
     def __init__(self, *controllers, render_mode=None, winning_score=None, map_name=DEFAULT_MAP,
-                 round_time=None, colors=None):
-        """colors: optional colour index (into theme.PLAYER_COLORS) per player."""
+                 round_time=None, colors=None, teams=None, respawn=None, gravity=1.0):
+        """colors: optional colour index (into theme.PLAYER_COLORS) per player.
+        teams: optional team number per player. Teammates aren't opponents:
+        agents and bots go after the other team, a round ends when one team
+        is left, and bumping a teammate off doesn't count as a knockout.
+        respawn: True respawns dead players straight away, even on maps that
+        normally restart the round; False restarts the round. None: the
+        map's own rule.
+        gravity: multiplies the pull of gravity on the players."""
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.map = make_map(map_name)
@@ -55,7 +62,17 @@ class TestEnv():
 
         self.controllers = list(controllers)
         self.n = len(controllers)
+        self.teams = list(range(self.n)) if teams is None else list(teams)
+        if len(self.teams) != self.n:
+            raise ValueError("need a team for each player")
+        self.rounds = self.map.reset_round_on_kill if respawn is None else not respawn
+        # Respawn maps restart the clock after each point; a mode can turn that off
+        self.timer_resets_on_death = True
+        # A player everyone else goes after instead of the nearest (the crown holder)
+        self.focus = None
         self.players = list(self.map.make_players(self.n, colors))
+        for p in self.players:
+            p.gravity *= gravity
         self.scores = [0] * self.n
         self.last_hit = [None] * self.n  # (index of who hit them, step) per player
         self.kos = []  # this step's deaths: (victim, who knocked them out or None, walls?)
@@ -84,7 +101,10 @@ class TestEnv():
     def nearest_opponent(self, i):
         """Index of the closest living opponent (any opponent if none are alive)."""
         me = self.players[i]
-        others = [j for j in range(self.n) if j != i]
+        others = [j for j in range(self.n) if self.teams[j] != self.teams[i]] or \
+            [j for j in range(self.n) if j != i]
+        if self.focus is not None and self.focus in others and self.players[self.focus].alive:
+            return self.focus
         living = [j for j in others if self.players[j].alive] or others
         return min(living, key=lambda j: math.dist((me.x, me.y),
                                                    (self.players[j].x, self.players[j].y)))
@@ -101,7 +121,8 @@ class TestEnv():
     def knocked_out_by(self, victim):
         """Who last hit `victim` in the past few seconds (or None)."""
         hit = self.last_hit[victim]
-        if hit is not None and self.steps - hit[1] <= self.HIT_CREDIT_STEPS:
+        if (hit is not None and self.steps - hit[1] <= self.HIT_CREDIT_STEPS
+                and self.teams[hit[0]] != self.teams[victim]):
             return hit[0]
         return None
 
@@ -110,7 +131,7 @@ class TestEnv():
         by = self.knocked_out_by(victim)
         if by is not None:
             return by
-        if self.n == 2:
+        if self.n == 2 and self.teams[0] != self.teams[1]:
             return 1 - victim
         return None
 
@@ -128,15 +149,18 @@ class TestEnv():
         self.kos = [(i, self.knocked_out_by(i), i in walled) for i in dead]
         points = []
 
-        if self.map.reset_round_on_kill:
+        if self.rounds:
             if dead:
                 for i in dead:
                     self.players[i].alive = 0
                 remaining = [i for i in living if i not in dead]
-                points = remaining if len(remaining) == 1 else [] if remaining else dead
+                # The round is over once only one team (or nobody) is left: they
+                # score. If the last ones all go at once, they all score.
+                over = len({self.teams[i] for i in remaining}) <= 1
+                points = (remaining or dead) if over else []
                 for i in points:
                     self.players[i].score += 1
-                if len(remaining) <= 1:
+                if over:
                     self.new_round()
                     return deaths, points, True
         else:
@@ -145,7 +169,7 @@ class TestEnv():
                 if scorer is not None:
                     points.append(scorer)
                     self.players[scorer].score += 1
-            if dead:
+            if dead and self.timer_resets_on_death:
                 self.timer.reset()
             for i in dead:
                 # Respawn away from everyone else

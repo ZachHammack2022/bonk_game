@@ -42,6 +42,9 @@ class Map:
     round_time = 45
     # (left, right) x where the sudden-death walls appear
     sudden_death_start = (0, arena.WIDTH)
+    # Can players respawn mid-round (the web version's respawn modes)? Not on
+    # maps that change for good during a round, like a floor that sinks away.
+    respawn_ok = True
 
     @property
     def obs_size(self):
@@ -295,6 +298,7 @@ class SwingMap(OpenMap):
     LAUNCH_SPEED = 25  # enough to fly from the pit up to the swing
 
     spawn_box = (FLOOR_LEFT + 20, FLOOR_RIGHT - 20, 290, FLOOR_Y - 2)
+    respawn_ok = False  # the floor is gone by the end of a round
     n_extra_obs = 3  # floor depth, swing angle, swing angular velocity
 
     FLOOR_COLOR = theme.PLATFORM

@@ -36,6 +36,7 @@ class player():
         # player is standing on something (set grounded during collisions).
         self.can_fly = True
         self.jump_speed = 0
+        self.gravity = 1.5  # added to the vertical speed every step
         self.grounded = False
         self.jump_buffer = 0     # steps left on a remembered "up" press
         self.air_steps = COYOTE_TIME + 1  # steps since last standing on something
@@ -46,7 +47,7 @@ class player():
     def update_velocities(self):
         
         # prepare velocities for normalization
-        self.y_v +=1.5
+        self.y_v += self.gravity
         if self.x_v >self.v_range:
             self.x_v = self.v_range
         if self.x_v <-self.v_range:

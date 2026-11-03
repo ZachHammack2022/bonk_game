@@ -21,6 +21,7 @@ import time
 from bonk_game.envs.utils import arena
 from bonk_game.server import limits
 from bonk_game.envs.utils.maps import MAPS
+from bonk_game.server import modes
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
@@ -33,6 +34,9 @@ FIRST_TO_RANGE = (1, 100)
 EMOTES = 4               # emote ids 0-3 (the client picks the pictures)
 EMOTE_GAP = 0.8          # seconds between one person's emotes
 DEFAULT_MAP = "platform"
+# Room settings besides the map, mode and goal
+ROUND_TIMES = (None, 0, 20, 30, 45, 60, 90)   # seconds before sudden death; None: the map's own
+GRAVITY = {"low": 0.6, "normal": 1.0, "high": 1.4}
 
 
 class RoomFull(Exception):
@@ -56,6 +60,7 @@ class Member:
         self.connected = True
         self.left_at = None
         self.color = None       # colour they picked (index), if any
+        self.team = None        # team they picked (0 or 1) in the teams mode, if any
         self.last_emote = 0.0
 
 
@@ -66,7 +71,8 @@ class Room:
         self.agents = agents
         self.members = {}          # token -> Member, in join order
         self.host = None
-        self.settings = {"map": DEFAULT_MAP, "first_to": 5, "bots": ["bot:medium"]}
+        self.settings = {"map": DEFAULT_MAP, "first_to": 5, "bots": ["bot:medium"],
+                         "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal"}
         self.match = None
         self.match_tokens = []     # slot -> member token (None for bots)
         self.results = None
@@ -164,8 +170,16 @@ class Room:
             "colors": ["#%02x%02x%02x" % c for c in theme.PLAYER_COLORS],
             "color_names": list(theme.PLAYER_NAMES),
             "maps": [{"name": n, "title": MAPS[n].title, "description": MAPS[n].description,
-                      "first_to": min(MAPS[n].winning_score, 10)}
+                      "first_to": min(MAPS[n].winning_score, 10), "round_time": MAPS[n].round_time,
+                      "respawn_ok": MAPS[n].respawn_ok}
                      for n in map_order()],
+            "modes": modes.describe_modes(),
+            "round_times": list(ROUND_TIMES),
+            "gravities": list(GRAVITY),
+            "team_names": list(modes.TEAM_NAMES),
+            "team_colors": list(modes.TEAM_HEX),
+            "team_size": modes.TEAM_SIZE,
+            "team_palettes": [list(c) for c in modes.TEAM_COLORS],
         }
 
     def lobby(self):
@@ -221,6 +235,12 @@ class Room:
                 await self.error(token, problem)
             await self.broadcast_lobby()
             return
+        if kind == "team":
+            problem = self.pick_team(token, msg.get("team"))
+            if problem:
+                await self.error(token, problem)
+            await self.broadcast_lobby()
+            return
         if kind == "emote":
             await self.emote(token, msg.get("id"))
             return
@@ -257,6 +277,13 @@ class Room:
             if any(m.color == color for t, m in self.members.items() if t != token):
                 return "Someone else has that colour."
         self.members[token].color = color
+        return None
+
+    def pick_team(self, token, team):
+        """Someone picks a side in the teams mode (0 or 1), or None for "either"."""
+        if team is not None and team not in (0, 1):
+            return "Unknown team."
+        self.members[token].team = team
         return None
 
     async def emote(self, token, emote):
@@ -297,18 +324,38 @@ class Room:
         if self.match is not None:
             return "Settings can't change during a match."
         s = dict(self.settings)
+        if "mode" in msg:
+            if msg["mode"] not in modes.MODES:
+                return "Unknown mode."
+            if msg["mode"] != s["mode"]:
+                s["first_to"] = default_goal(msg["mode"], s["map"])
+            s["mode"] = msg["mode"]
         if "map" in msg:
             if msg["map"] not in MAPS:
                 return "Unknown map."
-            if msg["map"] != s["map"]:
-                s["first_to"] = min(MAPS[msg["map"]].winning_score, 10)
+            if msg["map"] != s["map"] and modes.MODES[s["mode"]].goal_label == "First to":
+                s["first_to"] = default_goal(s["mode"], msg["map"])
             s["map"] = msg["map"]
+        mode = modes.MODES[s["mode"]]
+        if mode.respawns and not MAPS[s["map"]].respawn_ok and "map" not in msg:
+            # Picked a respawn mode on a map that can't do it: move to one that can
+            s["map"] = next(n for n in map_order() if MAPS[n].respawn_ok)
+        if mode.respawns and not MAPS[s["map"]].respawn_ok:
+            return f"{mode.title} needs a map where you can respawn: {MAPS[s['map']].title} isn't one."
         if "first_to" in msg:
             try:
                 ft = int(msg["first_to"])
             except (TypeError, ValueError):
                 return "First to should be a number."
             s["first_to"] = max(FIRST_TO_RANGE[0], min(FIRST_TO_RANGE[1], ft))
+        if "round_time" in msg:
+            if msg["round_time"] not in ROUND_TIMES:
+                return "Unknown round time."
+            s["round_time"] = msg["round_time"]
+        if "gravity" in msg:
+            if msg["gravity"] not in GRAVITY:
+                return "Unknown gravity."
+            s["gravity"] = msg["gravity"]
         self.settings = s
         options = self.bot_options()
         if "bots" in msg:
@@ -327,25 +374,57 @@ class Room:
         bots = self.settings["bots"][:arena.MAX_PLAYERS - len(humans)]
         return humans, bots
 
-    def colors_for(self, humans, n_bots):
-        """A colour index per seat: people get the colour they picked (first
-        come, first served), everyone else the free colours in order."""
-        out, taken = [], set()
+    def teams_for(self, humans, n_bots):
+        """A team per seat in the teams mode (else None): people get the side
+        they picked while it has room; everyone else evens the teams out."""
+        if self.settings["mode"] != "teams":
+            return None
+        out, size = [], [0, 0]
         for t in humans:
+            pick = self.members[t].team
+            if pick is not None and size[pick] < modes.TEAM_SIZE:
+                size[pick] += 1
+                out.append(pick)
+            else:
+                out.append(None)
+        for k in range(len(out)):
+            if out[k] is None:
+                out[k] = 0 if size[0] <= size[1] else 1
+                size[out[k]] += 1
+        for _ in range(n_bots):
+            out.append(0 if size[0] <= size[1] else 1)
+            size[out[-1]] += 1
+        return out
+
+    def colors_for(self, humans, n_bots, teams=None):
+        """A colour index per seat: people get the colour they picked (first
+        come, first served), everyone else the free colours in order. In the
+        teams mode each side has its own colours (modes.TEAM_COLORS)."""
+        palette = lambda k: (modes.TEAM_COLORS[teams[k]] if teams is not None
+                             else range(arena.MAX_PLAYERS))
+        out, taken = [], set()
+        for k, t in enumerate(humans):
             c = self.members[t].color
-            out.append(c if c is not None and c not in taken else None)
-            taken.add(c)
+            ok = c is not None and c not in taken and c in palette(k)
+            out.append(c if ok else None)
+            if ok:
+                taken.add(c)
         out += [None] * n_bots
-        free = iter(c for c in range(arena.MAX_PLAYERS) if c not in taken)
-        return [c if c is not None else next(free) for c in out]
+        for k, c in enumerate(out):
+            if c is None:
+                out[k] = next(c for c in palette(k) if c not in taken)
+                taken.add(out[k])
+        return out
 
     def lineup(self):
         """The seats as they'd be if the match started now, for the lobby."""
         humans, bots = self.seats()
-        colors = self.colors_for(humans, len(bots))
-        seats = [{"id": t, "name": self.members[t].name, "kind": "human", "color": c}
-                 for t, c in zip(humans, colors)]
-        seats += [{"id": None, "kind": b, "bot": k, "color": c}
+        teams = self.teams_for(humans, len(bots))
+        colors = self.colors_for(humans, len(bots), teams)
+        team = lambda k: None if teams is None else teams[k]
+        seats = [{"id": t, "name": self.members[t].name, "kind": "human", "color": c, "team": team(k)}
+                 for k, (t, c) in enumerate(zip(humans, colors))]
+        seats += [{"id": None, "kind": b, "bot": k, "color": c, "team": team(len(humans) + k)}
                   for k, (b, c) in enumerate(zip(bots, colors[len(humans):]))]
         return seats
 
@@ -356,7 +435,8 @@ class Room:
         if len(humans) + len(bots) < arena.MIN_PLAYERS:
             await self.error(self.host, "Add a bot or invite someone: a match needs 2 players.")
             return
-        colors = self.colors_for(humans, len(bots))
+        teams = self.teams_for(humans, len(bots))
+        colors = self.colors_for(humans, len(bots), teams)
         slots = [{"kind": "human", "name": self.members[t].name, "id": t, "color": c}
                  for t, c in zip(humans, colors)]
         # Bots are named by colour ("Green bot"), which is easier to follow than
@@ -364,11 +444,21 @@ class Room:
         slots += [{"kind": b, "color": c,
                    "name": f"{theme.PLAYER_NAMES[c]} {bot_label(b, short=True)}"}
                   for b, c in zip(bots, colors[len(humans):])]
+        for k, slot in enumerate(slots):
+            if teams is not None:
+                slot["team"] = teams[k]
         agents = {}
         agent_kinds = [b for b in bots if not is_bot(b)]
         if agent_kinds:
             agents = self.agents.load(self.settings["map"])
-        self.match = Match(self.settings["map"], slots, self.settings["first_to"], agents)
+        s = self.settings
+        mode = modes.MODES[s["mode"]]
+        if mode.respawns and not MAPS[s["map"]].respawn_ok:
+            await self.error(self.host, f"{mode.title} doesn't work on {MAPS[s['map']].title}.")
+            return
+        self.match = Match(s["map"], slots, s["first_to"], agents, mode=s["mode"],
+                           round_time=s["round_time"] if mode.uses_round_time else None,
+                           gravity=GRAVITY[s["gravity"]])
         self.match_tokens = humans + [None] * len(bots)
         self.results = None
         self.votes.clear()
@@ -413,6 +503,12 @@ def bot_label(kind, short=False):
     if is_bot(kind):
         return "bot" if short else f"{kind.split(':', 1)[1].title()} bot"
     return kind.upper()
+
+
+def default_goal(mode, map_name):
+    if modes.MODES[mode].goal_label == "First to":
+        return min(MAPS[map_name].winning_score, 10)
+    return modes.MODES[mode].goal_default
 
 
 def map_order():

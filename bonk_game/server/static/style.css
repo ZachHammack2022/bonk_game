@@ -200,5 +200,10 @@ body.touch #emotes { bottom: auto; top: 12px; }
 .awards .icon { font-size: 20px; flex: none; }
 .awards .body { display: flex; flex-direction: column; min-width: 0; }
 .awards .title { font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
-.awards .who { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.awards .who { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 @media (max-width: 420px) { .awards { grid-template-columns: 1fr; } }
+
+.settings-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.settings-row > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.settings-row select { width: 100%; padding-left: 10px; padding-right: 6px; }
+.team-head { font-size: 13px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; padding: 6px 2px 0; }
