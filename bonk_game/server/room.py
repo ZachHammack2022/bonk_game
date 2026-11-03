@@ -12,6 +12,9 @@ seconds you leave the room.
 
 Nothing here touches sockets directly: each member has an async `send`
 function that takes a message dict.
+
+The lobby's rules (settings, seats, teams, colours) are in lobby.py, and
+what happens to playtest reports in playtest.py.
 """
 import asyncio
 import json
@@ -22,7 +25,8 @@ import traceback
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import delta, limits, metrics, modes, playtest, replay
+from bonk_game.server import delta, limits, lobby, metrics, modes, playtest, replay
+from bonk_game.server.lobby import GRAVITY, PATTERNS, ROUND_TIMES, bot_label, clean_name, map_order
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
@@ -31,16 +35,8 @@ ROOM_CODE_LEN = 4
 LEAVE_GRACE = 30.0       # seconds a disconnected member keeps their place
 REOPEN_GRACE = 30.0      # after a restart, seconds the old host has to claim the room back
 EMPTY_ROOM_TTL = 600.0   # seconds an empty room is kept around
-NAME_LEN = 16
-FIRST_TO_RANGE = (1, 100)
 EMOTES = 4               # emote ids 0-3 (the client picks the pictures)
 EMOTE_GAP = 0.8          # seconds between one person's emotes
-# Ball patterns people can pick (the client draws them)
-PATTERNS = ("plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes")
-DEFAULT_MAP = "platform"
-# Room settings besides the map, mode and goal
-ROUND_TIMES = (None, 0, 20, 30, 45, 60, 90)   # seconds before sudden death; None: the map's own
-GRAVITY = {"low": 0.6, "normal": 1.0, "high": 1.4}
 
 
 class RoomFull(Exception):
@@ -49,11 +45,6 @@ class RoomFull(Exception):
 
 class ServerFull(Exception):
     pass
-
-
-def clean_name(name):
-    name = " ".join(str(name or "").split())[:NAME_LEN]
-    return name or "Player"
 
 
 class Member:
@@ -78,9 +69,7 @@ class Room:
         self.agents = agents
         self.members = {}          # token -> Member, in join order
         self.host = None
-        self.settings = {"map": DEFAULT_MAP, "first_to": 5, "bots": ["bot:medium"],
-                         "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal",
-                         "power_ups": False}
+        self.settings = lobby.default_settings()
         self.match = None
         self.match_tokens = []     # slot -> member token (None for bots)
         self.results = None
@@ -179,8 +168,10 @@ class Room:
                 and now - self.empty_since > EMPTY_ROOM_TTL)
 
     # --- messages out -------------------------------------------------------
-    def bot_options(self):
-        names = list(self.agents.names(self.settings["map"])) if self.agents else []
+    def bot_options(self, settings=None):
+        """The bots and trained agents that can play the map."""
+        map_name = (settings or self.settings)["map"]
+        names = list(self.agents.names(map_name)) if self.agents else []
         return list(BOT_KINDS) + names
 
     def welcome(self, token):
@@ -320,28 +311,10 @@ class Room:
             await self.kick(str(msg.get("id")))
 
     def playtest_report(self, token, kind, msg):
-        """A browser says what it saw during a match, or that it hit an error
-        (see playtest.py)."""
+        """A browser says what it saw during a match, or that it hit an error."""
         m = self.members.get(token)
-        if m is None or not playtest.ENABLED:
-            return
-        where = {"room": self.code, "name": m.name, "map": self.settings["map"],
-                 "mode": self.settings["mode"]}
-        if kind == "client_error":
-            if m.errors_sent < playtest.ERRORS_PER_PERSON:
-                m.errors_sent += 1
-                playtest.REPORTS.add("client_error", {**where, **playtest.clean_error(msg)})
-            return
-        now = time.monotonic()
-        if m.last_report is not None and now - m.last_report < playtest.REPORT_EVERY:
-            return
-        m.last_report = now
-        # Reports come in on the results screen, after the match is gone
-        slots = (self.results or {}).get("slots") or []
-        if slots:
-            where["players"] = len(slots)
-            where["people"] = sum(1 for s in slots if s.get("kind") == "human")
-        playtest.REPORTS.add("playtest", {**where, **playtest.clean_report(msg)})
+        if m is not None:
+            playtest.receive(m, kind, msg, room=self.code, settings=self.settings, results=self.results)
 
     # --- people -------------------------------------------------------------
     def pick_color(self, token, color):
@@ -398,123 +371,23 @@ class Room:
         """Apply the host's changes. Returns an error message or None."""
         if self.match is not None:
             return "Settings can't change during a match."
-        s = dict(self.settings)
-        if "mode" in msg:
-            if msg["mode"] not in modes.MODES:
-                return "Unknown mode."
-            if msg["mode"] != s["mode"]:
-                s["first_to"] = default_goal(msg["mode"], s["map"])
-            s["mode"] = msg["mode"]
-        if "map" in msg:
-            if msg["map"] not in MAPS:
-                return "Unknown map."
-            most = MAPS[msg["map"]].players[1]
-            if len(self.connected) > most:
-                return (f"{MAPS[msg['map']].title} is for up to {most} players, "
-                        f"and there are {len(self.connected)} here.")
-            if msg["map"] != s["map"] and modes.MODES[s["mode"]].goal_label == "First to":
-                s["first_to"] = default_goal(s["mode"], msg["map"])
-            s["map"] = msg["map"]
-        mode = modes.MODES[s["mode"]]
-        if mode.respawns and not MAPS[s["map"]].respawn_ok and "map" not in msg:
-            # Picked a respawn mode on a map that can't do it: move to one that can
-            s["map"] = next(n for n in map_order() if MAPS[n].respawn_ok)
-        if mode.respawns and not MAPS[s["map"]].respawn_ok:
-            return f"{mode.title} needs a map where you can respawn: {MAPS[s['map']].title} isn't one."
-        if "first_to" in msg:
-            try:
-                ft = int(msg["first_to"])
-            except (TypeError, ValueError):
-                return "First to should be a number."
-            s["first_to"] = max(FIRST_TO_RANGE[0], min(FIRST_TO_RANGE[1], ft))
-        if "round_time" in msg:
-            rt = msg["round_time"]
-            if (rt is not None and type(rt) is not int) or rt not in ROUND_TIMES:
-                return "Unknown round time."
-            s["round_time"] = msg["round_time"]
-        if "power_ups" in msg:
-            if not isinstance(msg["power_ups"], bool):
-                return "Power-ups should be on or off."
-            s["power_ups"] = msg["power_ups"]
-        if "gravity" in msg:
-            if msg["gravity"] not in GRAVITY:
-                return "Unknown gravity."
-            s["gravity"] = msg["gravity"]
-        self.settings = s
-        options = self.bot_options()
-        if "bots" in msg:
-            bots = msg["bots"]
-            if not isinstance(bots, list) or any(b not in options for b in bots):
-                return "Unknown bot."
-            s["bots"] = bots[:arena.MAX_PLAYERS - 1]
-        # Agents trained for another map can't play this one
-        s["bots"] = [b if b in options else "bot:medium" for b in s["bots"]]
-        return None
+        self.settings, problem = lobby.check_settings(self.settings, msg, len(self.connected), self.bot_options)
+        return problem
 
     # --- matches ------------------------------------------------------------
     def seats(self):
-        """Who would play if the match started now: (member tokens, bot kinds).
-        The map says how many can play; bots past that sit this one out, and
-        so do people (they watch)."""
-        most = MAPS[self.settings["map"]].players[1]
-        humans = [m.token for m in self.connected][:most]
-        bots = self.settings["bots"][:most - len(humans)]
-        return humans, bots
+        """Who would play if the match started now: (member tokens, bot kinds)."""
+        return lobby.seats(self.settings, [m.token for m in self.connected])
 
     def teams_for(self, humans, n_bots):
-        """A team per seat in the teams mode (else None): people get the side
-        they picked while it has room; everyone else evens the teams out."""
-        if self.settings["mode"] != "teams":
-            return None
-        out, size = [], [0, 0]
-        for t in humans:
-            pick = self.members[t].team
-            if pick is not None and size[pick] < modes.TEAM_SIZE:
-                size[pick] += 1
-                out.append(pick)
-            else:
-                out.append(None)
-        for k in range(len(out)):
-            if out[k] is None:
-                out[k] = 0 if size[0] <= size[1] else 1
-                size[out[k]] += 1
-        for _ in range(n_bots):
-            out.append(0 if size[0] <= size[1] else 1)
-            size[out[-1]] += 1
-        return out
+        return lobby.teams_for(self.settings["mode"], [self.members[t].team for t in humans], n_bots)
 
     def colors_for(self, humans, n_bots, teams=None):
-        """A colour index per seat: people get the colour they picked (first
-        come, first served), everyone else the free colours in order. In the
-        teams mode each side has its own colours (modes.TEAM_COLORS)."""
-        palette = lambda k: (modes.TEAM_COLORS[teams[k]] if teams is not None
-                             else range(arena.MAX_PLAYERS))
-        out, taken = [], set()
-        for k, t in enumerate(humans):
-            c = self.members[t].color
-            ok = c is not None and c not in taken and c in palette(k)
-            out.append(c if ok else None)
-            if ok:
-                taken.add(c)
-        out += [None] * n_bots
-        for k, c in enumerate(out):
-            if c is None:
-                out[k] = next(c for c in palette(k) if c not in taken)
-                taken.add(out[k])
-        return out
+        return lobby.colors_for([self.members[t].color for t in humans], n_bots, teams)
 
     def lineup(self):
         """The seats as they'd be if the match started now, for the lobby."""
-        humans, bots = self.seats()
-        teams = self.teams_for(humans, len(bots))
-        colors = self.colors_for(humans, len(bots), teams)
-        team = lambda k: None if teams is None else teams[k]
-        seats = [{"id": t, "name": self.members[t].name, "kind": "human", "color": c, "team": team(k),
-                  "pattern": self.members[t].pattern}
-                 for k, (t, c) in enumerate(zip(humans, colors))]
-        seats += [{"id": None, "kind": b, "bot": k, "color": c, "team": team(len(humans) + k)}
-                  for k, (b, c) in enumerate(zip(bots, colors[len(humans):]))]
-        return seats
+        return lobby.lineup(self.settings, self.members, [m.token for m in self.connected])
 
     async def start(self):
         if self.match is not None:
@@ -624,24 +497,6 @@ class Room:
     async def stop(self):
         if self.task is not None:
             self.task.cancel()
-
-
-def bot_label(kind, short=False):
-    """"Medium bot" / "PPO" (short: "bot" / "PPO")."""
-    if is_bot(kind):
-        return "bot" if short else f"{kind.split(':', 1)[1].title()} bot"
-    return kind.upper()
-
-
-def default_goal(mode, map_name):
-    if modes.MODES[mode].goal_label == "First to":
-        return min(MAPS[map_name].winning_score, 10)
-    return modes.MODES[mode].goal_default
-
-
-def map_order():
-    first = ["platform", "slider", "swing", "ramps", "classic"]
-    return [n for n in first if n in MAPS] + sorted(n for n in MAPS if n not in first)
 
 
 def valid_code(code):

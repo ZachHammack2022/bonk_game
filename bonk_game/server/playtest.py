@@ -110,3 +110,27 @@ class Reports:
 
 
 REPORTS = Reports()
+
+
+def receive(member, kind, msg, room, settings, results):
+    """A browser in `room` sent a "report" or a "client_error". `member` (a
+    room.Member) keeps count, so nobody can flood the list; `results`: the
+    last match's results (reports come in on the results screen, after the
+    match is gone)."""
+    if not ENABLED:
+        return
+    where = {"room": room, "name": member.name, "map": settings["map"], "mode": settings["mode"]}
+    if kind == "client_error":
+        if member.errors_sent < ERRORS_PER_PERSON:
+            member.errors_sent += 1
+            REPORTS.add("client_error", {**where, **clean_error(msg)})
+        return
+    now = time.monotonic()
+    if member.last_report is not None and now - member.last_report < REPORT_EVERY:
+        return
+    member.last_report = now
+    slots = (results or {}).get("slots") or []
+    if slots:
+        where["players"] = len(slots)
+        where["people"] = sum(1 for s in slots if s.get("kind") == "human")
+    REPORTS.add("playtest", {**where, **clean_report(msg)})

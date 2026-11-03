@@ -61,6 +61,31 @@ def test_two_matches_at_once_dont_change_each_other():
     assert last["players"] == a.snapshot()["players"] and last["tick"] == a.tick_count
 
 
+def test_the_same_seed_is_the_same_match_bots_and_all():
+    # Everything random in a match (spawns, the mode, power-ups, the bots'
+    # choices) comes from its seed, and nothing else changes it
+    slots = [{"kind": "bot:medium", "name": f"b{i}"} for i in range(4)]
+    a = Match("grand", slots, 3, mode="crown", power_ups=True, seed=11)
+    b = Match("grand", slots, 3, mode="crown", power_ups=True, seed=11)
+    for _ in range(600):
+        np.random.random(5)
+        random.random()
+        a.tick()
+        random.seed(random.random())
+        b.tick()
+        assert a.snapshot() == b.snapshot()
+
+
+def test_matches_leave_the_global_random_numbers_alone():
+    np.random.seed(1)
+    random.seed(1)
+    np_before, py_before = np.random.get_state()[1].copy(), random.getstate()
+    m = Match("platform", [{"kind": "bot:hard", "name": "a"}, {"kind": "bot:easy", "name": "b"}], 3, seed=3)
+    for _ in range(300):
+        m.tick()
+    assert (np.random.get_state()[1] == np_before).all() and random.getstate() == py_before
+
+
 def test_input_codes_round_trip():
     for b in [Buttons(), Buttons(up=True, heavy=True), Buttons(*[True] * 5)]:
         assert input_from_code(input_code(b)) == b

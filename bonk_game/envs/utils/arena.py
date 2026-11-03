@@ -11,7 +11,7 @@ import numpy as np
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
-from bonk_game.envs.utils.player import player
+from bonk_game.envs.utils.player import new_rng, player
 from bonk_game.envs.utils.platform import platform
 from bonk_game.ui.theme import PLAYER_COLORS
 
@@ -53,8 +53,9 @@ N_ACTIONS = len(ACTIONS)
 
 
 def make_players():
-    p1 = player(RADIUS, LEFT, RIGHT, TOP, BOTTOM, P1_COLOR)
-    p2 = player(RADIUS, LEFT, RIGHT, TOP, BOTTOM, P2_COLOR)
+    rng = new_rng()
+    p1 = player(RADIUS, LEFT, RIGHT, TOP, BOTTOM, P1_COLOR, rng=rng)
+    p2 = player(RADIUS, LEFT, RIGHT, TOP, BOTTOM, P2_COLOR, rng=rng)
     return p1, p2
 
 
@@ -94,7 +95,7 @@ def reset_players(players):
         respawn_apart(p, players[:i])
 
 
-def spawn_points(n, box, radius, rng=np.random, gap=4):
+def spawn_points(n, box, radius, rng, gap=4):
     """`n` random, non-overlapping spawn positions for balls of `radius`.
 
     The spawn box is split into a grid of cells at least one ball (plus
@@ -156,7 +157,6 @@ class Renderer:
 
         self._ensure_init()
         from bonk_game.ui.painter import Painter
-        from bonk_game.ui import theme
 
         canvas = pygame.Surface((WIDTH, HEIGHT))
         painter = Painter(canvas)
@@ -179,7 +179,7 @@ class Renderer:
         if self.render_mode == "human":
             self.window.blit(canvas, canvas.get_rect())
             # Let the user close the window instead of having to kill the process
-            for event in pygame.event.get(pygame.QUIT):
+            if pygame.event.get(pygame.QUIT):
                 self.quit_requested = True
             pygame.event.pump()
             pygame.display.update()

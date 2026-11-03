@@ -63,9 +63,9 @@ class BonkEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        if seed is not None:
-            # Players spawn using numpy's global RNG
-            np.random.seed(seed)
+        # Players spawn using the env's own random numbers (seeded by reset)
+        for p in self.players:
+            p.rng = self.np_random
         self.map.reset()
         arena.reset_players(self.players)
         if self.opponents is not None:

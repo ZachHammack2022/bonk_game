@@ -4,8 +4,8 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-COPY requirements-server.txt .
-RUN pip install --no-cache-dir -r requirements-server.txt
+COPY requirements-server.txt constraints.txt ./
+RUN pip install --no-cache-dir -r requirements-server.txt -c constraints.txt
 
 COPY bonk_game ./bonk_game
 ENV PYTHONPATH=/app PYTHONUNBUFFERED=1 PORT=8000

@@ -148,3 +148,21 @@ def test_rgb_render():
     frame = env.render()
     assert frame.shape == (arena.HEIGHT, arena.WIDTH, 3)
     env.close()
+
+
+def test_envs_have_their_own_random_numbers():
+    from bonk_game.envs.testing_env import TestEnv
+    a, b = TestEnv("human", "human", "human", seed=4), TestEnv("human", "human", "human", seed=4)
+    np.random.random(10)  # (doesn't change anything)
+    assert np.array_equal(a.reset(), b.reset())
+    for _ in range(100):
+        a.step(), b.step()
+    assert [(p.x, p.y) for p in a.players] == [(p.x, p.y) for p in b.players]
+    # The training env: reset(seed=) decides where players spawn
+    pytest.importorskip("gymnasium")
+    from bonk_game.envs.training_env import BonkEnv
+    env = BonkEnv(map_name="platform", opponent_path=None)
+    first, _ = env.reset(seed=9)
+    np.random.random(10)
+    again, _ = env.reset(seed=9)
+    assert np.array_equal(first, again)

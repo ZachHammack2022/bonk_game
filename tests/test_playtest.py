@@ -191,7 +191,7 @@ def test_smoke_test_checks_a_running_server():
     r, said = asyncio.run(go())
     assert r["states_per_second"] > 20 and r["ping_med"] < 100
     assert any("compressed" in s for s in said)
-    with pytest.raises(Exception):
+    with pytest.raises(OSError):  # (nothing listening there)
         asyncio.run(smoke.smoke("http://127.0.0.1:9", seconds=0.5, out=lambda s: None))
 
 

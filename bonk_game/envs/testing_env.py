@@ -6,6 +6,7 @@ from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.controls import apply_input
 from bonk_game.envs.utils.maps import DEFAULT_MAP, make_map
 from bonk_game.envs.utils.mechanics import player_collision
+from bonk_game.envs.utils.player import new_rng
 from bonk_game.envs.utils.timer import RoundTimer
 
 
@@ -43,7 +44,7 @@ class TestEnv():
     HIT_CREDIT_STEPS = 90
 
     def __init__(self, *controllers, render_mode=None, winning_score=None, map_name=DEFAULT_MAP,
-                 round_time=None, colors=None, teams=None, respawn=None, gravity=1.0):
+                 round_time=None, colors=None, teams=None, respawn=None, gravity=1.0, seed=None):
         """colors: optional colour index (into theme.PLAYER_COLORS) per player.
         teams: optional team number per player. Teammates aren't opponents:
         agents and bots go after the other team, a round ends when one team
@@ -51,7 +52,9 @@ class TestEnv():
         respawn: True respawns dead players straight away, even on maps that
         normally restart the round; False restarts the round. None: the
         map's own rule.
-        gravity: multiplies the pull of gravity on the players."""
+        gravity: multiplies the pull of gravity on the players.
+        seed: for where players spawn (the env's own random numbers, `rng`;
+        None: drawn once from numpy's global ones)."""
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.map = make_map(map_name)
@@ -70,7 +73,8 @@ class TestEnv():
         self.timer_resets_on_death = True
         # A player everyone else goes after instead of the nearest (the crown holder)
         self.focus = None
-        self.players = list(self.map.make_players(self.n, colors))
+        self.rng = new_rng(seed)
+        self.players = list(self.map.make_players(self.n, colors, rng=self.rng))
         for p in self.players:
             p.gravity *= gravity
         self.scores = [0] * self.n

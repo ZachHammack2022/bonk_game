@@ -99,7 +99,7 @@ def test_map_select_scrolls_to_every_map(app):
     from bonk_game.ui import app as A
     scene = A.MapSelectScene(app)
     app.scene = scene
-    for i in range(len(scene.names) - 1):
+    for _ in range(len(scene.names) - 1):
         key(app, pygame.K_TAB)
         tick(app, 0.4)
         x, y = scene.card_pos(scene.focus)
