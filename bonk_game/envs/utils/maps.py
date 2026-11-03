@@ -36,6 +36,11 @@ class Map:
     # In the game, does a death restart the whole round (True) or just
     # respawn the player who died (False)?
     reset_round_on_kill = False
+    # Seconds per round in the game before sudden death (closing walls)
+    # starts; 0 turns it off. See bonk_game/envs/utils/timer.py.
+    round_time = 45
+    # (left, right) x where the sudden-death walls appear
+    sudden_death_start = (0, arena.WIDTH)
 
     @property
     def obs_size(self):
@@ -87,6 +92,8 @@ class ClassicMap(Map):
     title = "Classic"
     description = "Bouncy floor and ceiling, deadly side walls."
     bot_margin = 60  # the walls kill on touch, so keep well clear
+    round_time = 30  # players respawn here, so this is time between points
+    sudden_death_start = (arena.LEFT, arena.RIGHT)
 
     def __init__(self):
         self.platforms = arena.make_platforms()

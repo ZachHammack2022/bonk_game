@@ -32,6 +32,8 @@ The other maps float in open space, bonk-style. There are no walls: you die if y
 - Fall through the hole and the pad fires you back up.
 - Jump into the swing to survive once the floor is gone. Kick the swing (going heavy kicks much harder) or jump out and knock your opponent off it.
 
+**Round timer**: rounds last 45 seconds. On Classic, which has no rounds, you get 30 seconds to score. When time runs out it's **sudden death**: red walls close in from both sides, and touching one kills you. Whoever gets pushed into a wall first loses. Change the limit with `round_time` on the map class (0 turns it off).
+
 ### Adding a map
 Subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. It then shows up in the main menu, in `tournament.py --map <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. `bonk_game/envs/utils/bodies.py` has building blocks: rectangles that can move, bounce, have friction or launch players, a platform that slides when pushed, and a swing.
 
