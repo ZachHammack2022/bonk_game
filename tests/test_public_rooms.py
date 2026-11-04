@@ -3,11 +3,9 @@ import asyncio
 import json
 
 import pytest
-from aiohttp.test_utils import TestClient, TestServer
 
 from bonk_game.server import room as room_mod
 from bonk_game.server.room import Room, RoomManager
-from bonk_game.server.web import make_app
 
 
 class Inbox:
@@ -151,6 +149,11 @@ def test_people_who_drop_in_get_the_match_in_their_history(monkeypatch):
 
 
 def test_the_public_list_and_quick_play_over_http():
+    pytest.importorskip("aiohttp")  # (the training job runs without the server's packages)
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from bonk_game.server.web import VERSION, make_app
+
     async def go():
         app = make_app()
         async with TestClient(TestServer(app)) as client:
@@ -159,7 +162,6 @@ def test_the_public_list_and_quick_play_over_http():
             body = await r.json()
             assert r.status == 200 and body["new"] and len(body["room"]) == 4
             ws = await client.ws_connect(f"/ws/{body['room']}")
-            from bonk_game.server.web import VERSION
             await ws.send_json({"type": "hello", "name": "Sam", "token": "t", "version": VERSION})
             welcome = await ws.receive_json()
             assert welcome["type"] == "welcome" and welcome["you"] != "t"
