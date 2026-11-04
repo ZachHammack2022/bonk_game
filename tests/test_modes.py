@@ -254,3 +254,19 @@ def test_settings_reject_booleans_posing_as_numbers():
         assert room.settings["round_time"] is None and room.settings["power_ups"] is False
         assert room.members["a"].team is None
     run(go())
+
+
+def test_the_browser_is_told_who_is_held_after_a_respawn():
+    m = Match("platform", bots(3), 2, mode="knockouts", seed=4)
+    assert m.describe()["respawn_hold"] == 2
+    seen = None
+    for _ in range(20_000):
+        m.tick()
+        s = m.snapshot()
+        if "held" in s:
+            seen = s
+            break
+    assert seen is not None, "nobody respawned"
+    held = [i for i, h in enumerate(seen["held"]) if h]
+    assert held and all(0 < seen["held"][i] <= 2 for i in held)
+    assert all(m.env.players[i].held for i in held)

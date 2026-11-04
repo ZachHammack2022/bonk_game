@@ -94,7 +94,7 @@ class PowerUps:
         for pickup in list(self.pickups):
             x, y, kind = pickup
             for i, p in enumerate(env.players):
-                if p.alive and math.hypot(p.x - x, p.y - y) < p.r + PICKUP_RADIUS:
+                if p.alive and not p.held and math.hypot(p.x - x, p.y - y) < p.r + PICKUP_RADIUS:
                     self.pickups.remove(pickup)
                     self.effects[i] = [kind, KINDS[kind]["seconds"] * TICK_HZ]
                     self.collected[i] += 1

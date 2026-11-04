@@ -365,6 +365,8 @@ class Sim:
         living = [p for p in self.env.players if p.alive]
         for p in living:
             painter.player(p)
+            if p.held:
+                painter.hold_ring(p, p.held / max(1, self.env.respawn_hold))
         for i in self.humans:
             if self.env.players[i].alive:
                 painter.you_marker(self.env.players[i])

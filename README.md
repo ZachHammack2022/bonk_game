@@ -16,11 +16,13 @@ Open the page, pick a name and **Create a room**. You get a 4-letter room code; 
 |---|---|
 | Free-for-all | On most maps a ball that's knocked out sits out the rest of the round, and the last one standing scores. (On Classic, where you respawn, the point goes to whoever last hit you.) First to N points. |
 | Teams | Red team against Blue team, up to 5 a side, each in its own colours. The last team standing scores the round (on Classic, every knockout scores for the other side). Bumping a teammate off doesn't count. Click **Switch to …** in the lobby to change sides. |
-| Lives | Everyone has N lives and respawns straight away until they run out. Last ball left wins. The sudden-death walls still close in when the round clock runs out. |
+| Lives | Everyone has N lives and respawns until they run out. Last ball left wins. The sudden-death walls still close in when the round clock runs out. |
 | Knockouts | N minutes, respawning; the most knockouts wins. A tie goes to overtime: the next knockout wins. |
 | Crown | One player wears the crown and scores a point a second. Bump the wearer to steal it; knock them out and it's yours. First to wear it for N seconds in total wins. |
 
 The respawning modes (Lives, Knockouts and Crown) don't work on Sinking Swing, whose floor is gone by the end of a round.
+
+A ball that respawns (in those modes, and on Classic) is held still for 2 seconds first, so you can see where you are: it's see-through, with a ring running down (and the seconds left, on your own ball). While it's held your keys do nothing, and nothing can hit it or knock it out; bots go after someone else.
 
 The host can also set the **round time** (how long before the sudden-death walls close in, or off), **gravity** (low, normal or high) and turn on **power-ups**. With power-ups on, a pickup appears every few seconds; touch it for a few seconds of ⚡ speed (push harder, faster top speed), 🎈 float (much less gravity), 🪨 iron (as heavy as a heavy ball the whole time, but you move as if you weren't) or 👊 punch (the next ball you bump goes flying).
 

@@ -198,7 +198,7 @@ class Lives(Mode):
 class Knockouts(Mode):
     id = "knockouts"
     title = "Knockouts"
-    description = "Respawn straight away. Most knockouts when time runs out wins."
+    description = "Keep respawning. Most knockouts when time runs out wins."
     respawns = True
     goal_label = "Minutes"
     goal_choices = (1, 2, 3, 5)

@@ -59,7 +59,8 @@ function ownPosition(now, dt) {
   const i = M.slots.findIndex((s) => s.id === me.token);
   const entry = app.states[app.states.length - 1];
   const S = entry[1];
-  if (i < 0 || S.phase !== "play" || !S.players[i][3] || (S.stand_ins || []).includes(i)) {
+  // (Held after a respawn: you're not moving, so there's nothing to predict)
+  if (i < 0 || S.phase !== "play" || !S.players[i][3] || (S.held && S.held[i]) || (S.stand_ins || []).includes(i)) {
     // (Forget the last prediction too: when you're back, start afresh
     // rather than fading in from where you were before)
     own.tick = null; own.base = null; own.offX = own.offY = 0;
