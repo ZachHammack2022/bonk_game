@@ -64,13 +64,12 @@ def test_the_host_names_the_room_and_sets_its_password():
         assert room.settings["name"] is None and b.all("lobby")[-1]["title"] == "Ann's room"
         await room.handle("a", {"type": "settings", "name": 5})
         assert "name" in a.all("error")[-1]["message"]
-        await room.handle("a", {"type": "settings", "password": " hunter2 "})
-        assert room.settings["password"] == "hunter2"
-        assert b.all("lobby")[-1]["settings"]["password"] == "hunter2"  # (people in the room can invite)
-        await room.handle("a", {"type": "settings", "password": "x" * 21})
-        assert "Passwords" in a.all("error")[-1]["message"] and room.settings["password"] == "hunter2"
         await room.handle("a", {"type": "settings", "password": True})
-        assert room.settings["password"] not in (None, "hunter2")
+        pw = room.settings["password"]
+        assert pw and b.all("lobby")[-1]["settings"]["password"] == pw  # (people in the room can invite)
+        # Nobody types a password in: the server makes them up
+        await room.handle("a", {"type": "settings", "password": "hunter2"})
+        assert "private" in a.all("error")[-1]["message"] and room.settings["password"] == pw
         await room.handle("a", {"type": "settings", "password": None})
         assert room.settings["password"] is None
     run(go())

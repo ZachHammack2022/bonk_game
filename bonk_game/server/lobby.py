@@ -158,14 +158,13 @@ def check_settings(settings, msg, people, bot_options):
             return settings, "The room's name should be text."
         s["name"] = clean_room_name(msg["name"])
     if "password" in msg:
-        pw = msg["password"]
-        if pw is True:
-            pw = new_password()
-        elif pw is not None and pw is not False:
-            pw = clean_password(pw)
-            if pw is None:
-                return settings, f"Passwords are {PASSWORD_LEN[0]} to {PASSWORD_LEN[1]} characters."
-        s["password"] = pw or None
+        # Made up by the server (true: private, with a new one), never typed in
+        if msg["password"] is True:
+            s["password"] = new_password()
+        elif msg["password"] in (None, False):
+            s["password"] = None
+        else:
+            return settings, "Switch the room to private for a password."
     if "gravity" in msg:
         if msg["gravity"] not in GRAVITY:
             return settings, "Unknown gravity."

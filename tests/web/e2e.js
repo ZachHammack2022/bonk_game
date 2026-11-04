@@ -94,12 +94,13 @@ function check(cond, what) {
     const hostName = await host.inputValue("#name");
     check((await host.inputValue("#new-name")) === `${hostName}'s room`, "a new room is named after you, to start with");
     await shot(host, "new-game");
-    await host.click("#new-private");
+    check(await host.isVisible('#new-privacy [data-private="1"].on'), "new games are private unless you pick public");
+    await host.click("#new-create");
     await host.waitForSelector("#lobby:not(.hidden)");
     const url = host.url();
     const password = new URL(url).searchParams.get("pw");
     check(/\/r\/[A-Z]{4}\?pw=[a-z0-9]{6}$/.test(url), "a private game's link has its password in it");
-    check((await host.inputValue("#room-name-input")) === `${hostName}'s room` && (await host.inputValue("#room-password")) === password &&
+    check((await host.inputValue("#room-name-input")) === `${hostName}'s room` && (await host.textContent("#room-password")) === password &&
       await host.isVisible('#privacy [data-private="1"].on'), "the lobby shows the room's name, that it's private, and its password");
     const code = new URL(url).pathname.split("/r/")[1];
     await host.waitForFunction(() => bonkDebug.app.lobby && bonkDebug.app.lobby.seats[0].color === 3 && bonkDebug.app.lobby.seats[0].pattern === "stripes");
@@ -127,13 +128,21 @@ function check(cond, what) {
     await host.waitForFunction(() => bonkDebug.app.lobby.seats[1].color === 5);
     check(true, "picking a colour shows up for everyone");
 
-    // Host sets up a quick match
+    // Host sets up a quick match (in the Game settings dialog)
+    await host.click("#open-game-settings");
     await host.selectOption("#map", "classic");
     await host.selectOption("#first-to", "1");
+    await host.click("#game-settings-done");
+    check((await host.textContent("#sum-map")) === "Classic" && (await host.textContent("#sum-rest")).includes("First to 1"),
+      "the lobby sums up the settings");
     await host.click("#add-bot");
     await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length === 4);
     await guest.waitForFunction(() => document.querySelector("#map").value === "classic");
     check(true, "settings reach the guest");
+    await host.setViewportSize({ width: 1000, height: 585 });
+    check(await host.evaluate(() => { const r = $("start").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }),
+      "Start is on screen in a smallish window, without scrolling");
+    await host.setViewportSize({ width: 1000, height: 720 });
     // Chat in the lobby: everyone sees it, with swear words starred out
     await guest.fill("#chat-input", "hi there you shit");
     await guest.press("#chat-input", "Enter");
@@ -255,16 +264,22 @@ function check(cond, what) {
     check(true, "back to the lobby together");
 
     // Teams: the guest sees the sides and switches
+    await host.click("#open-game-settings");
     await host.selectOption("#mode", "teams");
+    await host.click("#game-settings-done");
     await guest.waitForFunction(() => document.querySelectorAll("#seats .team-head").length === 2);
     check(await guest.isVisible("#switch-team"), "teams show up in the lobby, with a switch button");
     const before = await guest.evaluate(() => bonkDebug.app.lobby.seats.find((s) => s.name === "Bob").team);
     await guest.click("#switch-team");
     await host.waitForFunction((t) => bonkDebug.app.lobby.seats.find((s) => s.name === "Bob").team === 1 - t, before);
     check(true, "switching team shows up for everyone");
+    await host.click("#open-game-settings");
     await host.selectOption("#mode", "crown");
     await guest.waitForFunction(() => document.querySelector("#goal-label").textContent.startsWith("Hold"));
-    check(await guest.isHidden("#round-time-box"), "the goal and settings follow the mode");
+    await guest.click("#open-game-settings");
+    check(await guest.isHidden("#round-time-box") && await guest.isDisabled("#mode"),
+      "the goal and settings follow the mode (and the guest can look, not change)");
+    await guest.click("#game-settings-done");
     await host.selectOption("#gravity", "low");
     await guest.waitForFunction(() => document.querySelector("#gravity").value === "low");
     check(true, "gravity reaches the guest");
@@ -276,6 +291,7 @@ function check(cond, what) {
     await host.check("#power-ups");
     await guest.waitForFunction(() => document.querySelector("#power-ups").checked);
     check(await guest.isDisabled("#power-ups"), "power-ups can be turned on (by the host only)");
+    await host.click("#game-settings-done");
     await shot(host, "lobby-crown");
 
     // A phone joins by typing the code
@@ -388,10 +404,13 @@ function check(cond, what) {
     await shot(q1, "browse-empty");
     check(!(await q1.$("#quick")) && !(await q1.$("#empty-quick")), "there are no play-with-bots buttons: you make a public or private game");
     await q1.click("#new-game");
-    await q1.click("#new-public");
+    await q1.click('#new-privacy [data-private="0"]');
+    await q1.click("#new-create");
     await q1.waitForSelector("#lobby:not(.hidden)");
     check(/\/r\/[A-Z]{4}$/.test(q1.url()) && await q1.isVisible('#privacy [data-private="0"].on'), "a public game has no password");
+    await q1.click("#open-game-settings");
     await q1.selectOption("#mode", "knockouts");
+    await q1.click("#game-settings-done");
     await q1.waitForFunction(() => app.lobby.settings.mode === "knockouts");
     await q1.click("#add-bot");
     await q1.waitForFunction(() => document.querySelectorAll("#seats .seat").length === 3);

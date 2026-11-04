@@ -53,6 +53,7 @@ function renderLobby() {
   // a private room's password (everyone in the room sees it, to invite people)
   const nameBox = $("room-name-input");
   if (document.activeElement !== nameBox) nameBox.value = L.title || "";
+  nameBox.size = Math.max(6, nameBox.value.length + 1);  // (as wide as the name, where CSS can't say)
   nameBox.readOnly = !host;
   nameBox.title = host ? "Rename the room" : "";
   for (const b of $("privacy").querySelectorAll("button")) {
@@ -62,11 +63,10 @@ function renderLobby() {
     b.disabled = !host;
     b.classList.toggle("hidden", !host && !on);  // (guests just see which it is)
   }
+  // A private room's password: made up by the server, shown to everyone in
+  // the room (to invite people), changed by switching to public and back
   $("password-row").classList.toggle("hidden", !s.password);
-  const pwBox = $("room-password");
-  if (document.activeElement !== pwBox) pwBox.value = s.password || "";
-  pwBox.readOnly = !host;
-  pwBox.size = Math.max(6, (s.password || "").length);
+  $("room-password").textContent = s.password || "";
 
   // Mode, map and the other settings
   const mode = modeInfo(s.mode);
@@ -101,6 +101,21 @@ function renderLobby() {
   $("speed").disabled = !host;
   $("power-ups").checked = !!s.power_ups;
   $("power-ups").disabled = !host;
+  $("game-settings-done").textContent = host ? "Done" : "Close";
+  $("game-settings-title").textContent = host ? "Game settings" : "Game settings (the host picks them)";
+
+  // The panel: the map, the mode, and the rest in a line. All of it is in
+  // the Game settings dialog
+  $("sum-map").textContent = mapInfo ? mapInfo.title : s.map;
+  $("sum-mode").textContent = mode.title;
+  const goalChoice = $("first-to").selectedOptions[0];
+  const rest = [`${mode.goal_label} ${goalChoice ? goalChoice.textContent : s.first_to}`];
+  if (mode.round_time) rest.push(`Round time ${roundTimeLabel(s.round_time, mapInfo)}`);
+  if (s.gravity !== "normal") rest.push(`${s.gravity[0].toUpperCase() + s.gravity.slice(1)} gravity`);
+  if ((s.speed || "normal") !== "normal") rest.push(`${s.speed[0].toUpperCase() + s.speed.slice(1)} speed`);
+  rest.push(s.power_ups ? "Power-ups on" : "Power-ups off");
+  $("sum-rest").textContent = rest.join(" · ");
+  $("open-game-settings-text").textContent = host ? "Change map, mode & rules" : "See all settings";
   const teams = s.mode === "teams";
   const mine = L.seats.find((x) => x.id === me.id);
   $("switch-team").classList.toggle("hidden", !teams || !mine);
@@ -467,6 +482,7 @@ $("gravity").addEventListener("change", () => send({ type: "settings", gravity: 
 $("speed").addEventListener("change", () => send({ type: "settings", speed: $("speed").value }));
 $("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
 $("room-name-input").addEventListener("change", () => send({ type: "settings", name: $("room-name-input").value.trim() || null }));
+$("room-name-input").addEventListener("input", (e) => { e.target.size = Math.max(6, e.target.value.length + 1); });
 $("room-name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
 for (const b of $("privacy").querySelectorAll("button")) {
   b.addEventListener("click", () => {
@@ -474,12 +490,20 @@ for (const b of $("privacy").querySelectorAll("button")) {
     if (priv !== !!app.lobby.settings.password) send({ type: "settings", password: priv ? true : null });
   });
 }
-$("room-password").addEventListener("change", () => {
-  const pw = $("room-password").value.trim();
-  if (pw) send({ type: "settings", password: pw });
-  else renderLobby();  // (an empty password: untick Password instead)
-});
-$("new-password").addEventListener("click", () => send({ type: "settings", password: true }));
+// The room code and password chips copy what they show
+async function copyText(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(`${what} copied`); } catch (e) { toast(text); }
+}
+$("room-code-chip").addEventListener("click", () => copyText(app.room, "Room code"));
+$("password-row").addEventListener("click", () => copyText(app.lobby.settings.password || "", "Room password"));
+
+// The Game settings dialog
+const openGameSettings = () => { $("game-settings").classList.remove("hidden"); $("game-settings-done").focus(); };
+const closeGameSettings = () => $("game-settings").classList.add("hidden");
+$("open-game-settings").addEventListener("click", openGameSettings);
+$("open-game-settings-map").addEventListener("click", openGameSettings);
+$("game-settings-done").addEventListener("click", closeGameSettings);
+$("game-settings").addEventListener("click", (e) => { if (e.target === $("game-settings")) closeGameSettings(); });
 $("switch-team").addEventListener("click", () => {
   const mine = app.lobby.seats.find((x) => x.id === me.id);
   if (mine) send({ type: "team", team: 1 - mine.team });
