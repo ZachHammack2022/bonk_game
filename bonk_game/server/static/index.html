@@ -20,10 +20,10 @@
         <span id="home-ball-label" class="dim small"></span>
         <button id="edit-ball">Customize</button>
       </div>
-      <button id="quick" class="primary">Quick play</button>
-      <p class="dim small quick-help">Jump into a public match with whoever's on, or bots.</p>
-      <button id="create">Create a room</button>
-      <div class="or">or join one</div>
+      <button id="find" class="primary">Find a game</button>
+      <p id="find-help" class="dim small quick-help">See every public game and pick one to join.</p>
+      <button id="create">Create a private room</button>
+      <div class="or">or join one with its code</div>
       <form id="join-form" class="row">
         <input id="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
         <button type="submit">Join</button>
@@ -40,10 +40,6 @@
           <p class="small">Signed in as <b id="account-who"></b> <button id="sign-out" class="link-button">Sign out</button></p>
         </div>
       </div>
-      <div id="public" class="public hidden">
-        <h3>Public rooms</h3>
-        <ul id="public-list" class="public-list"></ul>
-      </div>
       <div class="home-links">
         <button id="open-stats" class="link-button">📊 Your stats</button>
         <button id="open-replay" class="link-button">🎞 Watch a replay</button>
@@ -53,6 +49,75 @@
     </div>
     <footer class="home-footer"><a href="/privacy">Privacy policy</a> · <a href="/terms">Terms of service</a></footer>
   </section>
+
+  <!-- The game browser: every public game, to filter and join; a private
+       one by its code (people.js) -->
+  <section id="browse" class="screen hidden">
+    <div class="browse">
+      <header class="browse-head">
+        <button id="browse-back" class="ghost" title="Back to the start page">← Back</button>
+        <div class="browse-title">
+          <h1>Find a game</h1>
+          <p id="browse-summary" class="dim small" aria-live="polite"></p>
+        </div>
+        <div class="browse-actions">
+          <button id="quick" title="Join the busiest public game with a free seat, or start one with bots">Quick match</button>
+          <button id="new-game" class="primary">New game</button>
+        </div>
+      </header>
+      <div class="browse-bar">
+        <div class="seg" role="radiogroup" aria-label="Show">
+          <button data-show="all" class="on" role="radio" aria-checked="true">All</button>
+          <button data-show="open" role="radio" aria-checked="false">Open seats</button>
+          <button data-show="lobby" role="radio" aria-checked="false">In lobby</button>
+        </div>
+        <select id="filter-mode" aria-label="Mode"><option value="">All modes</option></select>
+        <select id="filter-map" aria-label="Map"><option value="">All maps</option></select>
+        <input id="browse-search" type="search" placeholder="Search host, player or code" aria-label="Search" autocomplete="off">
+        <form id="code-form" class="code-join" title="Private games aren't listed: join one with its 4-letter code">
+          <input id="browse-code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off" aria-label="Private game code">
+          <button type="submit">Join</button>
+        </form>
+      </div>
+      <div class="games" role="table" aria-label="Public games">
+        <div class="games-head" role="row">
+          <span role="columnheader">Game</span>
+          <button role="columnheader" data-sort="mode">Mode</button>
+          <button role="columnheader" data-sort="map">Map</button>
+          <button role="columnheader" data-sort="players" class="sorted">Players</button>
+          <button role="columnheader" data-sort="status">Status</button>
+          <span role="columnheader"><span class="sr">Join</span></span>
+        </div>
+        <div id="games-list" role="rowgroup"></div>
+        <div id="games-empty" class="games-empty hidden">
+          <p id="games-empty-text"></p>
+          <div class="row-buttons">
+            <button id="empty-public" class="primary">Start a public game</button>
+            <button id="empty-quick">Play bots now</button>
+            <button id="clear-filters" class="hidden">Clear filters</button>
+          </div>
+        </div>
+      </div>
+      <button id="games-more" class="ghost hidden"></button>
+    </div>
+  </section>
+
+  <!-- New game: public (listed in the browser) or private (code and link) -->
+  <div id="new-dialog" class="overlay hidden" role="dialog" aria-labelledby="new-title">
+    <div class="card settings-card">
+      <h2 id="new-title">New game</h2>
+      <button id="new-public" class="choice">
+        <b>Public</b>
+        <span class="dim small">Listed in Find a game, so anyone can join. You can add bots while you wait.</span>
+      </button>
+      <button id="new-private" class="choice">
+        <b>Private</b>
+        <span class="dim small">Not listed. Friends join with the code or the invite link.</span>
+      </button>
+      <p class="dim small">You can change this later in the lobby.</p>
+      <button id="new-cancel" class="ghost">Cancel</button>
+    </div>
+  </div>
 
   <!-- Lobby: who's here, the host's settings -->
   <section id="lobby" class="screen hidden">
@@ -106,7 +171,7 @@
         </div>
         <label class="check"><input id="power-ups" type="checkbox"> Power-ups</label>
         <label class="check"><input id="public-room" type="checkbox"> Public room</label>
-        <p id="public-help" class="dim small">Listed on the home page, so anyone can join. Private rooms are by invite link only.</p>
+        <p id="public-help" class="dim small">Listed in Find a game, so anyone can join. Private rooms are by invite link or code only.</p>
         <p class="dim small power-help">⚡ speed · 🎈 float · 🪨 iron · 👊 punch the next ball you bump</p>
         <div id="need-players" class="need hidden">
           <p id="need-text"></p>

@@ -45,6 +45,13 @@ class Mode:
     uses_round_time = True  # the room's round-time setting means something here
     respawns = False        # players respawn mid-round (needs a map with respawn_ok)
 
+    @classmethod
+    def goal_short(cls, goal):
+        """The goal in a few words, for the game browser: "First to 5",
+        "3 lives", "2 min", "Hold 30s"."""
+        return {"Lives": f"{goal} {'life' if goal == 1 else 'lives'}", "Minutes": f"{goal} min",
+                "Hold for (s)": f"Hold {goal}s"}.get(cls.goal_label, f"{cls.goal_label} {goal}")
+
     def __init__(self, n, goal, teams=None):
         self.n = n
         self.goal = goal

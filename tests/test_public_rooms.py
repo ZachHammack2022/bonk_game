@@ -33,8 +33,11 @@ def test_rooms_are_private_until_the_host_lists_them():
         assert room.settings["public"] is False
         await room.handle("a", {"type": "settings", "public": True})
         [listed] = rooms.public()
-        assert listed == {"room": room.code, "map": "Floating Platform", "mode": "Free-for-all", "people": 1,
-                          "bots": 1, "most": 6, "playing": False, "host": "Ann"}
+        assert listed == {"room": room.code, "map": "Floating Platform", "map_id": "platform",
+                          "mode": "Free-for-all", "mode_id": "ffa", "goal": "First to 5", "people": 1,
+                          "bots": 1, "most": 6, "names": ["Ann"], "playing": False, "elapsed": None,
+                          "open": True, "power_ups": False, "gravity": "normal", "quick": False,
+                          "host": "Ann"}
         await room.disconnect("a")
         assert rooms.public() == []  # (nobody there)
     run(go())
@@ -157,7 +160,8 @@ def test_the_public_list_and_quick_play_over_http():
     async def go():
         app = make_app()
         async with TestClient(TestServer(app)) as client:
-            assert (await (await client.get("/api/public")).json()) == {"rooms": []}
+            assert (await (await client.get("/api/public")).json()) == {"rooms": [], "online": 0, "private": 0,
+                                                                        "more": 0}
             r = await client.post("/api/quickplay")
             body = await r.json()
             assert r.status == 200 and body["new"] and len(body["room"]) == 4
@@ -181,4 +185,52 @@ def test_unknown_ids_do_nothing(bad):
         await room.handle("a", {"type": "kick", "id": bad})
         await room.handle("a", {"type": "report_player", "id": bad})
         assert set(room.members) == {"a", "b"}
+    run(go())
+
+
+def test_the_browser_counts_private_rooms_but_never_lists_them():
+    async def go():
+        rooms = RoomManager()
+        public, private, empty = rooms.create(), rooms.create(), rooms.create()
+        await public.join("a", "Ann", Inbox())
+        await public.handle("a", {"type": "settings", "public": True})
+        await private.join("b", "Bo", Inbox())
+        await private.join("c", "Cy", Inbox())
+        listed = rooms.browse()
+        assert [r["room"] for r in listed["rooms"]] == [public.code]
+        assert listed["online"] == 3 and listed["private"] == 1 and listed["more"] == 0
+        assert private.code not in json.dumps(listed) and empty.code not in json.dumps(listed)
+    run(go())
+
+
+def test_a_listed_match_shows_how_long_it_has_been_on():
+    async def go():
+        rooms = RoomManager()
+        room = rooms.create()
+        await room.join("a", "Ann", Inbox())
+        await room.handle("a", {"type": "settings", "public": True, "mode": "lives"})
+        await room.start()
+        room.match.tick_count = 30 * 75
+        [listed] = rooms.public()
+        assert listed["playing"] and listed["elapsed"] == 75 and listed["goal"] == "3 lives"
+        await room.stop()
+    run(go())
+
+
+def test_new_rooms_can_be_public_from_the_start():
+    pytest.importorskip("aiohttp")
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from bonk_game.server.web import make_app
+
+    async def go():
+        app = make_app()
+        async with TestClient(TestServer(app)) as client:
+            plain = await (await client.post("/api/rooms")).json()
+            assert plain["public"] is False
+            listed = await (await client.post("/api/rooms", json={"public": True})).json()
+            assert listed["public"] is True
+            junk = await (await client.post("/api/rooms", data="not json")).json()
+            assert junk["public"] is False
+            assert (await client.get("/play")).status == 200
     run(go())
