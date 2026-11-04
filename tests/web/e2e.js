@@ -330,17 +330,11 @@ function check(cond, what) {
     check((await host.$$eval("#stats .stat-history li", (els) => els.length)) === 2 && (await host.isVisible(".stat-tiles")),
       "the stats screen shows your totals and recent matches");
     await shot(host, "stats");
-    const [download] = await Promise.all([host.waitForEvent("download"), host.click("#stats-export")]);
-    const file = await download.path();
+    check(await host.isHidden("#download-data"), "guests have no data download (their profile is in the browser)");
     const fresh = await open("fresh");
     await fresh.goto(base + "/");
     await fresh.click("#open-stats");
     check((await fresh.textContent("#stats-body")).includes("No matches yet"), "a new browser has no matches");
-    await fresh.setInputFiles("#stats-file", file);
-    await fresh.waitForFunction(() => /Added 2 matches/.test(document.querySelector("#toast").textContent));
-    await fresh.setInputFiles("#stats-file", file);
-    await fresh.waitForFunction(() => /Nothing new/.test(document.querySelector("#toast").textContent));
-    check((await fresh.evaluate(() => profileStore.get().stats.matches)) === 2, "a saved profile can be added to another browser (once)");
 
     // Watching a replay file: from the home screen, with pause, speed and jumping about
     await fresh.click("#stats-close");
@@ -406,6 +400,22 @@ function check(cond, what) {
     const playerReports = await (await fetch(base + "/api/reports")).json();
     check(playerReports.items.length === 1 && playerReports.items[0].reported.name === q2name && playerReports.items[0].reporter.name === "Quinn",
       "a report reaches the server");
+    // Out of a match to the lobby (a bot plays for you), back in, and out for good
+    await q2.click("#go-lobby");
+    await q2.waitForSelector("#lobby:not(.hidden)");
+    check(await q2.isVisible("#back-to-match"), "you can go to the lobby during a match, with a way back");
+    const q2slot = await q2.evaluate(() => app.match.slots.findIndex((s) => s.id === me.id));
+    await q1.waitForFunction((k) => (bonkDebug.app.last.stand_ins || []).includes(k), q2slot);
+    check(true, "a bot plays for you while you're in the lobby");
+    await shot(q2, "lobby-during-match");
+    await q2.click("#back-to-match");
+    await q2.waitForSelector("#game:not(.hidden)");
+    await q1.waitForFunction((k) => !(bonkDebug.app.last.stand_ins || []).includes(k), q2slot);
+    check(true, "and you can jump back into the match");
+    await q2.click("#go-lobby");
+    await q2.click("#leave");
+    await q2.waitForSelector("#home:not(.hidden)");
+    check(true, "and leave the room from there");
     await q1.close(); await q2.close();
 
     // Saved before profiles: the old settings come along

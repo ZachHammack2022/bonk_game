@@ -40,6 +40,8 @@ WebSocket protocol (JSON text messages):
         so you get that back (once, within room.REOPEN_GRACE seconds).
     {"type": "input", "b": [up, left, down, right, heavy]}      0/1 each, on change
     {"type": "name", "name": "Sam"}
+    {"type": "away"} / {"type": "back"}   off to the lobby during a match (a
+                                          bot plays for you), and back
     {"type": "report_player", "id": "<their public id>", "reason": "name", "note": "..."}
     {"type": "report", "ping": {...}, ...}     after a match: what it saw (playtest.py)
     {"type": "client_error", "message": "...", "where": "draw.js:12"}

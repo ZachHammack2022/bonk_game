@@ -395,6 +395,15 @@ class Room:
         if kind == "leave":
             await self.leave(token)
             return
+        if kind in ("away", "back"):
+            # Off to the lobby during a match (a bot plays for you), and back
+            if self.match is not None and token in self.match_tokens:
+                k = self.match_tokens.index(token)
+                if kind == "away":
+                    self.match.stand_in(k)
+                else:
+                    self.match.release(k)
+            return
         if kind == "vote":
             if self.match is None and self.results is not None:
                 self.votes.symmetric_difference_update({token})

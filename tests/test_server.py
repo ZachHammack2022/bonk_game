@@ -505,3 +505,21 @@ def test_emotes_reach_everyone_but_not_too_often():
         assert emotes == [{"type": "emote", "slot": 1, "id": 2}]
         await room.stop()
     run(go())
+
+
+def test_going_to_the_lobby_mid_match_hands_your_ball_to_a_bot_until_you_come_back():
+    async def go():
+        room = Room("ABCD")
+        await room.join("a", "Ann", Inbox())
+        await room.join("b", "Bob", Inbox())
+        await room.handle("b", {"type": "away"})   # no match yet: nothing
+        await room.start()
+        await room.handle("b", {"type": "away"})
+        assert 1 in room.match.stand_ins and "b" in room.members
+        await room.handle("b", {"type": "back"})
+        assert 1 not in room.match.stand_ins
+        await room.handle("b", {"type": "away"})
+        await room.handle("b", {"type": "leave"})   # ← Leave from the lobby: gone, the bot plays on
+        assert "b" not in room.members and 1 in room.match.stand_ins
+        await room.stop()
+    run(go())

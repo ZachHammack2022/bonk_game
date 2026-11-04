@@ -152,7 +152,7 @@ class Accounts:
         return self._save(uid, {**p, **{k: checked[k] for k in edits}})
 
     def merge(self, uid, other):
-        """Add a browser's profile (or a profile file) to the account. The
+        """Add a browser's profile to the account (on first sign-in there). The
         same one twice counts once. A brand-new account takes the browser's
         name, ball and settings too."""
         p = self.profile(uid)

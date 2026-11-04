@@ -183,7 +183,43 @@ function renderLobby() {
 
   // Joined during a match: watch it
   if (L.phase === "match" && !app.match) status("A match is on. You'll play in the next one.");
+
+  // Here while a match is on (you came out to the lobby): go back to it
+  const on = !!app.match && (L.phase === "match" || (app.away && !!app.results));
+  $("match-on").classList.toggle("hidden", !on);
+  if (on) {
+    const playingIt = app.match.slots.some((x) => x.id === me.id);
+    $("match-on-text").textContent = app.results ? "The match has finished."
+      : playingIt ? "A match is on. A bot is playing for you while you're here." : "A match is on.";
+    $("back-to-match").textContent = app.results ? "See the results" : playingIt ? "Back to the match" : "Watch the match";
+  }
+  if (L.phase === "match") {
+    $("start").disabled = true;
+    $("start").textContent = "A match is on";
+  }
 }
+
+// Out of a match to the lobby (and from there, ← Leave goes home). A bot
+// plays for you meanwhile; Back to the match puts you back in
+function goToLobby() {
+  if (!app.match || !app.lobby || !app.ws) return;
+  app.away = true;
+  held.keys.clear(); held.touch.fill(0); held.pad.fill(0);
+  send({ type: "away" });
+  closeSettings();
+  show("lobby");
+  renderLobby();
+}
+function backToMatch() {
+  if (!app.match) return;
+  app.away = false;
+  send({ type: "back" });
+  show("game");
+  resize();
+  sendInput(true);
+}
+$("go-lobby").addEventListener("click", goToLobby);
+$("back-to-match").addEventListener("click", backToMatch);
 
 function removeButton(title, onClick) {
   const rm = document.createElement("button");

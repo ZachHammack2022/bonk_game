@@ -1,7 +1,6 @@
 // bonk web client: Your stats (📊 on the home screen): lifetime totals,
 // awards, results by mode and your recent matches, from your profile
-// (profileStore in core.js). Save it to a file, or add one from another
-// browser; an account will be able to take the same file.
+// (profileStore in core.js). Signed in, Download my data saves a copy.
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";
 
@@ -96,23 +95,12 @@ function openStats() { renderStats(); $("stats").classList.remove("hidden"); }
 $("open-stats").addEventListener("click", openStats);
 $("stats-close").addEventListener("click", () => $("stats").classList.add("hidden"));
 
-// Save to a file / add one (from another browser, say)
-$("stats-export").addEventListener("click", () => {
+// Signed in: a copy of everything your account keeps (see the privacy page)
+$("download-data").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(profileStore.get(), null, 1)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `bonk-profile-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `bonk-my-data-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-});
-$("stats-import").addEventListener("click", () => $("stats-file").click());
-$("stats-file").addEventListener("change", async () => {
-  const f = $("stats-file").files[0];
-  $("stats-file").value = "";
-  if (!f) return;
-  let added = null;
-  try { added = await profileStore.add(JSON.parse(await f.text())); } catch (e) { /* not JSON, or offline */ }
-  if (added === null) toast("That isn't a bonk profile file.", true);
-  else toast(added ? `Added ${added} match${added === 1 ? "" : "es"}.` : "Nothing new in that file.");
-  renderStats();
 });
