@@ -170,8 +170,9 @@ def test_a_room_gives_each_match_an_id():
         await room.join("a", "Ann", inbox)
         room.settings.update(map="classic", bots=["bot:hard"], first_to=1)
         await room.start()
-        while room.match is not None:
-            await asyncio.sleep(0.05)
+        # (The task, not room.match: the results go out just after the
+        # match is cleared, and they're what this waits for)
+        await room.task
         return [m for m in inbox.msgs if m["type"] == "results"][0]
     res = asyncio.run(asyncio.wait_for(go(), 120))
     assert res["match_id"].startswith("WXYZ-") and res["at"] > 1_700_000_000
