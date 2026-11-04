@@ -1,6 +1,7 @@
 # Fly.io config for the bonk server. Deploy with ./deploy/fly.sh <app-name>
-# (see "Hosting it on Fly.io" in the README). The app name is set there.
+# (see "Hosting it on Fly.io" in the README), or from Fly's dashboard.
 
+app = "bonk-game"               # https://bonk-game.fly.dev; fly.sh's <app-name> overrides it
 primary_region = "iad"          # Virginia; pick the region nearest your players
 kill_signal = "SIGTERM"         # the server finishes running matches, then exits
 kill_timeout = 130              # seconds: a bit longer than BONK_DRAIN_SECONDS (120)
