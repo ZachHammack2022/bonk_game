@@ -283,9 +283,9 @@ function openRoom(code, push, password) {
   connect();
 }
 
-// The room has a password and we don't have it (or it's wrong): ask
+// The game is private and we don't have its password (or it's wrong): ask
 function askPassword(code, wrong) {
-  $("pw-text").textContent = `Room ${code} has a password. Ask whoever invited you for it, or for their invite link.`;
+  $("pw-text").textContent = `Game ${code} is private. Type its password, or ask whoever invited you for their invite link (it has the password in).`;
   $("pw-wrong").classList.toggle("hidden", !wrong);
   $("pw-input").value = wrong ? $("pw-input").value : "";
   $("pw-dialog").dataset.room = code;

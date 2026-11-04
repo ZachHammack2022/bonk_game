@@ -92,15 +92,15 @@ function check(cond, what) {
     await host.click("#create");
     await host.waitForSelector("#new-dialog:not(.hidden)");
     const hostName = await host.inputValue("#name");
-    check((await host.inputValue("#new-name")) === `${hostName}'s room` && await host.isChecked("#new-locked"),
-      "a new room is named after you and has a password, to start with");
-    await host.click("#new-create");
+    check((await host.inputValue("#new-name")) === `${hostName}'s room`, "a new room is named after you, to start with");
+    await shot(host, "new-game");
+    await host.click("#new-private");
     await host.waitForSelector("#lobby:not(.hidden)");
     const url = host.url();
     const password = new URL(url).searchParams.get("pw");
-    check(/\/r\/[A-Z]{4}\?pw=[a-z0-9]{6}$/.test(url), "creating a room opens its link, with the password in it");
-    check((await host.textContent("#room-name")) === `${hostName}'s room` && (await host.inputValue("#room-password")) === password,
-      "the lobby shows the room's name and password");
+    check(/\/r\/[A-Z]{4}\?pw=[a-z0-9]{6}$/.test(url), "a private game's link has its password in it");
+    check((await host.inputValue("#room-name-input")) === `${hostName}'s room` && (await host.inputValue("#room-password")) === password &&
+      await host.isVisible('#privacy [data-private="1"].on'), "the lobby shows the room's name, that it's private, and its password");
     const code = new URL(url).pathname.split("/r/")[1];
     await host.waitForFunction(() => bonkDebug.app.lobby && bonkDebug.app.lobby.seats[0].color === 3 && bonkDebug.app.lobby.seats[0].pattern === "stripes");
     check(true, "your ball's colour and pattern come with you into the room");
@@ -361,8 +361,9 @@ function check(cond, what) {
     check(!(await fresh.$("#replay-file")) && !(await fresh.$("#replay-download")), "there are no replay files to watch or download");
     check((await fetch(base + "/api/replay", { method: "POST", body: "{}" })).status === 404, "and no server routes for them");
 
-    // Quick play (#35): straight into a public match against bots. Someone
-    // else sees it listed, joins while it's on and takes over a bot's seat
+    // A public game (#35): made from the game browser, with bots, and
+    // started. Someone else sees it listed, joins while it's on and takes
+    // over a bot's seat
     const q1 = await open("quick1");
     await q1.goto(base + "/");
     await q1.fill("#name", "Quinn");
@@ -370,14 +371,27 @@ function check(cond, what) {
     await q1.waitForSelector("#browse:not(.hidden)");
     check(q1.url().endsWith("/play"), "Find a game opens the game browser at /play");
     await shot(q1, "browse-empty");
-    await q1.click("#quick");
+    check(!(await q1.$("#quick")) && !(await q1.$("#empty-quick")), "there are no play-with-bots buttons: you make a public or private game");
+    await q1.click("#new-game");
+    await q1.click("#new-public");
+    await q1.waitForSelector("#lobby:not(.hidden)");
+    check(/\/r\/[A-Z]{4}$/.test(q1.url()) && await q1.isVisible('#privacy [data-private="0"].on'), "a public game has no password");
+    await q1.selectOption("#mode", "knockouts");
+    await q1.waitForFunction(() => app.lobby.settings.mode === "knockouts");
+    await q1.click("#add-bot");
+    await q1.waitForFunction(() => document.querySelectorAll("#seats .seat").length === 3);
+    check(await q1.isVisible("#map-preview") && await q1.isVisible("#seats .open-seat"), "the lobby shows the map and the open seats");
+    await shot(q1, "lobby-public");
+    await q1.click("#start");
     await q1.waitForSelector("#game:not(.hidden)", { timeout: 8000 });
-    check(true, "Quick match puts you in a match within seconds");
     const q2 = await open("quick2");
     await q2.goto(base + "/");
     await q2.fill("#name", "sh1thead");
     await q2.click("#find");
     await q2.waitForSelector("#games-list .game-row");
+    await q2.check("#hide-locked");
+    await q2.waitForFunction(() => !document.querySelector("#games-list .game-row.locked"));
+    check(true, "Hide private games hides the private ones");
     const listed = await q2.textContent("#games-list");
     check(listed.includes("Knockouts") && listed.includes("Floating Platform") && listed.includes("Playing"),
       "the browser lists the public game: its mode, map and that it's on");
@@ -389,7 +403,7 @@ function check(cond, what) {
     check((await q2.textContent("#games-empty-text")).includes("match these filters"), "a search with no games says so");
     await q2.click("#clear-filters");
     await q2.waitForSelector("#games-list .game-row");
-    await q2.click("#games-list .game-row .g-join button");
+    await q2.click("#games-list .game-row:not(.locked) .g-join button");
     await q2.waitForSelector("#game:not(.hidden)");
     await q2.waitForFunction(() => app.match.slots.some((s) => s.id === me.id), null, { timeout: 5000 });
     check(true, "joining while a match is on takes over a bot's seat");
