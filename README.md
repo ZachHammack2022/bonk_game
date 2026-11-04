@@ -187,7 +187,7 @@ Each map says how many players it's for (below), and the lobby holds to it. Bots
 
 **Classic**: a box with a bouncy floor and ceiling and deadly side walls. "Up" is a thrust, so you can fly. Push someone into a wall to score: the point goes to whoever last hit them (with two players, always the other player), and only the player who died respawns. First to 100 wins.
 
-The other maps float in open space, bonk-style. There are no walls: you die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top. You can't fly on them either: "up" is a jump, and it only works while you're standing on something. If you die you're out until the next round. The last ball standing scores and a new round starts; the first to 5 wins.
+The other maps float in open space, bonk-style. There are no walls: you die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top. You can't fly on them either: "up" is a small hop off whatever you're standing on, and held in the air it hovers, cancelling most of gravity but never all of it, so you float and fall slowly but can't climb (a tap hops ~30 px, a held jump ~120 px). Steering is gentle: it takes about a second to get up to speed, so you commit to a direction. Balls bounce off each other with 85% of the speed they hit at. These numbers were measured from a recording of bonk.io (`arena.OPEN_PUSH`, `arena.OPEN_HOVER`, `OpenMap.jump_speed`, `mechanics.PLAYER_BOUNCE`). Sinking Swing keeps the original big jump, since it's built around jumping into the swing. If you die you're out until the next round. The last ball standing scores and a new round starts; the first to 5 wins.
 
 **Floating Platform**: one platform, nothing else. Knock your opponent off.
 
@@ -221,7 +221,7 @@ Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `ma
     "first_to": 5,
     "round_time": 45,               // seconds before sudden death; 0 = off
     "on_death": "new_round",        // or "respawn" (only the dead player)
-    "jump_speed": 23.5, "max_speed": 28,
+    "jump_speed": 10, "max_speed": 28,
     "players": [2, 10]              // fewest and most players it's for
   },
   "spawn": [260, 420, 200, 328],    // [left, right, top, bottom] players spawn in

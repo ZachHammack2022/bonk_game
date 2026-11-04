@@ -297,7 +297,9 @@ class Match:
         """Constants the client needs to predict its own ball (predict.js)."""
         p = self.env.players[0]
         return {
-            "force": arena.FORCE,
+            "force": p.push,  # sideways and down
+            "fly_force": arena.FORCE,  # up, on maps where you fly
+            "hover": p.hover,  # share of gravity "up" cancels in the air (jump maps)
             "gravity": p.gravity,
             "max_speed": p.v_range,
             "can_fly": p.can_fly,

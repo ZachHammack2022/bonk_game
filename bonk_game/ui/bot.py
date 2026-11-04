@@ -10,7 +10,7 @@ It comes in three difficulty levels (LEVELS).
 import math
 import random
 
-from bonk_game.envs.utils.arena import ACTIONS, FORCE
+from bonk_game.envs.utils.arena import ACTIONS
 
 _LOOKUP = {(int(dx), int(dy), int(h)): a for a, (dx, dy, h) in ACTIONS.items()}
 
@@ -128,7 +128,7 @@ class Bot:
 
         # Don't run off the edge chasing: brake if we couldn't stop in time.
         # Braking is weaker while heavy (force / mass).
-        decel = FORCE / me.m
+        decel = me.push / me.m
         ahead = 2 * getattr(self.env, "time_scale", 1.0)  # two ticks of movement
         stop = me.x + math.copysign(me.x_v ** 2 / (2 * decel), me.x_v) * self.caution + me.x_v * ahead
         braking = False

@@ -48,7 +48,8 @@ def test_pushing_the_opponent_off_the_platform_kills_them():
     place(a, 300, m.TOP - a.r - 1)
     place(b, 360, m.TOP - b.r - 1)
     for _ in range(600):
-        a.move_right(2)
+        # Push until they're over the edge, then brake
+        (a.move_right if b.x < m.RIGHT else a.move_left)(a.push)
         dead = tick(m, [a, b])
         if any(dead):
             break
@@ -129,9 +130,14 @@ def test_every_map_has_a_training_env(name):
     from bonk_game.envs.training_env import BonkEnv
     env = BonkEnv(map_name=name, opponent_path=None)
     obs, _ = env.reset(seed=3)
+    env.action_space.seed(3)
     assert env.observation_space.contains(obs)
-    for _ in range(15000):
-        obs, reward, done, _, _ = env.step(env.action_space.sample())
+    for t in range(15000):
+        # Random actions, each held a while (pushes are gentle on the open
+        # maps: flicking between keys every step goes nowhere)
+        if t % 20 == 0:
+            action = env.action_space.sample()
+        obs, reward, done, _, _ = env.step(action)
         assert env.observation_space.contains(obs)
         if done:
             break
