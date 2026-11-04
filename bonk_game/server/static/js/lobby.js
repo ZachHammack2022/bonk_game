@@ -285,14 +285,19 @@ function colorPicker(current, own) {
   return li;
 }
 
-// The "any colour" swatch: a colour picker. onPick(hex) when a colour is
-// picked.
+// The "any colour" swatch: a colour picker when signed in, a lock for
+// guests. onPick(hex) when a colour is picked.
 function ownColorButton(current, onPick) {
   const wrap = document.createElement("label");
-  wrap.className = "swatch own" + (current ? " on" : "");
-  wrap.title = "Any colour";
+  wrap.className = "swatch own" + (current ? " on" : "") + (profileStore.user ? "" : " locked");
+  wrap.title = profileStore.user ? "Any colour" : "Any colour: sign in to use it";
   if (current) wrap.style.background = current;
-  else wrap.innerHTML = icon("palette");
+  else wrap.innerHTML = icon(profileStore.user ? "palette" : "lock");
+  if (!profileStore.user) {
+    wrap.setAttribute("role", "button");
+    wrap.addEventListener("click", () => toast("Sign in (on the home page) to pick any colour you like."));
+    return wrap;
+  }
   const input = document.createElement("input");
   input.type = "color";
   input.value = current || "#ff8800";
@@ -355,7 +360,8 @@ function renderProfileEditor() {
     label.textContent = looks.LABELS[kind];
     extras.append(label, lookRow(kind, me.look(kind), me.ballHex, me.pattern, pick(kind)));
   }
-  $("profile-unlock").textContent = "";
+  $("profile-unlock").textContent = profileStore.user || !looks.catalog ? ""
+    : "The locked ones are for signed-in players: sign in on the home page to use them.";
   $("profile-preview").innerHTML = "";
   $("profile-preview").appendChild(ballCanvas(72, me.ballHex, me.pattern, me.look("hat")));
 }

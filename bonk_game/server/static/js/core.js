@@ -39,8 +39,8 @@ const PALETTE = [
   ["Red", "#ff6b6b"], ["Blue", "#4dabf7"], ["Yellow", "#ffd43b"], ["Purple", "#b197fc"], ["Orange", "#ff922b"],
   ["Green", "#40c057"], ["Pink", "#faa2c1"], ["Cyan", "#3bc9db"], ["White", "#f1f3f5"], ["Brown", "#9c6644"],
 ];
-// Patterns, as on the server (bonk_game/server/cosmetics.py; everyone can
-// wear every one)
+// Patterns, as on the server (bonk_game/server/cosmetics.py; a few are for
+// signed-in players: see `looks`)
 const PATTERNS = ["plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes", "swirl", "smile",
                   "heart", "checker", "galaxy", "flame", "bolt", "target"];
 const PATTERN_NAMES = { plain: "Plain", stripes: "Stripes", dots: "Dots", ring: "Ring", split: "Split", star: "Star", zigzag: "Zigzag", eyes: "Eyes",
@@ -52,7 +52,7 @@ const looks = {
   KINDS: ["pattern", "trail", "hat", "ko"],
   DEFAULT: { pattern: "plain", trail: "none", hat: "none", ko: "pop" },
   LABELS: { pattern: "Pattern", trail: "Trail", hat: "Hat", ko: "Knockout effect" },
-  catalog: null,   // {kind: [{id, name, how, unlocked, member, have, want}]}
+  catalog: null,   // {kind: [{id, name, how, unlocked, member}]}
   item(kind, id) { return this.catalog ? this.catalog[kind].find((x) => x.id === id) : null; },
   // Can you wear it? (Until the catalogue arrives, what you saved; the
   // server checks anyway)
@@ -63,7 +63,7 @@ const looks = {
   },
   name(kind, id) { const it = this.item(kind, id); return it ? it.name : kind === "pattern" ? PATTERN_NAMES[id] || id : id; },
   // How to unlock it, with how far you've got
-  how(it) { return it.how + (it.want ? ` (${Math.min(it.have, it.want)} of ${it.want} so far)` : ""); },
+  how(it) { return it.how; },
   // A new catalogue (after signing in, or a match): say what's newly unlocked
   set(catalog) {
     const before = this.catalog;
@@ -217,8 +217,8 @@ const me = {
   setLook(kind, v) { profileStore.update((p) => ({ ...p, [kind]: v })); },
   get pattern() { return this.look("pattern"); },
   set pattern(v) { this.setLook("pattern", v); },
-  // A colour of your own ("#rrggbb"), or null for one from the palette
-  get ownColor() { return profileStore.get().own_color || null; },
+  // A colour of your own ("#rrggbb"): signed in only
+  get ownColor() { return profileStore.user ? profileStore.get().own_color || null : null; },
   set ownColor(v) { profileStore.update((p) => ({ ...p, own_color: v })); },
   // Your ball's colour as it looks: your own, your favourite, or the first
   get ballHex() { return this.ownColor || (this.color === null ? PALETTE[0][1] : PALETTE[this.color][1]); },

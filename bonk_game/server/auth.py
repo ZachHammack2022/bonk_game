@@ -248,11 +248,10 @@ async def logout(request):
 def _me(request, user):
     accounts = request.app.get(ACCOUNTS)
     out = {"accounts": accounts is not None, "user": None}
-    profile = None
     if user is not None:
         out["user"] = {"id": user["id"], "name": user["name"], "email": user["email"]}
-        out["profile"] = profile = accounts.profile(user["id"])
-    out["cosmetics"] = cosmetics.catalog(profile)
+        out["profile"] = accounts.profile(user["id"])
+    out["cosmetics"] = cosmetics.catalog(signed_in=user is not None)
     return out
 
 
