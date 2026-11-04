@@ -233,10 +233,33 @@ function route() {
     }
     openRoom(m[1], false);
   } else {
-    if (app.ws) { app.fatal = true; app.ws.close(); }
-    show("home");
+    leaveRoom();
   }
 }
+
+// Leave the room for good (the ← Leave button, or Back in the browser):
+// your seat goes now, rather than being kept for a reconnect
+function leaveRoom(push) {
+  const ws = app.ws;
+  if (ws) {
+    playtest.flush();
+    app.fatal = true;
+    // (Straight onto the socket, not through ?net='s pretend delay: it's
+    // about to close)
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "leave" }));
+    ws.close();
+  }
+  replayer.stop();
+  app.ws = null; app.room = null; app.lobby = null; app.match = null; app.results = null;
+  app.states = []; app.last = null; app.retry = 0;
+  $("results").classList.add("hidden");
+  $("killcam").classList.add("hidden");
+  status("");
+  if (push) history.pushState({}, "", "/");
+  show("home");
+}
+$("leave").addEventListener("click", () => leaveRoom(true));
+$("leave-results").addEventListener("click", () => leaveRoom(true));
 
 // ---------------------------------------------------------------------------
 // Connection

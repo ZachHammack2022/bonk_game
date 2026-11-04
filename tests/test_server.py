@@ -186,6 +186,24 @@ def test_members_who_stay_away_leave_the_room():
     run(go())
 
 
+def test_leaving_on_purpose_gives_up_your_place_straight_away():
+    async def go():
+        room = Room("ABCD")
+        a, b = Inbox(), Inbox()
+        await room.join("a", "Ann", a)
+        await room.join("b", "Bob", b)
+        await room.start()
+        await room.handle("a", {"type": "leave"})
+        assert list(room.members) == ["b"] and room.host == "b"
+        assert 0 in room.match.stand_ins  # a bot finishes Ann's match
+        assert [m["name"] for m in b.last("lobby")["members"]] == ["Bob"]
+        await room.disconnect("a", a)  # (then the socket closes: nothing more happens)
+        await room.handle("b", {"type": "leave"})
+        assert room.members == {} and room.expired(now=room.empty_since + 10**6)
+        await room.stop()
+    run(go())
+
+
 def test_room_codes_are_unique():
     rooms = RoomManager()
     codes = {rooms.create().code for _ in range(200)}
@@ -240,7 +258,8 @@ def test_full_match_over_websockets(monkeypatch):
                 if msg["type"] == "results":
                     break
             assert "match" in kinds and "state" in kinds
-            assert msg["type"] == "results" and max(msg["scores"]) == 1
+            # (at least: two knockouts in the same tick both count)
+            assert msg["type"] == "results" and max(msg["scores"]) >= 1
             assert len(msg["slots"]) == 4
             await ws.close()
 

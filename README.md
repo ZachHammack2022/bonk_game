@@ -10,7 +10,7 @@ pip install -r requirements-server.txt
 python -m bonk_game.server            # http://localhost:8000 (--port to change)
 ```
 
-Open the page, pick a name and **Create a room**. You get a 4-letter room code; **Copy invite link** and send it to friends. Whoever made the room is the host (marked ★): they pick the mode, the map and the settings, and add bots (Easy, Medium or Hard) to fill seats, up to 10 players. Then **Start match**.
+Open the page, pick a name and **Create a room**. You get a 4-letter room code; **Copy invite link** and send it to friends. Whoever made the room is the host (marked ★): they pick the mode, the map and the settings, and add bots (Easy, Medium or Hard) to fill seats, up to 10 players. Then **Start match**. If the map needs more players than are in the room (Grand Stage and Double Decker need 4), the button says how many more, and the lobby offers to add the bots it would take. **← Leave** (or Back in the browser) goes back to the start page; your place goes straight away, rather than being kept for a reconnect.
 
 | Mode | How it works |
 |---|---|

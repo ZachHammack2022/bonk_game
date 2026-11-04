@@ -8,7 +8,8 @@ People who join during a match watch it and play in the next one.
 Each browser has a token (kept in its localStorage), so a refresh or a
 dropped connection puts you back in your seat. While you're gone a
 Medium bot plays for you; if you don't come back within LEAVE_GRACE
-seconds you leave the room.
+seconds you leave the room. The Leave button (or Back in the browser)
+leaves straight away.
 
 Nothing here touches sockets directly: each member has an async `send`
 function that takes a message dict.
@@ -286,6 +287,9 @@ class Room:
         if kind == "emote":
             await self.emote(token, msg.get("id"))
             return
+        if kind == "leave":
+            await self.leave(token)
+            return
         if kind == "vote":
             if self.match is None and self.results is not None:
                 self.votes.symmetric_difference_update({token})
@@ -360,6 +364,24 @@ class Room:
         del self.members[token]
         self.votes.discard(token)
         await self.broadcast_lobby()
+
+    async def leave(self, token):
+        """Someone left on purpose (the Leave button): their place goes now,
+        not after LEAVE_GRACE. Like a dropped connection otherwise: a bot
+        finishes their match, and the host role moves on."""
+        m = self.members.pop(token, None)
+        if m is None:
+            return
+        if self.match is not None and token in self.match_tokens:
+            self.match.stand_in(self.match_tokens.index(token))
+        self.votes.discard(token)
+        if self.host == token:
+            live = self.connected
+            self.host = live[0].token if live else next(iter(self.members), None)
+        if not self.connected:
+            self.empty_since = time.monotonic()
+        await self.broadcast_lobby()
+        await self._maybe_rematch()
 
     async def _maybe_rematch(self):
         """On the results screen, start again once everyone here has voted."""
