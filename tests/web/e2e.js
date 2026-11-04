@@ -452,6 +452,7 @@ function check(cond, what) {
     check(await q2.evaluate(() => document.querySelectorAll("#filter-map option").length === Object.keys(NAMES.maps).length + 1 &&
       document.querySelectorAll("#filter-mode option").length === Object.keys(NAMES.modes).length + 1),
     "the map and mode filters offer every map and mode, played right now or not");
+    check(!(await q2.$(".browse-bar .seg")), "there's no All / Open seats / In lobby switch");
     await q2.fill("#browse-search", "nothing like this");
     await q2.waitForSelector("#games-empty:not(.hidden)");
     check((await q2.textContent("#games-empty-text")).includes("match these filters"), "a search with no games says so");

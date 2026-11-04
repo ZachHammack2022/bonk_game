@@ -18,7 +18,6 @@ const GAMES_PAGE = 20;      // rows shown before "Show more"
 let publicTimer = null;
 const browse = {
   data: null,             // the last /api/public answer
-  show: "all",            // all | open | lobby
   mode: "", map: "", search: "",
   hideLocked: false,      // Hide private games
   sort: "players", desc: true,
@@ -65,7 +64,6 @@ function openBrowse(push) {
 function filteredGames() {
   const q = browse.search.trim().toLowerCase();
   const rows = browse.data.rooms.filter((r) =>
-    (browse.show !== "open" || r.open) && (browse.show !== "lobby" || !r.playing) &&
     (!browse.hideLocked || !r.locked) &&
     (!browse.mode || r.mode_id === browse.mode) && (!browse.map || r.map_id === browse.map) &&
     (!q || [r.room, r.name || "", r.host || "", r.map, r.mode, ...(r.names || [])].some((t) => t.toLowerCase().includes(q))));
@@ -106,7 +104,7 @@ function renderBrowse() {
   const list = $("games-list");
   list.innerHTML = "";
   for (const r of rows.slice(0, browse.shown)) list.appendChild(gameRow(r));
-  const filtering = browse.show !== "all" || browse.mode || browse.map || browse.search.trim() || browse.hideLocked;
+  const filtering = browse.mode || browse.map || browse.search.trim() || browse.hideLocked;
   $("games-empty").classList.toggle("hidden", rows.length > 0);
   $("games-empty-text").textContent = rooms.length
     ? "No games match these filters."
@@ -192,17 +190,6 @@ function gameRow(r) {
   return row;
 }
 
-for (const b of document.querySelectorAll(".browse-bar .seg button")) {
-  b.addEventListener("click", () => {
-    browse.show = b.dataset.show;
-    browse.shown = GAMES_PAGE;
-    for (const o of document.querySelectorAll(".browse-bar .seg button")) {
-      o.classList.toggle("on", o === b);
-      o.setAttribute("aria-checked", String(o === b));
-    }
-    renderBrowse();
-  });
-}
 for (const b of document.querySelectorAll(".games-head [data-sort]")) {
   b.addEventListener("click", () => {
     if (browse.sort === b.dataset.sort) browse.desc = !browse.desc;
@@ -216,10 +203,10 @@ $("filter-map").addEventListener("change", () => { browse.map = $("filter-map").
 $("browse-search").addEventListener("input", () => { browse.search = $("browse-search").value; browse.shown = GAMES_PAGE; renderBrowse(); });
 $("games-more").addEventListener("click", () => { browse.shown += GAMES_PAGE; renderBrowse(); });
 $("clear-filters").addEventListener("click", () => {
-  Object.assign(browse, { show: "all", mode: "", map: "", search: "", shown: GAMES_PAGE, hideLocked: false });
-  $("browse-search").value = "";
+  Object.assign(browse, { mode: "", map: "", search: "", shown: GAMES_PAGE, hideLocked: false });
+  for (const id of ["browse-search", "filter-mode", "filter-map"]) $(id).value = "";
   $("hide-locked").checked = false;
-  document.querySelector('.browse-bar .seg [data-show="all"]').click();
+  renderBrowse();
 });
 function joinListed(r) {
   if (r.locked) askPassword(r.room, false);  // (core.js)
