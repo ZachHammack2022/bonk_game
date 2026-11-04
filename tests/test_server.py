@@ -130,7 +130,7 @@ def test_room_host_settings_and_permissions():
                                 "bots": ["bot:easy", "bot:hard"]})
         assert room.settings == {"map": "swing", "first_to": 3, "bots": ["bot:easy", "bot:hard"],
                                  "mode": "ffa", "round_time": None, "gravity": "normal",
-                                 "power_ups": False}
+                                 "power_ups": False, "public": False}
         await room.handle("a", {"type": "settings", "bots": ["nope"]})
         assert "Unknown bot" in a.last("error")["message"]
         await room.handle("a", {"type": "settings", "bots": ["bot:easy"] * 20})
@@ -168,7 +168,7 @@ def test_disconnect_reconnect_and_host_handover(monkeypatch):
         a2 = Inbox()
         await room.join("a", "", a2)  # same token: back in the same seat
         assert 0 not in room.match.stand_ins
-        assert a2.last("match")["slots"][0]["id"] == "a"
+        assert a2.last("match")["slots"][0]["id"] == room.members["a"].pid == a2.last("welcome")["you"]
         await room.stop()
     run(go())
 
@@ -421,11 +421,14 @@ def test_host_can_remove_someone_for_good():
         a, b = Inbox(), Inbox()
         await room.join("a", "Ann", a)
         await room.join("b", "Bob", b)
-        await room.handle("b", {"type": "kick", "id": "a"})   # not the host
+        pa, pb = room.members["a"].pid, room.members["b"].pid
+        await room.handle("b", {"type": "kick", "id": pa})   # not the host
         assert "a" in room.members
-        await room.handle("a", {"type": "kick", "id": "a"})   # can't remove yourself
+        await room.handle("a", {"type": "kick", "id": pa})   # can't remove yourself
         assert "a" in room.members
-        await room.handle("a", {"type": "kick", "id": "b"})
+        await room.handle("a", {"type": "kick", "id": "b"})  # (a token, not an id: nothing)
+        assert "b" in room.members
+        await room.handle("a", {"type": "kick", "id": pb})
         assert "b" not in room.members
         assert b.last("error")["fatal"]
         with pytest.raises(room_mod.RoomFull, match="removed"):
@@ -439,7 +442,7 @@ def test_kicking_a_player_mid_match_hands_their_ball_to_a_bot():
         await room.join("a", "Ann", Inbox())
         await room.join("b", "Bob", Inbox())
         await room.start()
-        await room.handle("a", {"type": "kick", "id": "b"})
+        await room.handle("a", {"type": "kick", "id": room.members["b"].pid})
         assert 1 in room.match.stand_ins
         await room.stop()
     run(go())
@@ -459,7 +462,7 @@ def test_rematch_starts_when_everyone_votes(monkeypatch):
         await room.task
         assert room.results is not None and room.match is None
         await room.handle("b", {"type": "vote"})
-        assert a.last("lobby")["votes"] == ["b"] and room.match is None
+        assert a.last("lobby")["votes"] == [room.members["b"].pid] and room.match is None
         await room.handle("b", {"type": "vote"})   # changed their mind
         assert room.votes == set()
         await room.handle("b", {"type": "vote"})

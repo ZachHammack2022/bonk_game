@@ -6,7 +6,9 @@ host presses Start plays (up to 10); bots fill the slots the host added.
 People who join during a match watch it and play in the next one.
 
 Each browser has a token (kept in its localStorage), so a refresh or a
-dropped connection puts you back in your seat. While you're gone a
+dropped connection puts you back in your seat. The token is a secret: the
+others see you by a public id (Member.pid) instead, so nobody can take
+your seat (or the host's) by copying it. While you're gone a
 Medium bot plays for you; if you don't come back within LEAVE_GRACE
 seconds you leave the room. The Leave button (or Back in the browser)
 leaves straight away.
@@ -14,21 +16,32 @@ leaves straight away.
 Nothing here touches sockets directly: each member has an async `send`
 function that takes a message dict.
 
-The lobby's rules (settings, seats, teams, colours) are in lobby.py, and
-what happens to playtest reports in playtest.py.
+Public rooms (#35): the host can list the room on the home page
+(settings "public"). Quick play (RoomManager.quick_play) sends you to the
+public room with the most people and space for you, or makes one with
+bots that starts by itself ("quick"). Someone who joins during a match
+takes over a bot's seat: straight away in modes where balls respawn, at
+the next round in the others. With no bot to take over, they watch and
+play in the next match.
+
+The lobby's rules (settings, seats, teams, colours) are in lobby.py, what
+happens to playtest reports in playtest.py, and the name filter and
+player reports in moderation.py.
 """
 import asyncio
+import collections
 import json
 import logging
 import random
+import secrets
 import time
 import traceback
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import cosmetics, delta, limits, lobby, metrics, modes, playtest, profiles, replay
-from bonk_game.server.lobby import (GRAVITY, HEX_COLOR, PATTERNS, ROUND_TIMES, bot_label,
-                                    clean_name, map_order)
+from bonk_game.server import (cosmetics, delta, limits, lobby, metrics, moderation, modes, playtest,
+                              profiles, replay)
+from bonk_game.server.lobby import GRAVITY, HEX_COLOR, PATTERNS, ROUND_TIMES, bot_label, map_order
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
@@ -39,6 +52,9 @@ REOPEN_GRACE = 30.0      # after a restart, seconds the old host has to claim th
 EMPTY_ROOM_TTL = 600.0   # seconds an empty room is kept around
 EMOTES = 4               # emote ids 0-3 (the client picks the pictures)
 EMOTE_GAP = 0.8          # seconds between one person's emotes
+AUTO_START = 2.0         # quick-play rooms: seconds from someone joining to the match starting
+AUTO_NEXT = 10.0         # and from the results to the next match
+PUBLIC_LISTED = 50       # public rooms shown on the home page
 
 
 class RoomFull(Exception):
@@ -67,6 +83,15 @@ class Member:
         self.errors_sent = 0     # client errors logged for them
         self.account = None      # their account id, when signed in (accounts.py)
         self.own_color = None    # a colour of their own ("#rrggbb"): signed in only
+        self.pid = secrets.token_hex(4)  # how the others see them (the token is a secret)
+        self.names = collections.deque([name], maxlen=5)  # names they've used here, for reports
+        self.report_times = collections.deque(maxlen=moderation.REPORTS_PER_MINUTE)
+        self.reported = set()    # pids they've reported
+
+    def rename(self, name):
+        self.name = name
+        if name not in self.names:
+            self.names.append(name)
 
     def look(self):
         """What their ball wears, for the lobby and the match."""
@@ -97,6 +122,11 @@ class Room:
         self.votes = set()         # tokens that want a rematch (on the results screen)
         self.closing = False       # the server is restarting: no new matches
         self.reopened_at = None    # made again after a server restart (see web.py)
+        self.quick = False         # made by Quick play: matches start by themselves
+        self.auto_task = None      # (the next one, when it's due)
+        self.waiting = []          # tokens waiting to take over a bot's seat in this match
+        self.match_accounts = []   # slot -> account of whoever plays it (for match history)
+        self.recent = collections.deque(maxlen=moderation.RECENT_KEPT)  # for reports
         self.created = time.monotonic()
         self.empty_since = time.monotonic()
 
@@ -104,6 +134,28 @@ class Room:
     @property
     def connected(self):
         return [m for m in self.members.values() if m.connected]
+
+    def token_of(self, pid):
+        """The member with this public id's token, or None."""
+        return next((t for t, m in self.members.items() if m.pid == pid), None)
+
+    def pid(self, token):
+        m = self.members.get(token)
+        return m.pid if m is not None else None
+
+    def note(self, event, **info):
+        """Remember what happened, for reports (moderation.py)."""
+        self.recent.append({"t": round(time.monotonic() - self.created), "e": event, **info})
+
+    def _name(self, token, name):
+        """A name to use, and a word with them (and the log) if it was
+        replaced by the filter. Returns (name, notice or None)."""
+        clean, replaced = moderation.clean_name(name)
+        if not replaced:
+            return clean, None
+        metrics.event("name_filtered", logging.WARNING, room=self.code, name=str(name)[:40])
+        self.note("name_filtered", name=str(name)[:40], now=clean)
+        return clean, f"That name isn't allowed here, so you're {clean}."
 
     async def join(self, token, name, send, was_host=False, account=None):
         """Add (or reconnect) a member. Returns the Member. was_host: they
@@ -113,16 +165,20 @@ class Room:
         if token in self.banned or (account is not None and account in self.banned):
             raise RoomFull("The host removed you from this room.")
         m = self.members.get(token)
+        notice = None
         if m is None:
             if len(self.members) >= limits.MAX_MEMBERS:
                 raise RoomFull("This room is full.")
-            m = Member(token, clean_name(name), send)
+            clean, notice = self._name(token, name)
+            m = Member(token, clean, send)
             self.members[token] = m
         else:
             m.send, m.connected, m.left_at = send, True, None
             if name:
-                m.name = clean_name(name)
+                clean, notice = self._name(token, name)
+                m.rename(clean)
         m.account = account
+        self.note("join", who=m.name, account=account)
         if self.host is None or self.host not in self.members:
             self.host = token
         if (was_host and self.reopened_at is not None
@@ -131,6 +187,8 @@ class Room:
             self.reopened_at = None  # only once
         self.empty_since = None
         await m.send(self.welcome(token))
+        if notice:
+            await m.send({"type": "notice", "message": notice})
         if self.match is not None and token in self.match_tokens:
             self.match.release(self.match_tokens.index(token))
         if self.match is not None:
@@ -142,6 +200,10 @@ class Room:
         elif self.results is not None:
             await m.send(self.results)
         await self.broadcast_lobby()
+        if self.match is not None and token not in self.match_tokens:
+            await self.wait_for_seat(token)
+        elif self.match is None and self.results is None:
+            self.auto_start(AUTO_START)
         return m
 
     async def disconnect(self, token, send=None):
@@ -159,6 +221,8 @@ class Room:
         if not self.connected:
             self.empty_since = time.monotonic()
         self.votes.discard(token)
+        if token in self.waiting:
+            self.waiting.remove(token)
         await self.broadcast_lobby()
         await self._maybe_rematch()
 
@@ -197,7 +261,7 @@ class Room:
         return {
             "type": "welcome",
             "room": self.code,
-            "you": token,
+            "you": self.members[token].pid,
             "max_players": arena.MAX_PLAYERS,
             "colors": ["#%02x%02x%02x" % c for c in theme.PLAYER_COLORS],
             "color_names": list(theme.PLAYER_NAMES),
@@ -221,15 +285,16 @@ class Room:
         return {
             "type": "lobby",
             "room": self.code,
-            "host": self.host,
-            "members": [{"id": m.token, "name": m.name, "connected": m.connected}
+            "host": self.pid(self.host),
+            "members": [{"id": m.pid, "name": m.name, "connected": m.connected}
                         for m in self.members.values()],
             "settings": self.settings,
             "bot_options": self.bot_options(),
             "phase": "match" if self.match is not None else "results" if self.results else "lobby",
-            "playing": list(self.match_tokens) if self.match is not None else [],
+            "playing": [self.pid(t) for t in self.match_tokens] if self.match is not None else [],
             "seats": self.lineup(),
-            "votes": sorted(self.votes),
+            "votes": sorted(self.pid(t) for t in self.votes if t in self.members),
+            "quick": self.quick,  # matches start by themselves
         }
 
     async def broadcast(self, msg):
@@ -282,8 +347,18 @@ class Room:
             self.playtest_report(token, kind, msg)
             return
         if kind == "name":
-            self.members[token].name = clean_name(msg.get("name"))
+            m = self.members[token]
+            old = m.name
+            clean, notice = self._name(token, msg.get("name"))
+            m.rename(clean)
+            if notice:
+                await m.send({"type": "notice", "message": notice})
+            if clean != old:
+                self.note("name", was=old, now=clean)
             await self.broadcast_lobby()
+            return
+        if kind == "report_player":
+            await self.report_player(token, msg)
             return
         if kind == "color":
             problem = self.pick_color(token, msg.get("color"))
@@ -342,7 +417,31 @@ class Room:
                 self.votes.clear()
                 await self.broadcast_lobby()
         elif kind == "kick":
-            await self.kick(str(msg.get("id")))
+            target = self.token_of(msg.get("id"))
+            if target is not None:
+                await self.kick(target)
+
+    async def report_player(self, token, msg):
+        """Someone reports a player (moderation.py): {"id": their public id,
+        "reason": one of moderation.REASONS, "note": optional words}."""
+        m = self.members[token]
+        target = self.token_of(msg.get("id"))
+        if target is None or target == token:
+            await self.error(token, "That player isn't in the room any more.")
+            return
+        other = self.members[target]
+        if other.pid in m.reported:
+            await m.send({"type": "notice", "message": f"You've already reported {other.name}."})
+            return
+        now = time.monotonic()
+        if len(m.report_times) == m.report_times.maxlen and now - m.report_times[0] < 60:
+            await self.error(token, "You've sent a lot of reports. Try again in a minute.")
+            return
+        m.report_times.append(now)
+        m.reported.add(other.pid)
+        moderation.REPORTS.add(moderation.make_report(self.code, m, other, msg.get("reason"),
+                                                      msg.get("note"), self.recent))
+        await m.send({"type": "notice", "message": f"Thanks. Your report about {other.name} was sent."})
 
     def playtest_report(self, token, kind, msg):
         """A browser says what it saw during a match, or that it hit an error."""
@@ -402,6 +501,7 @@ class Room:
         if now - m.last_emote < EMOTE_GAP:
             return
         m.last_emote = now
+        self.note("emote", who=m.name, id=emote)
         await self.broadcast({"type": "emote", "slot": self.match_tokens.index(token), "id": emote})
 
     async def kick(self, token):
@@ -412,6 +512,8 @@ class Room:
         self.banned.add(token)
         if m.account is not None:
             self.banned.add(m.account)  # (signed in: on any browser)
+        self.note("kick", who=m.name, by=self.members[self.host].name if self.host in self.members else None)
+        metrics.event("kick", room=self.code, name=m.name, account=m.account)
         if m.connected:
             await m.send({"type": "error", "message": "The host removed you from this room.",
                           "fatal": True})
@@ -419,6 +521,8 @@ class Room:
             self.match.stand_in(self.match_tokens.index(token))
         del self.members[token]
         self.votes.discard(token)
+        if token in self.waiting:
+            self.waiting.remove(token)
         await self.broadcast_lobby()
 
     async def leave(self, token):
@@ -428,9 +532,12 @@ class Room:
         m = self.members.pop(token, None)
         if m is None:
             return
+        self.note("leave", who=m.name)
         if self.match is not None and token in self.match_tokens:
             self.match.stand_in(self.match_tokens.index(token))
         self.votes.discard(token)
+        if token in self.waiting:
+            self.waiting.remove(token)
         if self.host == token:
             live = self.connected
             self.host = live[0].token if live else next(iter(self.members), None)
@@ -482,7 +589,7 @@ class Room:
         teams = self.teams_for(humans, len(bots))
         colors = self.colors_for(humans, len(bots), teams)
         own = lobby.own_colors(colors, [self.members[t].own_color for t in humans] + [None] * len(bots), teams)
-        slots = [{"kind": "human", "name": self.members[t].name, "id": t, "color": c,
+        slots = [{"kind": "human", "name": self.members[t].name, "id": self.members[t].pid, "color": c,
                   **self.members[t].look(), "own_color": own[k]}
                  for k, (t, c) in enumerate(zip(humans, colors))]
         # Bots are named by colour ("Green bot"), which is easier to follow than
@@ -506,6 +613,10 @@ class Room:
                            round_time=s["round_time"] if mode.uses_round_time else None,
                            gravity=GRAVITY[s["gravity"]], power_ups=s["power_ups"])
         self.match_tokens = humans + [None] * len(bots)
+        # Who's signed in, as the match starts (a stand-in bot plays for
+        # anyone who drops out; the match still counts for them)
+        self.match_accounts = [self.members[t].account for t in humans] + [None] * len(bots)
+        self.waiting = [m.token for m in self.connected if m.token not in humans]
         self.results = None
         self.votes.clear()
         await self.broadcast(self.match.describe())
@@ -525,12 +636,11 @@ class Room:
         began_at = time.time()
         next_t = began
         why = "finished"
-        # Who's signed in, as the match starts (a stand-in bot plays for
-        # anyone who drops out; the match still counts for them)
-        match_accounts = [self.members[t].account if t in self.members else None
-                          for t in self.match_tokens]
+        match_accounts = self.match_accounts  # (people who drop in are added to it)
         try:
             while not match.finished:
+                if self.waiting:
+                    await self.drop_in()
                 t0 = time.perf_counter()
                 events = match.tick()
                 state = match.snapshot()
@@ -572,11 +682,68 @@ class Room:
             metrics.event("match_ended", room=self.code, why=why, ticks=match.env.steps,
                           seconds=round(loop.time() - began, 1),
                           scores=match.mode.scores())
+        self.waiting = []
         if self.results is not None:
             await self.broadcast(self.results)
         else:
             await self.broadcast({"type": "error", "message": "Something went wrong in that match. Sorry!"})
         await self.broadcast_lobby()
+        if why == "finished":
+            self.auto_start(AUTO_NEXT)
+
+    # --- joining a match that's on, and quick-play rooms ---------------------
+    async def wait_for_seat(self, token):
+        """Someone joined during the match: they take over a bot's seat as
+        soon as they can (drop_in), or watch and play in the next match."""
+        if token not in self.waiting:
+            self.waiting.append(token)
+        free = self._bot_seats()
+        m = self.members[token]
+        if not free:
+            await m.send({"type": "notice", "message": "A match is on. You'll play in the next one."})
+        elif not self.match.can_drop_in():
+            name = self.match.slots[free[0]]["name"]
+            await m.send({"type": "notice", "message": f"You'll take over from {name} at the next round."})
+        await self.drop_in()
+
+    def _bot_seats(self):
+        """Seats in this match played by bots (the last one first)."""
+        return [k for k in reversed(range(len(self.match_tokens))) if self.match_tokens[k] is None]
+
+    async def drop_in(self):
+        """People waiting take over bots' seats, if the match allows it now."""
+        match = self.match
+        if match is None or not match.can_drop_in():
+            return
+        free = self._bot_seats()
+        while self.waiting and free:
+            token = self.waiting.pop(0)
+            m = self.members.get(token)
+            if m is None or not m.connected:
+                continue
+            k = free.pop(0)
+            was = match.slots[k]["name"]
+            match.take_seat(k, {"name": m.name, "id": m.pid, **m.look()})
+            self.match_tokens[k] = token
+            self.match_accounts[k] = m.account
+            self.note("drop_in", who=m.name, seat=was)
+            await self.broadcast({"type": "seat", "slot": k, "info": match.describe_slot(k)})
+            await m.send({"type": "notice", "message": f"You're in! You took over from {was}."})
+            await self.broadcast_lobby()
+        if not free:
+            self.waiting = []  # (the rest play in the next match)
+
+    def auto_start(self, delay):
+        """Quick-play rooms start their next match by themselves."""
+        if not self.quick or self.closing or (self.auto_task is not None and not self.auto_task.done()):
+            return
+
+        async def go():
+            await asyncio.sleep(delay)
+            self.auto_task = None
+            if self.match is None and self.connected and not self.closing:
+                await self.start()
+        self.auto_task = asyncio.ensure_future(go())
 
     def _record(self, accounts):
         """Add the match to each signed-in player's history."""
@@ -592,8 +759,24 @@ class Room:
                 metrics.event("error", logging.ERROR, room=self.code, where="record", error=repr(e))
 
     async def stop(self):
+        if self.auto_task is not None:
+            self.auto_task.cancel()
         if self.task is not None:
             self.task.cancel()
+
+    def listing(self):
+        """How the room shows in the home page's list of public rooms."""
+        humans, bots = self.seats()
+        info = MAPS[self.settings["map"]]
+        host = self.members.get(self.host)
+        return {"room": self.code, "map": info.title, "mode": modes.MODES[self.settings["mode"]].title,
+                "people": len(self.connected), "bots": len(bots), "most": info.players[1],
+                "playing": self.match is not None, "host": host.name if host else None}
+
+    def has_space(self):
+        """Is there room to play here (now or in the next match)?"""
+        most = MAPS[self.settings["map"]].players[1]
+        return len(self.connected) < most and len(self.members) < limits.MAX_MEMBERS
 
 
 def valid_code(code):
@@ -655,6 +838,34 @@ class RoomManager:
 
     def get(self, code):
         return self.rooms.get((code or "").upper())
+
+    def public(self):
+        """Public rooms with people in them, the fullest first."""
+        rooms = [r for r in self.rooms.values()
+                 if r.settings.get("public") and r.connected and not r.closing]
+        rooms.sort(key=lambda r: (-len(r.connected), r.created))
+        return [r.listing() for r in rooms[:PUBLIC_LISTED]]
+
+    def quick_play(self, allow_new=lambda: True):
+        """Quick play: the public room with the most people that still has
+        space, or a new one with bots that starts by itself. Returns
+        (room, whether it's new), or (None, False) if a room is needed and
+        allow_new() says no (the per-IP limit). ServerFull if the server
+        can't make one."""
+        best = None
+        for r in self.rooms.values():
+            if r.settings.get("public") and not r.closing and r.has_space() and (r.connected or r.quick):
+                key = (len(r.connected), r.quick)
+                if best is None or key > best[0]:
+                    best = (key, r)
+        if best is not None:
+            return best[1], False
+        if not allow_new():
+            return None, False
+        room = self.create()
+        room.settings = lobby.quick_settings()
+        room.quick = True
+        return room, True
 
     async def sweep(self):
         """Drop departed members and expired rooms. Run every few seconds."""

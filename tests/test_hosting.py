@@ -111,7 +111,7 @@ def test_coming_back_after_a_restart_reopens_the_room():
         welcome = await ws.receive_json()
         assert welcome["type"] == "welcome" and welcome["room"] == "ABCD"
         lobby = await ws.receive_json()
-        assert lobby["host"] == "tok-a"
+        assert lobby["host"] == welcome["you"]
         bad = await client.ws_connect("/ws/AB1D")  # not a code we'd make
         await bad.send_json(hello(reopen=True))
         assert (await bad.receive_json())["fatal"]
@@ -122,16 +122,16 @@ def test_the_old_host_gets_the_room_back_even_if_someone_beats_them_to_it():
     async def go(client):
         guest = await client.ws_connect("/ws/ABCD")
         await guest.send_json(hello(token="bob", reopen=True))
-        await guest.receive_json()
-        assert (await guest.receive_json())["host"] == "bob"
+        bob = (await guest.receive_json())["you"]
+        assert (await guest.receive_json())["host"] == bob
         host = await client.ws_connect("/ws/ABCD")
         await host.send_json(hello(token="ann", reopen=True, host=True))
-        await host.receive_json()
-        assert (await host.receive_json())["host"] == "ann"
+        ann = (await host.receive_json())["you"]
+        assert (await host.receive_json())["host"] == ann
         other = await client.ws_connect("/ws/ABCD")  # only once
         await other.send_json(hello(token="cat", reopen=True, host=True))
         await other.receive_json()
-        assert (await other.receive_json())["host"] == "ann"
+        assert (await other.receive_json())["host"] == ann
     run(with_client(go))
 
 

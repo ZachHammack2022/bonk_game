@@ -46,7 +46,8 @@
   <h2>4. Game and technical information</h2>
   <ul>
     <li><b>Playtest reports:</b> after a match your browser sends a short report: ping, frame rate, how smooth the game was, your device type (for example "phone, Chrome") and, if you answer, how the match felt. It includes your player name but not your email or IP address. The server keeps the latest 500 reports in memory; they're cleared when the server restarts. JavaScript errors are reported the same way.</li>
-    <li><b>Logs:</b> the server logs events such as rooms opening and matches ending, with room codes and account IDs, but not names or email addresses.</li>
+    <li><b>Reports:</b> if someone reports a player, the server keeps the report: both players' names (and account IDs if signed in), the reason and note, and what happened in that room in the last few minutes (who joined or left, name changes, emotes, removals). The latest 500 are kept in memory and in the logs, for whoever runs the server to review.</li>
+    <li><b>Logs:</b> the server logs events such as rooms opening and matches ending, with room codes and account IDs, but not email addresses. Player names are logged only for moderation: reports, someone removed from a room, and names the filter replaced.</li>
     <li><b>IP addresses</b> are used while you're connected, to limit abuse (for example, how many rooms one network can make). They aren't stored.</li>
   </ul>
 

@@ -148,11 +148,12 @@ def test_players_get_their_own_speeds_and_late_arrivals_a_full_state():
         room = Room("ABCD")
         a = Inbox()
         await room.join("a", "Ann", a)
-        room.settings.update(map="classic", bots=["bot:medium"])
+        await room.join("b", "Bob", Inbox())
+        room.settings.update(map="classic", bots=[])
         await room.start()
         await asyncio.sleep(0.3)
         late = Inbox()
-        await room.join("w", "Wes", late)  # watches this match
+        await room.join("w", "Wes", late)  # watches this match (no bot to take over)
         await asyncio.sleep(0.3)
         await room.stop()
         mine = [m for m in a.msgs if m["type"] in ("state", "d")]

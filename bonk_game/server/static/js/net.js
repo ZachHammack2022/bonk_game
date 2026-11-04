@@ -24,7 +24,7 @@ const debug = (window.bonkDebug = { app, net, own, drawn: null, get fx() { retur
 function predictFrom(entry, now) {
   const [arrived, S] = entry;
   const M = app.match;
-  const i = M.slots.findIndex((s) => s.id === me.token);
+  const i = M.slots.findIndex((s) => s.id === me.id);
   const tick = M.physics.tick_ms;
   const rtt = net.rtt ?? 0;
   // Steps from that state until the server uses the keys you're pressing
@@ -56,7 +56,7 @@ function effectPhysics(M, S, i) {
 function ownPosition(now, dt) {
   const M = app.match;
   if (!PREDICT || !M || !app.states.length || typeof BonkPredict === "undefined" || replayer.active) return null;
-  const i = M.slots.findIndex((s) => s.id === me.token);
+  const i = M.slots.findIndex((s) => s.id === me.id);
   const entry = app.states[app.states.length - 1];
   const S = entry[1];
   // (Held after a respawn: you're not moving, so there's nothing to predict)

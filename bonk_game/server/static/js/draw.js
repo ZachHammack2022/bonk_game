@@ -423,7 +423,7 @@ function blendShape(a, b, t) {
 function drawTeamScores(st) {
   const M = app.match;
   const chipW = 190, gap = 10, x0 = W / 2 - chipW - gap / 2;
-  const mine = M.slots.find((x) => x.id === me.token);
+  const mine = M.slots.find((x) => x.id === me.id);
   [0, 1].forEach((t) => {
     const x = x0 + t * (chipW + gap);
     pill(x, 8, chipW, 30, 0.78, mine && mine.team === t ? T.accent : M.team_colors[t]);
@@ -455,10 +455,10 @@ function drawHud(st, now) {
     const slot = M.slots[i];
     const out = !p[3];
     const x = x0 + i * (chipW + 4);
-    pill(x, 8, chipW, 30, out ? 0.45 : 0.78, slot.id === me.token ? T.accent : null);
+    pill(x, 8, chipW, 30, out ? 0.45 : 0.78, slot.id === me.id ? T.accent : null);
     circle(x + 15, 23, 8, out ? darken(slot.color, 0.55) : slot.color);
     if (n <= 4) {
-      const name = slot.id === me.token ? "You" : slot.name;
+      const name = slot.id === me.id ? "You" : slot.name;
       ctx.save();
       ctx.beginPath(); ctx.rect(x + 27, 8, chipW - 58, 30); ctx.clip();
       text(name, 12, out ? T.faint : T.text, x + 28, 23, { align: "left", shadow: false });
@@ -529,7 +529,7 @@ function drawHold(x, y, R, left, slot) {
   ctx.beginPath();
   ctx.arc(x, y, R + 5, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * clamp(left / total, 0, 1));
   ctx.strokeStyle = slot.color; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.stroke(); ctx.lineCap = "butt";
-  if (slot.id === me.token) text(String(Math.ceil(left)), 14, T.text, x, y + 1, { weight: 800 });
+  if (slot.id === me.id) text(String(Math.ceil(left)), 14, T.text, x, y + 1, { weight: 800 });
 }
 
 let lastFrame = performance.now();
@@ -576,7 +576,7 @@ function frame(now) {
 
   const R = app.match.radius;
   const showNames = st.players.length > 2;
-  const mine = app.match.slots.findIndex((s) => s.id === me.token);
+  const mine = app.match.slots.findIndex((s) => s.id === me.id);
   const ownAt = ownPosition(now, dt);
   if (ownAt && mine >= 0) {
     // A copy: st may be a stored server state, which prediction still reads
@@ -609,7 +609,7 @@ function frame(now) {
     // (Above the hat, if there is one)
     const up = slot.hat && slot.hat !== "none" ? R * 0.8 : 0;
     if (st.crown === i) drawCrown(p[0], p[1] - up, R);
-    if (slot.id === me.token) drawYouMarker(p[0], p[1] - up - (st.crown === i ? 8 : 0), R, slot.color);
+    if (slot.id === me.id) drawYouMarker(p[0], p[1] - up - (st.crown === i ? 8 : 0), R, slot.color);
     else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 10, "rgba(241,245,249,0.75)", p[0], p[1] - up - R - 9, { weight: 700 });
     drawOffscreen(p[0], p[1], R, slot.color);
   });

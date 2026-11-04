@@ -7,6 +7,8 @@ Routes:
     GET  /r/<code>       the client, opening room <code>
     GET  /static/...     client files
     POST /api/rooms      create a room -> {"room": "ABCD"}
+    GET  /api/public     the public rooms, for the home page's list
+    POST /api/quickplay  a public room to join -> {"room": "ABCD"} (room.py)
     GET  /api/rooms/<code>   {"room": "ABCD", "players": 3} or 404
     GET  /api/rooms/<code>/replay   the room's last match as a replay file
     POST /api/replay     a replay file -> the match played back (replay.py)
@@ -17,6 +19,7 @@ Routes:
                          is set, send it as "Authorization: Bearer <token>".
     GET  /api/playtest   the latest playtest reports and browser errors
                          (playtest.py; same token as /metrics)
+    GET  /api/reports    the latest player reports (moderation.py; same token)
     GET  /privacy        what the site keeps about people
     GET  /terms          the terms of use
     /auth/..., /api/me   signing in with Google and your account, when
@@ -37,16 +40,20 @@ WebSocket protocol (JSON text messages):
         so you get that back (once, within room.REOPEN_GRACE seconds).
     {"type": "input", "b": [up, left, down, right, heavy]}      0/1 each, on change
     {"type": "name", "name": "Sam"}
+    {"type": "report_player", "id": "<their public id>", "reason": "name", "note": "..."}
     {"type": "report", "ping": {...}, ...}     after a match: what it saw (playtest.py)
     {"type": "client_error", "message": "...", "where": "draw.js:12"}
     host only:
-    {"type": "settings", "map": "platform", "first_to": 5, "bots": ["bot:medium"]}
+    {"type": "settings", "map": "platform", "first_to": 5, "bots": ["bot:medium"], "public": true}
     {"type": "start"}
     {"type": "lobby"}                                          back from results
   server -> browser
     welcome, lobby, match (once per match), 30 times a second a state or,
     mostly, "d" (just what changed: delta.py), results, error, notice,
-    restart. See room.py and match.py. Players' own state messages also
+    restart, and "seat" when someone who joined during the match takes
+    over a bot ({"slot": k, "info": the slot, as in "match"}). People are
+    known by a public id ("you" in welcome), not their token. See room.py
+    and match.py. Players' own state messages also
     have "you": [x speed, y speed, standing] for predicting their ball.
     "results" has "summaries" (how each slot did), "match_id" and "at",
     which browsers add to their match history (profiles.py).
@@ -70,7 +77,7 @@ import traceback
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server import auth, delta, limits, metrics, modes, playtest, replay
+from bonk_game.server import auth, delta, limits, metrics, moderation, modes, playtest, replay
 from bonk_game.server.room import RoomFull, RoomManager, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -224,6 +231,27 @@ async def create_room(request):
     return web.json_response({"room": room.code})
 
 
+async def public_rooms(request):
+    return web.json_response({"rooms": request.app[ROOMS].public()},
+                             headers={"Cache-Control": "no-store"})
+
+
+async def quick_play(request):
+    """The public room to join, or a new one with bots."""
+    rooms = request.app[ROOMS]
+    if rooms.draining:
+        return web.json_response({"error": "The server is restarting. Try again in a moment."}, status=503)
+    ip = limits.client_ip(request)
+    try:
+        room, new = rooms.quick_play(allow_new=lambda: request.app[ROOM_LIMIT].allow(ip))
+    except ServerFull:
+        return web.json_response({"error": "The server is full right now. Try again later."}, status=503)
+    if room is None:
+        return web.json_response({"error": "You're making rooms too quickly. Try again in a minute."},
+                                 status=429)
+    return web.json_response({"room": room.code, "new": new})
+
+
 async def room_info(request):
     room = request.app[ROOMS].get(request.match_info["code"])
     if room is None:
@@ -289,11 +317,19 @@ async def playtest_page(request):
                              headers={"Cache-Control": "no-store"})
 
 
+async def reports_page(request):
+    """The latest player reports (moderation.py)."""
+    _check_token(request)
+    return web.json_response({"total": moderation.REPORTS.total, "items": list(moderation.REPORTS.items)},
+                             headers={"Cache-Control": "no-store"})
+
+
 async def metrics_page(request):
     _check_token(request)
     snap = metrics.STATS.snapshot(request.app[ROOMS])
     snap["playtest_reports_total"] = playtest.REPORTS.reports
     snap["client_errors_total"] = playtest.REPORTS.client_errors
+    snap["player_reports_total"] = moderation.REPORTS.total
     snap["version"] = VERSION
     headers = {"Cache-Control": "no-store"}
     if request.query.get("format") == "json":
@@ -451,6 +487,9 @@ def make_app(rooms=None, auth_config=None, accounts=None):
     app.router.add_get("/", index)
     app.router.add_get("/r/{code}", index)
     app.router.add_post("/api/rooms", create_room)
+    app.router.add_get("/api/public", public_rooms)
+    app.router.add_post("/api/quickplay", quick_play)
+    app.router.add_get("/api/reports", reports_page)
     app.router.add_get("/api/rooms/{code}", room_info)
     app.router.add_get("/api/rooms/{code}/replay", room_replay)
     app.router.add_post("/api/replay", watch_replay)

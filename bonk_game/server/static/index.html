@@ -20,7 +20,9 @@
         <span id="home-ball-label" class="dim small"></span>
         <button id="edit-ball">Customize</button>
       </div>
-      <button id="create" class="primary">Create a room</button>
+      <button id="quick" class="primary">Quick play</button>
+      <p class="dim small quick-help">Jump into a public match with whoever's on, or bots.</p>
+      <button id="create">Create a room</button>
       <div class="or">or join one</div>
       <form id="join-form" class="row">
         <input id="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
@@ -37,6 +39,10 @@
         <div id="account-in" class="hidden">
           <p class="small">Signed in as <b id="account-who"></b> <button id="sign-out" class="link-button">Sign out</button></p>
         </div>
+      </div>
+      <div id="public" class="public hidden">
+        <h3>Public rooms</h3>
+        <ul id="public-list" class="public-list"></ul>
       </div>
       <div class="home-links">
         <button id="open-stats" class="link-button">📊 Your stats</button>
@@ -94,6 +100,8 @@
           </div>
         </div>
         <label class="check"><input id="power-ups" type="checkbox"> Power-ups</label>
+        <label class="check"><input id="public-room" type="checkbox"> Public room</label>
+        <p id="public-help" class="dim small">Listed on the home page, so anyone can join. Private rooms are by invite link only.</p>
         <p class="dim small power-help">⚡ speed · 🎈 float · 🪨 iron · 👊 punch the next ball you bump</p>
         <div id="need-players" class="need hidden">
           <p id="need-text"></p>
@@ -162,7 +170,8 @@
         <button id="again" class="host-only">Start now</button>
         <button id="to-lobby" class="host-only">Back to lobby</button>
         <button id="leave-results">Leave room</button>
-        <p class="dim small">The next match starts when everyone has voted<span class="guest-only">, or when the host starts it</span>.</p>
+        <p id="next-help" class="dim small">The next match starts when everyone has voted<span class="guest-only">, or when the host starts it</span>.</p>
+        <p id="next-quick" class="dim small hidden">The next match starts by itself in a few seconds.</p>
       </div>
     </div>
   </section>
@@ -180,6 +189,26 @@
       <div id="profile-extras"></div>
       <p id="profile-unlock" class="dim small"></p>
       <button id="profile-close" class="primary">Done</button>
+    </div>
+  </div>
+
+  <!-- Someone else: mute them on your screen, or report them -->
+  <div id="person" class="overlay hidden" role="dialog" aria-labelledby="person-name">
+    <div class="card settings-card">
+      <h2 id="person-name"></h2>
+      <label class="check"><input id="person-mute" type="checkbox"> Mute: hide their emotes and name on your screen</label>
+      <h3>Report</h3>
+      <p class="dim small">Sends their name and what happened in this room lately to whoever runs the server.</p>
+      <label for="report-reason">What's wrong?</label>
+      <select id="report-reason">
+        <option value="name">Offensive name</option>
+        <option value="emotes">Spamming emotes</option>
+        <option value="cheating">Cheating</option>
+        <option value="other">Something else</option>
+      </select>
+      <input id="report-note" maxlength="200" placeholder="Anything to add? (optional)" aria-label="Anything to add">
+      <button id="report-send">Send report</button>
+      <button id="person-close" class="primary">Done</button>
     </div>
   </div>
 
@@ -219,6 +248,10 @@
       <ul id="set-keys" class="set-keys"></ul>
       <p id="set-pad" class="dim small"></p>
       <button id="set-reset-keys" class="link-button">Reset controls</button>
+      <div id="settings-people" class="hidden">
+        <h3>People here</h3>
+        <ul id="people-list" class="public-list"></ul>
+      </div>
       <button id="settings-close" class="primary">Done</button>
     </div>
   </div>
@@ -243,6 +276,7 @@
   <script src="/static/js/replay.js"></script>
   <script src="/static/js/draw.js"></script>
   <script src="/static/js/looks.js"></script>
+  <script src="/static/js/people.js"></script>
   <script src="/static/js/account.js"></script>
   <script src="/static/js/main.js"></script>
 </body>

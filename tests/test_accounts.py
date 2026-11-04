@@ -305,10 +305,10 @@ def test_account_perks_are_checked_by_the_server():
         await room.handle("m", {"type": "own_color", "color": "#123456"})
         await room.handle("m", {"type": "pattern", "pattern": "galaxy"})
         await room.handle("m", {"type": "own_color", "color": "red; x"})  # (refused)
-        seat = next(s for s in member.msgs[-1]["seats"] if s["id"] == "m")
+        seat = next(s for s in member.msgs[-1]["seats"] if s["id"] == room.members["m"].pid)
         assert seat["own_color"] == "#123456" and seat["pattern"] == "galaxy"
         await room.start()
-        slot = next(s for s in room.match.describe()["slots"] if s["id"] == "m")
+        slot = next(s for s in room.match.describe()["slots"] if s["id"] == room.members["m"].pid)
         assert slot["color"] == "#123456" and slot["color_name"] == "Custom"
         await room.stop()
     run(go())
