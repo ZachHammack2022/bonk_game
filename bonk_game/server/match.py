@@ -265,9 +265,16 @@ class Match:
             "walls": None if timer.walls() is None else [round(w, 1) for w in timer.walls()],
             "t": round(timer.steps / TICK_HZ, 2),
             "stand_ins": sorted(self.stand_ins),
+            **self._held(),
             **self.mode.extra_state(),
             **(self.powerups.state() if self.powerups else {}),
         }
+
+    def _held(self):
+        """{"held": seconds each player has left of their respawn hold (0:
+        playing)}, while anyone's held."""
+        held = [round(p.held / TICK_HZ, 1) if p.alive and p.held else 0 for p in self.env.players]
+        return {"held": held} if any(held) else {}
 
     def motion(self, i):
         """Player i's speeds, for their own browser only (see room.py)."""
@@ -289,6 +296,7 @@ class Match:
             "width": self.env.map.width,
             "height": self.env.map.height,
             "reset_round_on_kill": self.env.rounds,
+            "respawn_hold": round(self.env.respawn_hold / TICK_HZ, 2),
             "physics": self.physics(),
             "powerups": powerups.describe() if self.powerups else None,
             "slots": [

@@ -41,6 +41,8 @@ class player():
         self.max_m = 5
         self.min_m = 1
         self.score = 0
+        # Steps left frozen after a respawn (TestEnv's respawn_hold); 0: playing
+        self.held = 0
         self.spawn = spawn if spawn is not None else (left, right, top, bottom)
         self.clamp_bottom = clamp_bottom
         # Classic players fly: "up" is a constant thrust stronger than gravity.
@@ -114,6 +116,7 @@ class player():
         start_height = (bottom-top-2*self.r-2)
 
         self.alive = 1.0
+        self.held = 0
         self.x = left+ self.r+1+ self.rng.random()*start_width
         self.y = top+ self.r+1+ self.rng.random()*start_height
         self.x_v = 0

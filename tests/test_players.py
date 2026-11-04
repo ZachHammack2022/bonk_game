@@ -261,3 +261,57 @@ def test_ten_bot_match_plays_to_results(app, map_name):
     # "Change players" keeps all ten
     app.scene.menu.activate(1)
     assert len(app.scene.picks) == 10
+
+
+def respawned(env, i=0):
+    """Knock player i into Classic's deadly wall and step: they respawn."""
+    put(env.players[i], arena.LEFT, 300)
+    env.step()
+    return env.players[i]
+
+
+def test_a_respawned_player_is_held_still_then_plays():
+    env = TestEnv(None, None, map_name="classic", round_time=0)
+    env.reset()
+    p = respawned(env)
+    assert p.held == env.RESPAWN_HOLD
+    spot = (p.x, p.y)
+    for _ in range(env.RESPAWN_HOLD):
+        env.step([Buttons(right=True, up=True), None])
+        assert (p.x, p.y) == spot  # keys, gravity: nothing moves it
+    assert p.held == 0
+    env.step([Buttons(right=True), None])
+    assert p.x > spot[0]
+
+
+def test_a_held_player_is_out_of_play():
+    env = TestEnv(None, None, None, map_name="classic", round_time=0)
+    env.reset()
+    a, b, c = env.players
+    respawned(env)
+    # Nothing hits them...
+    put(b, a.x + a.r + b.r - 4, a.y)
+    env.check_collisions()
+    assert env.last_hit[0] is None and (b.x_v, b.y_v) == (0, 0)
+    # ...nothing kills them (they're put back inside the walls)...
+    a.x = arena.LEFT
+    deaths, _, _ = env.check_collisions()
+    assert deaths == [] and a.alive
+    # ...and everyone goes after someone else
+    put(b, a.x + 40, 300)
+    put(c, a.x + 300, 300)
+    assert env.nearest_opponent(1) == 2
+
+
+def test_respawn_hold_can_be_turned_off():
+    env = TestEnv(None, None, map_name="classic", respawn_hold=0)
+    env.reset()
+    assert respawned(env).held == 0
+
+
+def test_a_new_round_starts_everyone_free():
+    env = TestEnv(None, None, None, map_name="classic", round_time=0)
+    env.reset()
+    respawned(env)
+    env.new_round()
+    assert all(p.held == 0 for p in env.players)

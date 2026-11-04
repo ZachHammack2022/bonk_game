@@ -266,6 +266,16 @@ class Painter:
         # Shine
         self.circle(x - r * 0.32, y - r * 0.34, max(1, r * 0.22), lighten(fill, 0.55))
 
+    def hold_ring(self, p, left):
+        """A ring round a player held after a respawn, running down as the
+        hold does (`left`: the fraction still to go)."""
+        x, y = self.pt(p.x, p.y)
+        r = p.r * self.scale + self.ln(5)
+        box = pygame.Rect(x - r, y - r, 2 * r, 2 * r)
+        start = math.pi / 2  # (pygame's angles go anticlockwise from the right)
+        pygame.draw.arc(self.surface, p.color, box, start, start + 2 * math.pi * max(0.0, min(1.0, left)),
+                        max(1, self.ln(3)))
+
     def you_marker(self, p):
         """Small arrow above the local player's ball, so you can find yourself."""
         x, y = self.pt(p.x, p.y - p.r - 9)

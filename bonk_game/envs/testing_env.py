@@ -26,6 +26,11 @@ class TestEnv():
       them in the past few seconds scores. With two players, the other
       player always scores.
 
+    A player who respawns mid-round is held for `respawn_hold` steps
+    first, so they can see where they are: frozen in place, ignoring their
+    keys, and out of play (nothing hits or kills them, and bots go after
+    someone else).
+
     The first to the winning score (the map's default unless given) wins.
 
     Rounds have a time limit (the map's round_time unless given; 0 turns it
@@ -42,9 +47,12 @@ class TestEnv():
 
     # A hit counts towards a kill (on respawn maps) for this many steps
     HIT_CREDIT_STEPS = 90
+    # Steps a respawned player is held before they play (2 s)
+    RESPAWN_HOLD = 60
 
     def __init__(self, *controllers, render_mode=None, winning_score=None, map_name=DEFAULT_MAP,
-                 round_time=None, colors=None, teams=None, respawn=None, gravity=1.0, seed=None):
+                 round_time=None, colors=None, teams=None, respawn=None, gravity=1.0, seed=None,
+                 respawn_hold=None):
         """colors: optional colour index (into theme.PLAYER_COLORS) per player.
         teams: optional team number per player. Teammates aren't opponents:
         agents and bots go after the other team, a round ends when one team
@@ -54,7 +62,9 @@ class TestEnv():
         map's own rule.
         gravity: multiplies the pull of gravity on the players.
         seed: for where players spawn (the env's own random numbers, `rng`;
-        None: drawn once from numpy's global ones)."""
+        None: drawn once from numpy's global ones).
+        respawn_hold: steps a respawned player is held (None: RESPAWN_HOLD;
+        0 respawns straight into play)."""
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.map = make_map(map_name)
@@ -71,6 +81,7 @@ class TestEnv():
         self.rounds = self.map.reset_round_on_kill if respawn is None else not respawn
         # Respawn maps restart the clock after each point; a mode can turn that off
         self.timer_resets_on_death = True
+        self.respawn_hold = self.RESPAWN_HOLD if respawn_hold is None else respawn_hold
         # A player everyone else goes after instead of the nearest (the crown holder)
         self.focus = None
         self.rng = new_rng(seed)
@@ -109,7 +120,8 @@ class TestEnv():
             [j for j in range(self.n) if j != i]
         if self.focus is not None and self.focus in others and self.players[self.focus].alive:
             return self.focus
-        living = [j for j in others if self.players[j].alive] or others
+        living = ([j for j in others if self.players[j].alive and not self.players[j].held]
+                  or [j for j in others if self.players[j].alive] or others)
         return min(living, key=lambda j: math.dist((me.x, me.y),
                                                    (self.players[j].x, self.players[j].y)))
 
@@ -147,6 +159,11 @@ class TestEnv():
         of players who scored.
         """
         living = [i for i, p in enumerate(self.players) if p.alive]
+        for i in living:
+            if self.players[i].held:
+                self._inside_walls(self.players[i])  # (the walls keep closing)
+        # Held players (just respawned) can't die yet
+        living = [i for i in living if not self.players[i].held]
         walled = [i for i in living if self.timer.kills(self.players[i])]
         dead = [i for i in living if self.map.collide(self.players[i]) or i in walled]
         deaths = [(i, self.players[i].x, self.players[i].y) for i in dead]
@@ -179,6 +196,7 @@ class TestEnv():
                 # Respawn away from everyone else
                 arena.respawn_apart(self.players[i], [p for j, p in enumerate(self.players) if j != i])
                 self._inside_walls(self.players[i])
+                self.players[i].held = self.respawn_hold
                 self.last_hit[i] = None
         self._collide_players()
         return deaths, points, False
@@ -191,7 +209,7 @@ class TestEnv():
             p.x = min(max(p.x, w[0] + p.r + 1), w[1] - p.r - 1)
 
     def _collide_players(self):
-        living = [i for i, p in enumerate(self.players) if p.alive]
+        living = [i for i, p in enumerate(self.players) if p.alive and not p.held]
         for k, i in enumerate(living):
             for j in living[k + 1:]:
                 a, b = self.players[i], self.players[j]
@@ -231,15 +249,20 @@ class TestEnv():
         actions = [None] * self.n if actions is None else list(actions)
         if len(actions) != self.n:
             raise ValueError(f"expected {self.n} inputs, got {len(actions)}")
-        for p, a in zip(self.players, actions):
-            if p.alive:
+        # (Held players were held before this step: they start playing the
+        # step after the hold runs out)
+        held = [p.held > 0 for p in self.players]
+        for p, a, h in zip(self.players, actions, held):
+            if p.alive and not h:
                 apply_input(p, a)
         self.map.step()
         self.timer.step()
         self.steps += 1
         deaths, points, round_over = self.check_collisions()
-        for p in self.players:
-            if p.alive:
+        for p, h in zip(self.players, held):
+            if h and p.held:
+                p.held -= 1
+            elif p.alive and not p.held:
                 p.update()
 
         self.scores = [p.score for p in self.players]
@@ -257,7 +280,7 @@ class TestEnv():
             return self._render_frame()
 
     def _render_frame(self):
-        return self.renderer.draw(self.players, self.map, self.scores, self.timer)
+        return self.renderer.draw(self.players, self.map, self.scores, self.timer, self.respawn_hold)
 
     def close(self):
         self.renderer.close()

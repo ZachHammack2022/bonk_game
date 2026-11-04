@@ -152,7 +152,8 @@ class Renderer:
             pygame.display.set_caption(self.caption)
             self.clock = pygame.time.Clock()
 
-    def draw(self, players, game_map, scores=None, timer=None):
+    def draw(self, players, game_map, scores=None, timer=None, hold=60):
+        """hold: how many steps a respawn hold lasts (TestEnv.respawn_hold)."""
         import pygame
 
         self._ensure_init()
@@ -167,6 +168,8 @@ class Renderer:
         for p in players:
             if p.alive:
                 painter.player(p)
+                if p.held:
+                    painter.hold_ring(p, p.held / max(1, hold))
 
         if scores is not None:
             # Scores in each player's colour, spread across the top

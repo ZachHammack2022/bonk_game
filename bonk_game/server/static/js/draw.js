@@ -445,6 +445,16 @@ function drawHud(st, now) {
   }
 }
 
+// Held after a respawn (`left` seconds to go): a ring that runs down, and
+// for your own ball, the seconds left
+function drawHold(x, y, R, left, slot) {
+  const total = app.match.respawn_hold || 2;
+  ctx.beginPath();
+  ctx.arc(x, y, R + 5, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * clamp(left / total, 0, 1));
+  ctx.strokeStyle = slot.color; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.stroke(); ctx.lineCap = "butt";
+  if (slot.id === me.token) text(String(Math.ceil(left)), 14, T.text, x, y + 1, { weight: 800 });
+}
+
 let lastFrame = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
@@ -511,7 +521,11 @@ function frame(now) {
       circle(p[0], p[1], R + 6, c);
       ctx.globalAlpha = 1;
     }
+    const held = st.held && st.held[i];
+    if (held) ctx.globalAlpha = 0.5 + 0.15 * Math.sin(now / 90);  // see-through, flickering
     drawPlayer(p[0], p[1], R, p[2], slot.color, slot.pattern);
+    ctx.globalAlpha = 1;
+    if (held) drawHold(p[0], p[1], R, held, slot);
   });
   if (mine >= 0) debug.drawn = { x: st.players[mine][0], y: st.players[mine][1], t: now };
   st.players.forEach((p, i) => {
