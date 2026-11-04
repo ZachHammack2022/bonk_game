@@ -46,8 +46,24 @@ function renderLobby() {
   const L = app.lobby, Wm = app.welcome;
   if (!Wm) return;
   $("room-code").textContent = L.room;
+  $("room-name").textContent = L.title || "";
   const host = isHost();
   const s = L.settings;
+
+  // The room's name and password (everyone in the room can see it, to invite people)
+  const nameBox = $("room-name-input");
+  if (document.activeElement !== nameBox) nameBox.value = s.name || "";
+  nameBox.placeholder = L.title || "";
+  nameBox.disabled = !host;
+  $("room-locked").checked = !!s.password;
+  $("room-locked").disabled = !host;
+  $("password-row").classList.toggle("hidden", !s.password);
+  const pwBox = $("room-password");
+  if (document.activeElement !== pwBox) pwBox.value = s.password || "";
+  pwBox.readOnly = !host;
+  $("password-help").textContent = s.password
+    ? "Everyone sees this game in Find a game, but only people with the password can join. Your invite link has it in."
+    : "Anyone can join from Find a game.";
 
   // Mode, map and the other settings
   const mode = modeInfo(s.mode);
@@ -81,8 +97,6 @@ function renderLobby() {
   $("speed").disabled = !host;
   $("power-ups").checked = !!s.power_ups;
   $("power-ups").disabled = !host;
-  $("public-room").checked = !!s.public;
-  $("public-room").disabled = !host;
   const teams = s.mode === "teams";
   const mine = L.seats.find((x) => x.id === me.id);
   $("switch-team").classList.toggle("hidden", !teams || !mine);
@@ -391,7 +405,14 @@ $("round-time").addEventListener("change", () => send({ type: "settings", round_
 $("gravity").addEventListener("change", () => send({ type: "settings", gravity: $("gravity").value }));
 $("speed").addEventListener("change", () => send({ type: "settings", speed: $("speed").value }));
 $("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
-$("public-room").addEventListener("change", () => send({ type: "settings", public: $("public-room").checked }));
+$("room-name-input").addEventListener("change", () => send({ type: "settings", name: $("room-name-input").value.trim() || null }));
+$("room-locked").addEventListener("change", () => send({ type: "settings", password: $("room-locked").checked ? true : null }));
+$("room-password").addEventListener("change", () => {
+  const pw = $("room-password").value.trim();
+  if (pw) send({ type: "settings", password: pw });
+  else renderLobby();  // (an empty password: untick Password instead)
+});
+$("new-password").addEventListener("click", () => send({ type: "settings", password: true }));
 $("switch-team").addEventListener("click", () => {
   const mine = app.lobby.seats.find((x) => x.id === me.id);
   if (mine) send({ type: "team", team: 1 - mine.team });
@@ -406,7 +427,7 @@ $("again").addEventListener("click", () => send({ type: "start" }));
 $("vote").addEventListener("click", () => send({ type: "vote" }));
 $("to-lobby").addEventListener("click", () => send({ type: "lobby" }));
 $("copy-link").addEventListener("click", async () => {
-  const link = `${location.origin}/r/${app.room}`;
+  const link = location.origin + roomLink(app.room, app.password);  // (core.js)
   try {
     await navigator.clipboard.writeText(link);
     toast("Invite link copied");

@@ -37,7 +37,7 @@ async def smoke(base, seconds=10.0, out=print):
         if not m:
             raise RuntimeError("the page has no bonk-version (not a bonk server?)")
         version = m.group(1)
-        async with http.post(base + "/api/rooms") as res:
+        async with http.post(base + "/api/rooms", json={"password": False}) as res:
             body = await res.json()
             if res.status != 200:
                 raise RuntimeError(f"making a room: {res.status} {body}")

@@ -1,0 +1,102 @@
+name: deploy
+
+# Staging: every merge to main goes straight to the staging app, without
+# waiting for the tests (they run at the same time; see tests.yml), so you
+# can try it within a few minutes.
+#
+# Production: by hand (Actions -> deploy -> Run workflow -> production).
+# It deploys main, and only if the tests passed on that commit.
+#
+# Setup, once (README: "Staging and deploys"):
+#   - Fly apps for both (./deploy/fly.sh bonk-game-staging makes staging)
+#   - the repository secret FLY_API_TOKEN (fly tokens create org)
+#   - optionally the repository variables STAGING_APP and PRODUCTION_APP
+#     (defaults: bonk-game-staging and bonk-game)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to deploy main
+        type: choice
+        options: [staging, production]
+        default: staging
+
+# One deploy at a time per app; a newer merge replaces a waiting one
+concurrency:
+  group: deploy-${{ github.event.inputs.target || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ github.event.inputs.target || 'staging' }}
+      url: https://${{ steps.app.outputs.name }}.fly.dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: app
+        env:
+          TARGET: ${{ github.event.inputs.target || 'staging' }}
+          STAGING: ${{ vars.STAGING_APP || 'bonk-game-staging' }}
+          PRODUCTION: ${{ vars.PRODUCTION_APP || 'bonk-game' }}
+          HAS_TOKEN: ${{ secrets.FLY_API_TOKEN != '' }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$TARGET" = "production" ]; then app="$PRODUCTION"; else app="$STAGING"; fi
+          echo "name=$app" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::notice::No FLY_API_TOKEN secret yet, so nothing was deployed (README: Staging and deploys)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Deploys are from main only."
+            exit 1
+          fi
+
+      - name: Production needs main's tests to have passed on this commit
+        if: steps.app.outputs.skip != 'true' && github.event.inputs.target == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          result="$(gh run list --workflow tests.yml --commit "$SHA" --event push \
+            --json conclusion --jq '.[0].conclusion // "none"')"
+          echo "tests on $SHA: $result"
+          if [ "$result" != "success" ]; then
+            echo "::error::The tests haven't passed on this commit of main ($result). Fix main, or wait for its tests to finish."
+            exit 1
+          fi
+
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+        if: steps.app.outputs.skip != 'true'
+
+      - name: Deploy
+        if: steps.app.outputs.skip != 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          APP: ${{ steps.app.outputs.name }}
+        # One machine: rooms live in memory. Matches being played finish first.
+        run: |
+          flyctl deploy --remote-only -a "$APP" --ha=false
+          flyctl scale count 1 -a "$APP" --yes
+
+      - uses: actions/setup-python@v5
+        if: steps.app.outputs.skip != 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-server.txt
+            constraints.txt
+
+      - name: Smoke test (load the page, make a room, play against a bot)
+        if: steps.app.outputs.skip != 'true'
+        env:
+          APP: ${{ steps.app.outputs.name }}
+        run: |
+          pip install -r requirements-server.txt -c constraints.txt
+          python -m bonk_game.server.smoke "https://$APP.fly.dev"

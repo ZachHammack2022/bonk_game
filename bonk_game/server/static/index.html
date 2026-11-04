@@ -36,8 +36,8 @@
         <button id="edit-ball">Customize</button>
       </div>
       <button id="find" class="primary">Find a game</button>
-      <p id="find-help" class="dim small quick-help">See every public game and pick one to join.</p>
-      <button id="create">Create a private room</button>
+      <p id="find-help" class="dim small quick-help">See every game and pick one to join.</p>
+      <button id="create">Create a room</button>
       <div class="or">or join one with its code</div>
       <form id="join-form" class="row">
         <input id="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
@@ -63,8 +63,8 @@
     <footer class="home-footer"><a href="/privacy">Privacy policy</a> · <a href="/terms">Terms of service</a></footer>
   </section>
 
-  <!-- The game browser: every public game, to filter and join; a private
-       one by its code (people.js) -->
+  <!-- The game browser: every game, to filter and join; one with a
+       password asks for it (people.js) -->
   <section id="browse" class="screen hidden">
     <div class="browse">
       <header class="browse-head">
@@ -86,18 +86,22 @@
         </div>
         <select id="filter-mode" aria-label="Mode"><option value="">All modes</option></select>
         <select id="filter-map" aria-label="Map"><option value="">All maps</option></select>
-        <input id="browse-search" type="search" placeholder="Search host, player or code" aria-label="Search" autocomplete="off">
-        <form id="code-form" class="code-join" title="Private games aren't listed: join one with its 4-letter code">
-          <input id="browse-code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off" aria-label="Private game code">
+        <input id="browse-search" type="search" placeholder="Search room, host, player or code" aria-label="Search" autocomplete="off">
+        <form id="code-form" class="code-join" title="Join a game with its 4-letter code">
+          <input id="browse-code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off" aria-label="Game code">
           <button type="submit">Join</button>
         </form>
       </div>
-      <div class="games" role="table" aria-label="Public games">
+      <div class="games" role="table" aria-label="Games">
+        <div class="games-top">
+          <label class="check"><input id="hide-locked" type="checkbox"> Hide passworded</label>
+        </div>
         <div class="games-head" role="row">
-          <span role="columnheader">Game</span>
-          <button role="columnheader" data-sort="mode">Mode</button>
-          <button role="columnheader" data-sort="map">Map</button>
+          <button role="columnheader" data-sort="name">Room name</button>
           <button role="columnheader" data-sort="players" class="sorted">Players</button>
+          <button role="columnheader" data-sort="mode">Mode</button>
+          <button role="columnheader" data-sort="locked">Password</button>
+          <button role="columnheader" data-sort="map">Map</button>
           <button role="columnheader" data-sort="status">Status</button>
           <span role="columnheader"><span class="sr">Join</span></span>
         </div>
@@ -105,7 +109,7 @@
         <div id="games-empty" class="games-empty hidden">
           <p id="games-empty-text"></p>
           <div class="row-buttons">
-            <button id="empty-public" class="primary">Start a public game</button>
+            <button id="empty-public" class="primary">Start a game</button>
             <button id="empty-quick">Play bots now</button>
             <button id="clear-filters" class="hidden">Clear filters</button>
           </div>
@@ -115,29 +119,43 @@
     </div>
   </section>
 
-  <!-- New game: public (listed in the browser) or private (code and link) -->
+  <!-- New game: its name, and whether it has a password. Every game is
+       listed; the invite link carries the password -->
   <div id="new-dialog" class="overlay hidden" role="dialog" aria-labelledby="new-title">
-    <div class="card settings-card">
+    <form id="new-form" class="card settings-card">
       <h2 id="new-title">New game</h2>
-      <button id="new-public" class="choice">
-        <b>Public</b>
-        <span class="dim small">Listed in Find a game, so anyone can join. You can add bots while you wait.</span>
-      </button>
-      <button id="new-private" class="choice">
-        <b>Private</b>
-        <span class="dim small">Not listed. Friends join with the code or the invite link.</span>
-      </button>
-      <p class="dim small">You can change this later in the lobby.</p>
-      <button id="new-cancel" class="ghost">Cancel</button>
-    </div>
+      <label for="new-name">Room name</label>
+      <input id="new-name" maxlength="30" autocomplete="off">
+      <label class="check"><input id="new-locked" type="checkbox" checked> Password</label>
+      <p class="dim small">Everyone can see the game in Find a game. With a password, only people who have it can join: it's in your invite link, so friends get in with one click. Without one, anyone can join.</p>
+      <p class="dim small">You can change these later in the lobby.</p>
+      <div class="row-buttons">
+        <button id="new-create" type="submit" class="primary">Create</button>
+        <button id="new-cancel" type="button" class="ghost">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Joining a game with a password -->
+  <div id="pw-dialog" class="overlay hidden" role="dialog" aria-labelledby="pw-title">
+    <form id="pw-form" class="card settings-card">
+      <h2 id="pw-title">Password</h2>
+      <p id="pw-text" class="dim small"></p>
+      <input id="pw-input" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Password">
+      <p id="pw-wrong" class="small danger hidden">That's not the password.</p>
+      <div class="row-buttons">
+        <button type="submit" class="primary">Join</button>
+        <button id="pw-cancel" type="button" class="ghost">Cancel</button>
+      </div>
+    </form>
   </div>
 
   <!-- Lobby: who's here, the host's settings -->
   <section id="lobby" class="screen hidden">
     <header class="lobby-head">
-      <div>
-        <div class="dim small">Room</div>
-        <div id="room-code" class="room-code"></div>
+      <div class="room-id">
+        <div class="dim small">Room <span id="room-code" class="room-code-small"></span></div>
+        <div id="room-name" class="room-name"></div>
       </div>
       <div class="head-buttons">
         <button id="leave" class="ghost" title="Leave this room and go back to the start page"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>Leave</button>
@@ -187,8 +205,14 @@
           </div>
         </div>
         <label class="check"><input id="power-ups" type="checkbox"> Power-ups</label>
-        <label class="check"><input id="public-room" type="checkbox"> Public room</label>
-        <p id="public-help" class="dim small">Listed in Find a game, so anyone can join. Private rooms are by invite link or code only.</p>
+        <label for="room-name-input">Room name</label>
+        <input id="room-name-input" maxlength="30" autocomplete="off">
+        <label class="check"><input id="room-locked" type="checkbox"> Password</label>
+        <div id="password-row" class="password-row hidden">
+          <input id="room-password" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Room password">
+          <button id="new-password" class="host-only" title="Make up a new password">New</button>
+        </div>
+        <p id="password-help" class="dim small"></p>
         <p class="dim small power-help">Pickups: speed, float, iron, and punch (the next ball you bump goes flying).</p>
         <div id="need-players" class="need hidden">
           <p id="need-text"></p>

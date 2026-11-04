@@ -92,7 +92,7 @@ class Stats:
             "members": sum(len(r.members) for r in all_rooms),
             "members_connected": sum(len(r.connected) for r in all_rooms),
             "matches_running": sum(1 for r in all_rooms if r.match is not None),
-            "rooms_public": sum(1 for r in all_rooms if r.settings.get("public")),
+            "rooms_locked": sum(1 for r in all_rooms if r.settings.get("password")),
             "connections": self.connections,
             "tick_ms_avg": round(avg, 3),
             "tick_ms_p99": round(p99, 3),

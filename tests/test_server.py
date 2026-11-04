@@ -130,7 +130,7 @@ def test_room_host_settings_and_permissions():
                                 "bots": ["bot:easy", "bot:hard"]})
         assert room.settings == {"map": "swing", "first_to": 3, "bots": ["bot:easy", "bot:hard"],
                                  "mode": "ffa", "round_time": None, "gravity": "normal", "speed": "normal",
-                                 "power_ups": False, "public": False}
+                                 "power_ups": False, "name": None, "password": None}
         await room.handle("a", {"type": "settings", "bots": ["nope"]})
         assert "Unknown bot" in a.last("error")["message"]
         await room.handle("a", {"type": "settings", "bots": ["bot:easy"] * 20})
@@ -236,9 +236,9 @@ def test_full_match_over_websockets(monkeypatch):
             for src in scripts:
                 assert (await client.get(src)).status == 200, src
 
-            code = (await (await client.post("/api/rooms")).json())["room"]
+            code = (await (await client.post("/api/rooms", json={"password": False})).json())["room"]
             info = await (await client.get(f"/api/rooms/{code}")).json()
-            assert info == {"room": code, "players": 0}
+            assert info == {"room": code, "players": 0, "locked": False}
             assert (await client.get("/api/rooms/ZZZZ")).status == 404
 
             ws = await client.ws_connect(f"/ws/{code}")
@@ -334,7 +334,7 @@ def test_room_creation_is_rate_limited(monkeypatch):
         client = _client(monkeypatch, ROOMS_PER_IP=3)
         await client.start_server()
         try:
-            statuses = [(await client.post("/api/rooms")).status for _ in range(5)]
+            statuses = [(await client.post("/api/rooms", json={"password": False})).status for _ in range(5)]
             assert statuses == [200, 200, 200, 429, 429]
         finally:
             await client.close()
@@ -346,7 +346,7 @@ def test_connections_per_ip_are_capped(monkeypatch):
         client = _client(monkeypatch, CONNECTIONS_PER_IP=2)
         await client.start_server()
         try:
-            code = (await (await client.post("/api/rooms")).json())["room"]
+            code = (await (await client.post("/api/rooms", json={"password": False})).json())["room"]
             socks = []
             for i in range(2):
                 ws = await client.ws_connect(f"/ws/{code}")
@@ -371,7 +371,7 @@ def test_flooding_messages_gets_you_disconnected(monkeypatch):
         client = _client(monkeypatch, MESSAGES_PER_SECOND=1.0, MESSAGE_BURST=5.0, MAX_DROPPED=20)
         await client.start_server()
         try:
-            code = (await (await client.post("/api/rooms")).json())["room"]
+            code = (await (await client.post("/api/rooms", json={"password": False})).json())["room"]
             ws = await client.ws_connect(f"/ws/{code}")
             await ws.send_json({"type": "hello", "version": VERSION, "name": "Ann", "token": "t"})
             for _ in range(100):
