@@ -280,3 +280,14 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 .replay-bar input[type=range] { flex: 1; min-width: 60px; padding: 0; min-height: 0; }
 .replay-bar button, .replay-bar select { min-height: 36px; padding: 4px 10px; }
 .replay-bar #replay-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Not enough players to start: said next to the Start button */
+.need {
+  margin: 14px 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: rgba(255, 209, 102, 0.08);
+}
+.need p { margin: 0 0 8px; font-size: 14px; }
+.need button { width: 100%; }

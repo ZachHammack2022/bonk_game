@@ -154,8 +154,19 @@ function renderLobby() {
   $("add-bot").disabled = n >= most;
   const extra = here - most;
   $("spectators").textContent = extra > 0 ? `${extra} more watching (the match is full).` : "";
-  $("start").disabled = n < fewest;
-  $("start").title = n < fewest ? `This map needs at least ${fewest} players: add bots` : "";
+  // Too few to start: say so next to the button, and offer the bots it'd take
+  const short = Math.max(0, fewest - n);
+  $("start").disabled = short > 0;
+  $("start").textContent = short ? `Need ${short} more player${short === 1 ? "" : "s"}` : "Start match";
+  $("need-players").classList.toggle("hidden", !short);
+  if (short) {
+    const title = mapInfo ? mapInfo.title : "This map";
+    $("need-text").textContent = `${title} needs at least ${fewest} players, and there ${n === 1 ? "is" : "are"} ${n}. ` +
+      (host ? "Add bots or invite friends (Copy invite link) to start, or pick another map."
+            : "Waiting for the host to add bots or pick another map.");
+    $("add-needed").textContent = short === 1 ? "+ Add a bot" : `+ Add ${short} bots`;
+    $("add-needed").dataset.short = String(short);
+  }
 
   // Rematch votes on the results screen
   if (L.phase === "results") {
@@ -295,6 +306,10 @@ $("power-ups").addEventListener("change", () => send({ type: "settings", power_u
 $("switch-team").addEventListener("click", () => {
   const mine = app.lobby.seats.find((x) => x.id === me.token);
   if (mine) send({ type: "team", team: 1 - mine.team });
+});
+$("add-needed").addEventListener("click", (e) => {
+  const short = +e.target.dataset.short || 1;
+  send({ type: "settings", bots: [...app.lobby.settings.bots, ...Array(short).fill("bot:medium")] });
 });
 $("add-bot").addEventListener("click", () => send({ type: "settings", bots: [...app.lobby.settings.bots, "bot:medium"] }));
 $("start").addEventListener("click", () => send({ type: "start" }));

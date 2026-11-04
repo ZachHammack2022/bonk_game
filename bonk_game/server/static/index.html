@@ -43,6 +43,7 @@
         <div id="room-code" class="room-code"></div>
       </div>
       <div class="head-buttons">
+        <button id="leave" title="Leave this room and go back to the start page">← Leave</button>
         <button id="open-settings-lobby" class="icon-button" aria-label="Settings" title="Settings">⚙</button>
         <button id="copy-link">Copy invite link</button>
       </div>
@@ -81,6 +82,10 @@
         </div>
         <label class="check"><input id="power-ups" type="checkbox"> Power-ups</label>
         <p class="dim small power-help">⚡ speed · 🎈 float · 🪨 iron · 👊 punch the next ball you bump</p>
+        <div id="need-players" class="need hidden">
+          <p id="need-text"></p>
+          <button id="add-needed" class="host-only"></button>
+        </div>
         <button id="start" class="primary host-only">Start match</button>
         <p id="waiting" class="dim guest-only">Waiting for the host to start…</p>
         <p id="controls-help" class="dim small"></p>
@@ -143,6 +148,7 @@
         <button id="vote" class="primary">Play again</button>
         <button id="again" class="host-only">Start now</button>
         <button id="to-lobby" class="host-only">Back to lobby</button>
+        <button id="leave-results">Leave room</button>
         <p class="dim small">The next match starts when everyone has voted<span class="guest-only">, or when the host starts it</span>.</p>
       </div>
     </div>
