@@ -76,7 +76,7 @@ def test_float_and_iron():
     assert p.m == p.max_m
     p.x_v = 0
     p.move_right(2)
-    assert p.x_v == pytest.approx(2 / p.min_m)  # heavy, but moves like a light ball
+    assert p.x_v == pytest.approx(2 * p.time_scale / p.min_m)  # heavy, but moves like a light ball
 
 
 def test_punch_sends_the_next_player_flying_once():

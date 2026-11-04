@@ -65,13 +65,15 @@ def is_bot(kind):
 
 class Match:
     def __init__(self, map_name, slots, first_to, agents=None, mode=modes.DEFAULT_MODE,
-                 round_time=None, gravity=1.0, power_ups=False, seed=None, replay=None):
+                 round_time=None, gravity=1.0, power_ups=False, seed=None, replay=None,
+                 speed=stepping.TIME_SCALE):
         """slots: one dict per player, {"kind": "human" | "bot:<level>" | agent
         name, "name": display name, "color": optional colour index, "team":
         0 or 1 in the teams mode}. agents: name -> trained model, for any
         agent kinds. first_to: the mode's goal (points, lives, minutes or
         seconds; see modes.py). round_time: seconds before sudden death
-        (None: the map's own, 0: off). gravity: a multiplier. power_ups:
+        (None: the map's own, 0: off). gravity: a multiplier. speed: how
+        fast the world runs (stepping.TIME_SCALE; 1 is the original speed). power_ups:
         turn on pickups (see powerups.py). seed: for everything random in
         the match (None: pick one). replay: a recording to play back."""
         agents = agents or {}
@@ -79,7 +81,7 @@ class Match:
         # repeatable match, as it did before matches had their own)
         self.seed = int(np.random.randint(2 ** 31)) if seed is None else int(seed)
         self.options = {"mode": mode, "first_to": first_to, "round_time": round_time,
-                        "gravity": gravity, "power_ups": bool(power_ups)}
+                        "gravity": gravity, "speed": speed, "power_ups": bool(power_ups)}
         self.map_name = map_name
         self.slots = [dict(s) for s in slots]
         self.first_to = first_to
@@ -90,7 +92,7 @@ class Match:
         self.mode = modes.make_mode(mode, len(kinds), first_to, teams, rng=random.Random(self.seed + 1))
         options = {"round_time": round_time, **self.mode.env_options()}
         self.env = TestEnv(*kinds, map_name=map_name, colors=self.colors, gravity=gravity, seed=self.seed,
-                           **options)
+                           time_scale=speed, **options)
         self.mode.start(self.env)
         self.powerups = powerups.PowerUps(self.env, random.Random(self.seed + 2)) if power_ups else None
         self.replay = None
@@ -341,6 +343,8 @@ class Match:
             "max_m": p.max_m,
             "mass_decay": MASS_DECAY,
             "substeps": stepping.SUBSTEPS,  # moves per step, collided in between
+            # How fast the world runs: scales moves, gravity, pushes and heavy
+            "time_scale": self.env.time_scale,
             # Bounce off surfaces that don't say (Classic's floor and ceiling)
             "bounce": abs(BOUNCE) if p.can_fly else 0.3,
             "tick_ms": 1000 / TICK_HZ,

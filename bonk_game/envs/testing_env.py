@@ -52,7 +52,7 @@ class TestEnv():
 
     def __init__(self, *controllers, render_mode=None, winning_score=None, map_name=DEFAULT_MAP,
                  round_time=None, colors=None, teams=None, respawn=None, gravity=1.0, seed=None,
-                 respawn_hold=None):
+                 respawn_hold=None, time_scale=stepping.TIME_SCALE):
         """colors: optional colour index (into theme.PLAYER_COLORS) per player.
         teams: optional team number per player. Teammates aren't opponents:
         agents and bots go after the other team, a round ends when one team
@@ -61,6 +61,8 @@ class TestEnv():
         normally restart the round; False restarts the round. None: the
         map's own rule.
         gravity: multiplies the pull of gravity on the players.
+        time_scale: how fast the world runs (stepping.TIME_SCALE: below 1 is
+        slow motion; 1 is the original speed).
         seed: for where players spawn (the env's own random numbers, `rng`;
         None: drawn once from numpy's global ones).
         respawn_hold: steps a respawned player is held (None: RESPAWN_HOLD;
@@ -86,8 +88,10 @@ class TestEnv():
         self.focus = None
         self.rng = new_rng(seed)
         self.players = list(self.map.make_players(self.n, colors, rng=self.rng))
+        self.time_scale = time_scale
         for p in self.players:
             p.gravity *= gravity
+            p.time_scale = time_scale
         self.scores = [0] * self.n
         self.last_hit = [None] * self.n  # (index of who hit them, step) per player
         self.kos = []  # this step's deaths: (victim, who knocked them out or None, walls?)
@@ -274,7 +278,8 @@ class TestEnv():
             self.last_hit[a] = (b, self.steps)
             self.last_hit[b] = (a, self.steps)
 
-        stepping.advance([self.players[i] for i in movers], self.map, on_contact=contact)
+        stepping.advance([self.players[i] for i in movers], self.map, on_contact=contact,
+                         time_scale=self.time_scale)
 
         self.scores = [p.score for p in self.players]
         terminated = max(self.scores) >= self.winning_score

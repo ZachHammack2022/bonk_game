@@ -245,6 +245,11 @@ function check(cond, what) {
     await host.selectOption("#gravity", "low");
     await guest.waitForFunction(() => document.querySelector("#gravity").value === "low");
     check(true, "gravity reaches the guest");
+    check((await guest.inputValue("#speed")) === "normal", "rooms start at the normal (slower) speed");
+    await host.selectOption("#speed", "fast");
+    await guest.waitForFunction(() => document.querySelector("#speed").value === "fast");
+    await host.selectOption("#speed", "normal");
+    check(true, "game speed reaches the guest");
     await host.check("#power-ups");
     await guest.waitForFunction(() => document.querySelector("#power-ups").checked);
     check(await guest.isDisabled("#power-ups"), "power-ups can be turned on (by the host only)");

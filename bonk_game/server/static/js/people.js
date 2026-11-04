@@ -145,6 +145,7 @@ function gameRow(r) {
   if (r.quick) tags.push("drop-in");
   if (r.power_ups) tags.push("power-ups");
   if (r.gravity && r.gravity !== "normal") tags.push(`${r.gravity} gravity`);
+  if (r.speed && r.speed !== "normal") tags.push(`${r.speed} speed`);
   sub.textContent = tags.join(" · ");
   const game = cell("g-game", name, sub);
   if (r.names && r.names.length) game.title = "Playing: " + r.names.join(", ");

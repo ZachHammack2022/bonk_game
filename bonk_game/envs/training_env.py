@@ -30,6 +30,10 @@ class BonkEnv(gym.Env):
 
         self.map = make_map(map_name)
         self.p1, self.p2 = self.map.make_players()
+        # Agents train at the speed the game is played at
+        self.time_scale = stepping.TIME_SCALE
+        for p in (self.p1, self.p2):
+            p.time_scale = self.time_scale
         self.players = [self.p1, self.p2]
 
         self.observation_space = gym.spaces.Box(-1, 1, shape=(self.map.obs_size,), dtype=np.float64)
@@ -84,7 +88,7 @@ class BonkEnv(gym.Env):
 
         self.map.step(move=False)  # (stepping.advance moves its parts)
         self.check_collisions()
-        stepping.advance(self.players, self.map)
+        stepping.advance(self.players, self.map, time_scale=self.time_scale)
 
         # An episode is done if agent or enemy dies
         terminated = not (self.p1.alive and self.p2.alive)

@@ -6,7 +6,7 @@ tick for tick, as the players saw.
 
     {"format": "bonk-replay", "v": 1, "engine": "<hash of the physics code>",
      "map": "platform", "mode": "ffa", "first_to": 5, "round_time": null,
-     "gravity": 1.0, "power_ups": false, "seed": 123,
+     "gravity": 1.0, "speed": 0.75, "power_ups": false, "seed": 123,
      "slots": [{"name", "kind", "color", "team"}],    no tokens: anyone can share it
      "inputs": [[physics step, slot, input code], ...],   (match.input_code)
      "ticks": 2500, "match_id": "ABCD-1700000000000", "at": 1700000000}
@@ -94,8 +94,12 @@ def check(rep):
     gravity = rep.get("gravity", 1.0)
     if not isinstance(gravity, (int, float)) or isinstance(gravity, bool) or not 0.1 <= gravity <= 5:
         raise BadReplay("bad gravity")
+    # (Replays from before the speed setting ran at the original speed)
+    speed = rep.get("speed", 1.0)
+    if not isinstance(speed, (int, float)) or isinstance(speed, bool) or not 0.1 <= speed <= 2:
+        raise BadReplay("bad speed")
     return {**rep, "slots": clean_slots, "inputs": clean_inputs, "first_to": goal, "round_time": rt,
-            "gravity": float(gravity), "power_ups": rep.get("power_ups") is True,
+            "gravity": float(gravity), "speed": float(speed), "power_ups": rep.get("power_ups") is True,
             "seed": _int(rep.get("seed"), 0, 2 ** 31, "seed"),
             "ticks": _int(rep.get("ticks"), 1, MAX_TICKS, "length")}
 
@@ -105,7 +109,8 @@ def rebuild(rep):
     slots = [{"kind": "human", "name": s["name"], "color": s["color"],
               **({"team": s["team"]} if s["team"] is not None else {})} for s in rep["slots"]]
     match = Match(rep["map"], slots, rep["first_to"], mode=rep["mode"], round_time=rep["round_time"],
-                  gravity=rep["gravity"], power_ups=rep["power_ups"], seed=rep["seed"], replay=rep["inputs"])
+                  gravity=rep["gravity"], speed=rep["speed"], power_ups=rep["power_ups"], seed=rep["seed"],
+                  replay=rep["inputs"])
     for s, r in zip(match.slots, rep["slots"]):
         s["kind"] = r["was"]  # (for showing who was a bot; everyone's inputs come from the file)
     return match

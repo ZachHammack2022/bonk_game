@@ -36,7 +36,7 @@ def test_rooms_are_private_until_the_host_lists_them():
         assert listed == {"room": room.code, "map": "Floating Platform", "map_id": "platform",
                           "mode": "Free-for-all", "mode_id": "ffa", "goal": "First to 5", "people": 1,
                           "bots": 1, "most": 6, "names": ["Ann"], "playing": False, "elapsed": None,
-                          "open": True, "power_ups": False, "gravity": "normal", "quick": False,
+                          "open": True, "power_ups": False, "gravity": "normal", "speed": "normal", "quick": False,
                           "host": "Ann"}
         await room.disconnect("a")
         assert rooms.public() == []  # (nobody there)

@@ -80,8 +80,15 @@ class Bot:
             return env.players[env.nearest_opponent(self.index)]
         return env.players[1 - self.index]  # the 1v1 training env
 
+    def chance(self, p):
+        """A per-step chance, as a chance per tick. The world can run slower
+        than a step per tick (env.time_scale): the bot then decides, hops and
+        so on just as often per moment of play, not more often."""
+        ts = getattr(self.env, "time_scale", 1.0)
+        return p if ts == 1.0 else 1 - (1 - p) ** ts
+
     def predict(self, obs, *args, **kwargs):
-        if self.rng.random() > self.reaction:
+        if self.rng.random() > self.chance(self.reaction):
             return self.last, None
         self.last = self.think()
         return self.last, None
@@ -109,7 +116,7 @@ class Bot:
         # Aim for the side of the opponent closer to the middle, then push out
         them_x = them.x
         side = 1 if them_x < centre else -1
-        if self.aim_error and self.rng.random() < 0.05:
+        if self.aim_error and self.rng.random() < self.chance(0.05):
             self.aim = self.rng.uniform(-self.aim_error, self.aim_error)
         target_x = them_x + side * (me.r + them.r) * 0.6 + self.aim
         margin = max(me.r, m.bot_margin * self.caution)
@@ -122,7 +129,8 @@ class Bot:
         # Don't run off the edge chasing: brake if we couldn't stop in time.
         # Braking is weaker while heavy (force / mass).
         decel = FORCE / me.m
-        stop = me.x + math.copysign(me.x_v ** 2 / (2 * decel), me.x_v) * self.caution + me.x_v * 2
+        ahead = 2 * getattr(self.env, "time_scale", 1.0)  # two ticks of movement
+        stop = me.x + math.copysign(me.x_v ** 2 / (2 * decel), me.x_v) * self.caution + me.x_v * ahead
         braking = False
         if me.x_v > 0 and stop > hi - margin + me.r:
             xdir, braking = -1, True
@@ -137,7 +145,7 @@ class Bot:
                 (them.y < me.y - 50 and abs(them.x - me.x) < 140)
                 # Now and then hop in close, to hit from above or pop them
                 # over an obstacle
-                or (abs(them.x - me.x) < 90 and self.rng.random() < self.hop)):
+                or (abs(them.x - me.x) < 90 and self.rng.random() < self.chance(self.hop))):
             ydir = -1
         elif not me.grounded and (me.x < lo or me.x > hi):
             # Off the edge: jump is gone, steer back hard

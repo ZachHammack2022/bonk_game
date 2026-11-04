@@ -51,6 +51,10 @@ class player():
         self.can_fly = True
         self.jump_speed = 0
         self.gravity = 1.5  # added to the vertical speed every step
+        # How much of a physics step passes each tick (stepping.TIME_SCALE):
+        # scales pushes from inputs and heavy wearing off, as the env scales
+        # movement and gravity (stepping.advance)
+        self.time_scale = 1.0
         # Power-up multipliers on top of the values above (1 = no effect)
         self.force_mult = 1.0    # push from inputs
         self.speed_mult = 1.0    # top speed
@@ -79,7 +83,7 @@ class player():
 
     def update_mass(self):
         if self.m > self.min_m:
-            self.m = max(self.m-0.1,self.min_m)
+            self.m = max(self.m - 0.1 * self.time_scale, self.min_m)
 
     def make_heavy(self):
         # Can only go heavy again once the previous heavy has fully worn off
@@ -157,7 +161,7 @@ class player():
 
     def move_up(self,force):
         if self.can_fly:
-            self.y_v -= force*self.force_mult/self.m
+            self.y_v -= force*self.force_mult*self.time_scale/self.m
         else:
             self.jump_buffer = JUMP_BUFFER
             self.try_jump()
@@ -190,13 +194,13 @@ class player():
             self.jump_buffer = max(0, self.jump_buffer - 1)
 
     def move_down(self,force):
-        self.y_v += force*self.force_mult/self.m
+        self.y_v += force*self.force_mult*self.time_scale/self.m
 
     def move_left(self,force):
-        self.x_v -= force*self.force_mult/self.m
+        self.x_v -= force*self.force_mult*self.time_scale/self.m
 
     def move_right(self,force):
-        self.x_v += force*self.force_mult/self.m
+        self.x_v += force*self.force_mult*self.time_scale/self.m
 
     def normalize(self,low,high,val):
         return ((val - low)/(high-low)-0.5)*2

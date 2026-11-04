@@ -101,7 +101,10 @@
   // jumping, then the move in substeps with collisions in between, then
   // heavy wearing off.
   function step(s, b, phys, fl, r) {
-    const F = phys.force;
+    // time_scale: how fast the world runs; scales pushes, moves, gravity and
+    // heavy wearing off (stepping.TIME_SCALE)
+    const ts = phys.time_scale ?? 1;
+    const F = phys.force * ts;
     // Inputs
     if (b[3]) s.vx += F / s.m;
     if (b[1]) s.vx -= F / s.m;
@@ -123,12 +126,12 @@
     // The move, in substeps (stepping.advance)
     const n = phys.substeps || 1;
     for (let k = 0; k < n; k++) {
-      integrate(s, phys, 1 / n, r);
+      integrate(s, phys, ts / n, r);
       if (k < n - 1) collide(s, fl, r);
     }
     // pin_heavy: the Iron power-up keeps you at full weight
     if (phys.pin_heavy) s.m = phys.max_m;
-    else if (s.m > phys.min_m) s.m = Math.max(s.m - phys.mass_decay, phys.min_m);
+    else if (s.m > phys.min_m) s.m = Math.max(s.m - phys.mass_decay * ts, phys.min_m);
     return s;
   }
 
