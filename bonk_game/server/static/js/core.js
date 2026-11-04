@@ -441,7 +441,10 @@ function onMessage(msg) {
       document.body.classList.toggle("is-host", isHost());
       renderLobby();
       if (app.restoring && msg.phase === "lobby") {
-        if (isHost()) send({ type: "settings", ...app.restoring });
+        // (Not the password: the room got that back when it was made again)
+        const settings = { ...app.restoring };
+        delete settings.password;
+        if (isHost()) send({ type: "settings", ...settings });
         app.restoring = null;
       }
       if (msg.phase === "lobby") { app.away = false; replayer.stop(); $("killcam").classList.add("hidden"); playtest.flush(); $("feel").classList.add("hidden"); app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
