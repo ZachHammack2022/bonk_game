@@ -1,4 +1,4 @@
-// bonk web client: The settings menu (⚙ or Esc): sound, screen shake, ping and controls.
+// bonk web client: The settings menu (⚙ or Esc): sound, screen shake, ping, colourblind mode and controls.
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";
 
@@ -15,7 +15,7 @@ const FIXED_KEYS = { ArrowUp: 0, ArrowLeft: 1, ArrowDown: 2, ArrowRight: 3, Shif
 const RESERVED_KEYS = new Set(["Digit1", "Digit2", "Digit3", "Digit4", "KeyM", "Escape", "Tab", "Enter"]);
 
 const prefs = (() => {
-  const d = { volume: 0.8, shake: true, ping: true, keys: { ...DEFAULT_KEYS } };
+  const d = { volume: 0.8, shake: true, ping: true, colorblind: false, contrast: false, keys: { ...DEFAULT_KEYS } };
   const saved = profileStore.get().prefs;
   return { ...d, ...saved, keys: { ...d.keys, ...(saved.keys || {}) } };
 })();
@@ -55,6 +55,8 @@ function renderSettings() {
   $("set-mute").checked = sound.muted;
   $("set-shake").checked = prefs.shake;
   $("set-ping").checked = prefs.ping;
+  $("set-colorblind").checked = prefs.colorblind;
+  $("set-contrast").checked = prefs.contrast;
   const pad = typeof gamepad !== "undefined" && gamepad.name;
   $("set-pad").textContent = pad
     ? `🎮 ${pad.replace(/\s*\(.*\)\s*$/, "").slice(0, 40)}: stick or d-pad to move, A jump, B/X/bumpers/triggers heavy, Y wave, Start for this menu.`
@@ -120,6 +122,9 @@ $("set-volume").addEventListener("change", () => sound.play("point"));
 $("set-mute").addEventListener("change", () => { sound.setMuted($("set-mute").checked); renderSettings(); });
 $("set-shake").addEventListener("change", () => { prefs.shake = $("set-shake").checked; savePrefs(); });
 $("set-ping").addEventListener("change", () => { prefs.ping = $("set-ping").checked; savePrefs(); });
+for (const [id, key] of [["set-colorblind", "colorblind"], ["set-contrast", "contrast"]]) {
+  $(id).addEventListener("change", () => { prefs[key] = $(id).checked; savePrefs(); applyLooks(app.match); });
+}
 $("set-reset-keys").addEventListener("click", () => {
   prefs.keys = { ...DEFAULT_KEYS }; menu.capture = null;
   savePrefs(); buildKeymap(); renderSettings(); updateHelp();

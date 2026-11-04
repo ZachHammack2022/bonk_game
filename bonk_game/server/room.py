@@ -26,8 +26,8 @@ import traceback
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import delta, limits, lobby, metrics, modes, playtest, profiles, replay
-from bonk_game.server.lobby import (GRAVITY, HEX_COLOR, MEMBER_PATTERNS, PATTERNS, ROUND_TIMES, bot_label,
+from bonk_game.server import cosmetics, delta, limits, lobby, metrics, modes, playtest, profiles, replay
+from bonk_game.server.lobby import (GRAVITY, HEX_COLOR, PATTERNS, ROUND_TIMES, bot_label,
                                     clean_name, map_order)
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
@@ -59,21 +59,31 @@ class Member:
         self.color = None       # colour they picked (index), if any
         self.team = None        # team they picked (0 or 1) in the teams mode, if any
         self.pattern = "plain"  # pattern on their ball (PATTERNS)
+        self.trail = "none"     # and the rest of what it wears (cosmetics.py)
+        self.hat = "none"
+        self.ko = "pop"
         self.last_emote = 0.0
         self.last_report = None  # when they last sent a playtest report
         self.errors_sent = 0     # client errors logged for them
         self.account = None      # their account id, when signed in (accounts.py)
         self.own_color = None    # a colour of their own ("#rrggbb"): signed in only
 
+    def look(self):
+        """What their ball wears, for the lobby and the match."""
+        return {"pattern": self.pattern, "trail": self.trail, "hat": self.hat, "ko": self.ko}
+
 
 class Room:
-    def __init__(self, code, agents=None, recorder=None):
+    def __init__(self, code, agents=None, recorder=None, profile_of=None):
         """agents: optional AgentStore for trained agents (see web.py).
         recorder(account, entry): adds a match to a signed-in player's
-        history (accounts.Accounts.record), if accounts are on."""
+        history (accounts.Accounts.record), if accounts are on.
+        profile_of(account): a signed-in player's profile (accounts.Accounts.
+        profile), for what they've unlocked (cosmetics.py)."""
         self.code = code
         self.agents = agents
         self.recorder = recorder
+        self.profile_of = profile_of
         self.members = {}          # token -> Member, in join order
         self.host = None
         self.settings = lobby.default_settings()
@@ -192,7 +202,6 @@ class Room:
             "colors": ["#%02x%02x%02x" % c for c in theme.PLAYER_COLORS],
             "color_names": list(theme.PLAYER_NAMES),
             "patterns": list(PATTERNS),
-            "member_patterns": list(MEMBER_PATTERNS),
             "signed_in": self.members[token].account is not None,
             "maps": [{"name": n, "title": MAPS[n].title, "description": MAPS[n].description,
                       "first_to": min(MAPS[n].winning_score, 10), "round_time": MAPS[n].round_time,
@@ -283,12 +292,14 @@ class Room:
                 await self.error(token, problem)
             await self.broadcast_lobby()
             return
-        if kind == "pattern":
-            p = msg.get("pattern")
-            if p in MEMBER_PATTERNS and self.members[token].account is None:
-                await self.error(token, "Sign in to use that pattern.")
-            elif p in PATTERNS:
-                self.members[token].pattern = p
+        if kind in ("pattern", "look"):
+            # "pattern": just the pattern; "look": any of pattern, trail, hat, ko
+            problems = [self.pick_look(token, k, msg[k]) for k in cosmetics.KINDS if k in msg]
+            problem = next((p for p in problems if p), None)
+            # "auto": the browser bringing your saved look; what's locked is left off quietly
+            if problem and not msg.get("auto"):
+                await self.error(token, problem)
+            if not all(problems):
                 await self.broadcast_lobby()
             return
         if kind == "own_color":
@@ -361,6 +372,18 @@ class Room:
             return "Unknown colour."
         m.own_color = color.lower() if color else None
         return None
+
+    def pick_look(self, token, kind, item):
+        """Someone picks a pattern, trail, hat or knockout effect
+        (cosmetics.py). Returns what's wrong, or None."""
+        m = self.members[token]
+        profile = None
+        if m.account is not None:
+            profile = (self.profile_of(m.account) if self.profile_of else None) or profiles.empty("")
+        problem = cosmetics.problem(kind, item, profile)
+        if problem is None:
+            setattr(m, kind, item)
+        return problem
 
     def pick_team(self, token, team):
         """Someone picks a side in the teams mode (0 or 1), or None for "either"."""
@@ -460,7 +483,7 @@ class Room:
         colors = self.colors_for(humans, len(bots), teams)
         own = lobby.own_colors(colors, [self.members[t].own_color for t in humans] + [None] * len(bots), teams)
         slots = [{"kind": "human", "name": self.members[t].name, "id": t, "color": c,
-                  "pattern": self.members[t].pattern, "own_color": own[k]}
+                  **self.members[t].look(), "own_color": own[k]}
                  for k, (t, c) in enumerate(zip(humans, colors))]
         # Bots are named by colour ("Green bot"), which is easier to follow than
         # five "Medium bot"s
@@ -583,6 +606,7 @@ class RoomManager:
         self.rooms = {}
         self.agents = agents
         self.recorder = recorder   # (see Room)
+        self.profile_of = None     # (see Room)
         self.rng = rng or random.Random()
         self.draining = False      # shutting down: no new rooms or matches
 
@@ -600,7 +624,7 @@ class RoomManager:
                 raise RuntimeError("no free room codes")
         elif not valid_code(code) or code in self.rooms:
             raise ValueError(f"bad room code {code!r}")
-        self.rooms[code] = Room(code, self.agents, self.recorder)
+        self.rooms[code] = Room(code, self.agents, self.recorder, self.profile_of)
         metrics.STATS.rooms_created += 1
         metrics.event("room_created", room=code, rooms=len(self.rooms))
         return self.rooms[code]

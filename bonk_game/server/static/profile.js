@@ -6,7 +6,7 @@
 //   { format: "bonk-profile", v: 1,
 //     id: "<random>",           this browser's profile (not the room token)
 //     merged: ["<id>", ...],    other profiles already added in (merge)
-//     name, color, own_color, pattern, muted,
+//     name, color, own_color, pattern, trail, hat, ko, muted,
 //                               (own_color: "#rrggbb" or null; accounts only)
 //     prefs: { volume, shake, ping, keys: {...} },
 //     stats: { matches, wins, kos, falls, deaths, pickups, best_hit,
@@ -39,7 +39,7 @@
   function empty(id) {
     return {
       format: FORMAT, v: VERSION, id, merged: [],
-      name: "", color: null, own_color: null, pattern: "plain", muted: false,
+      name: "", color: null, own_color: null, pattern: "plain", trail: "none", hat: "none", ko: "pop", muted: false,
       prefs: {},
       stats: { matches: 0, wins: 0, kos: 0, falls: 0, deaths: 0, pickups: 0, best_hit: 0,
                awards: {}, modes: {}, maps: {}, first_at: null, last_at: null },
@@ -75,6 +75,9 @@
     out.color = Number.isInteger(p.color) && p.color >= 0 && p.color < 10 ? p.color : null;
     out.own_color = typeof p.own_color === "string" && /^#[0-9a-f]{6}$/.test(p.own_color) ? p.own_color : null;
     out.pattern = text(p.pattern, 16) || "plain";
+    out.trail = text(p.trail, 16) || "none";
+    out.hat = text(p.hat, 16) || "none";
+    out.ko = text(p.ko, 16) || "pop";
     out.muted = p.muted === true;
     out.prefs = prefsCheck ? prefsCheck(isObj(p.prefs) ? p.prefs : {}) : (isObj(p.prefs) ? p.prefs : {});
     const s = isObj(p.stats) ? p.stats : {};

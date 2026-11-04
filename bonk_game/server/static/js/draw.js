@@ -177,12 +177,12 @@ function drawWalls(walls, t) {
   for (const x of [left, right]) line([x, -40], [x, H + 40], lighten(T.danger, 0.25 + 0.25 * pulse), 3);
 }
 
-function drawPlayer(x, y, r, heavy, color, pattern) {
-  drawBall(ctx, x, y, r, heavy, color, pattern, true);
+function drawPlayer(x, y, r, heavy, color, pattern, hat) {
+  drawBall(ctx, x, y, r, heavy, color, pattern, true, hat);
 }
 
-// A ball on any canvas context `g`: rim, fill, pattern, shine
-function drawBall(g, x, y, r, heavy, color, pattern = "plain", shadow = true) {
+// A ball on any canvas context `g`: rim, fill, pattern, shine (and a hat: looks.js)
+function drawBall(g, x, y, r, heavy, color, pattern = "plain", shadow = true, hat = "none") {
   const dot = (cx, cy, rr, c) => { g.beginPath(); g.arc(cx, cy, Math.max(0.5, rr), 0, Math.PI * 2); g.fillStyle = c; g.fill(); };
   if (shadow) dot(x, y + 4, r, "rgba(0,0,0,0.215)");
   else r -= 1;
@@ -198,7 +198,8 @@ function drawBall(g, x, y, r, heavy, color, pattern = "plain", shadow = true) {
     drawPattern(g, x, y, ri, pattern, fill);
     g.restore();
   }
-  if (pattern !== "eyes") dot(x - r * 0.32, y - r * 0.34, Math.max(1, r * 0.22), lighten(fill, 0.55));
+  if (pattern !== "eyes" && pattern !== "smile") dot(x - r * 0.32, y - r * 0.34, Math.max(1, r * 0.22), lighten(fill, 0.55));
+  if (hat && hat !== "none") drawHat(g, x, y, r, hat);
 }
 
 function drawPattern(g, x, y, r, pattern, fill) {
@@ -252,7 +253,21 @@ function drawPattern(g, x, y, r, pattern, fill) {
         dot(x + s * r * 0.36 + r * 0.07, y - r * 0.08, r * 0.13, "#1d2433");
       }
       break;
-    // Members' patterns (signed in)
+    case "swirl":
+      g.lineWidth = r * 0.2; g.lineCap = "round";
+      g.beginPath();
+      for (let k = 0; k <= 24; k++) {
+        const a = k / 24 * Math.PI * 3.2, rr = r * 0.78 * k / 24;
+        if (k) g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); else g.moveTo(x, y);
+      }
+      g.stroke();
+      break;
+    case "smile":
+      for (const s of [-1, 1]) dot(x + s * r * 0.32, y - r * 0.22, r * 0.13, ink);
+      g.lineWidth = r * 0.14; g.lineCap = "round";
+      g.beginPath(); g.arc(x, y + r * 0.02, r * 0.45, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
+      break;
+    // Signed in (some unlocked by playing: cosmetics.py)
     case "heart": {
       const s = r * 0.62, cy = y + r * 0.08;
       g.beginPath();
@@ -287,6 +302,33 @@ function drawPattern(g, x, y, r, pattern, fill) {
       }
       break;
     }
+    case "flame": {
+      const flame = (s, c) => {
+        g.beginPath();
+        g.moveTo(x, y + r * 0.8 * s);
+        g.bezierCurveTo(x - r * 0.75 * s, y + r * 0.6 * s, x - r * 0.5 * s, y - r * 0.2 * s, x - r * 0.1 * s, y - r * 0.85 * s);
+        g.bezierCurveTo(x + r * 0.05 * s, y - r * 0.4 * s, x + r * 0.35 * s, y - r * 0.45 * s, x + r * 0.3 * s, y - r * 0.75 * s);
+        g.bezierCurveTo(x + r * 0.8 * s, y - r * 0.2 * s, x + r * 0.7 * s, y + r * 0.6 * s, x, y + r * 0.8 * s);
+        g.fillStyle = c; g.fill();
+      };
+      flame(1, "#ff6b00"); flame(0.6, "#ffd43b");
+      break;
+    }
+    case "bolt":
+      g.beginPath();
+      [[0.15, -0.85], [-0.45, 0.1], [-0.02, 0.1], [-0.2, 0.85], [0.45, -0.18], [0.04, -0.18], [0.25, -0.85]]
+        .forEach(([px, py], i) => (i ? g.lineTo(x + px * r, y + py * r) : g.moveTo(x + px * r, y + py * r)));
+      g.closePath(); g.fillStyle = "#ffe066"; g.fill();
+      g.lineWidth = Math.max(0.8, r * 0.06); g.strokeStyle = ink; g.stroke();
+      break;
+    case "target":
+      g.lineWidth = r * 0.16;
+      g.strokeStyle = "#ffffff";
+      g.beginPath(); g.arc(x, y, r * 0.72, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = ink;
+      g.beginPath(); g.arc(x, y, r * 0.45, 0, Math.PI * 2); g.stroke();
+      dot(x, y, r * 0.17, "#ffffff");
+      break;
   }
 }
 
@@ -529,10 +571,7 @@ function frame(now) {
     ctx.beginPath(); ctx.arc(r.x, r.y, 20 + 30 * k, 0, Math.PI * 2);
     ctx.strokeStyle = r.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 3; ctx.stroke(); ctx.globalAlpha = 1;
   }
-  for (const p of fx.parts) {
-    ctx.globalAlpha = clamp(1 - p.age / p.life, 0, 1);
-    circle(p.x, p.y, p.size * (1 - 0.5 * p.age / p.life), p.color);
-  }
+  for (const p of fx.parts) drawPart(p);
   ctx.globalAlpha = 1;
 
   const R = app.match.radius;
@@ -545,6 +584,7 @@ function frame(now) {
     players[mine] = [ownAt[0], ownAt[1], st.players[mine][2], 1];
     st = { ...st, players };
   }
+  drawTrails(st.players, app.match.slots, R, now);
   st.players.forEach((p, i) => {
     if (!p[3]) return;
     const slot = app.match.slots[i];
@@ -558,7 +598,7 @@ function frame(now) {
     }
     const held = st.held && st.held[i];
     if (held) ctx.globalAlpha = 0.5 + 0.15 * Math.sin(now / 90);  // see-through, flickering
-    drawPlayer(p[0], p[1], R, p[2], slot.color, slot.pattern);
+    drawPlayer(p[0], p[1], R, p[2], slot.color, slot.pattern, slot.hat);
     ctx.globalAlpha = 1;
     if (held) drawHold(p[0], p[1], R, held, slot);
   });
@@ -566,9 +606,11 @@ function frame(now) {
   st.players.forEach((p, i) => {
     if (!p[3]) return;
     const slot = app.match.slots[i];
-    if (st.crown === i) drawCrown(p[0], p[1], R);
-    if (slot.id === me.token) drawYouMarker(p[0], p[1] - (st.crown === i ? 8 : 0), R, slot.color);
-    else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 10, "rgba(241,245,249,0.75)", p[0], p[1] - R - 9, { weight: 700 });
+    // (Above the hat, if there is one)
+    const up = slot.hat && slot.hat !== "none" ? R * 0.8 : 0;
+    if (st.crown === i) drawCrown(p[0], p[1] - up, R);
+    if (slot.id === me.token) drawYouMarker(p[0], p[1] - up - (st.crown === i ? 8 : 0), R, slot.color);
+    else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 10, "rgba(241,245,249,0.75)", p[0], p[1] - up - R - 9, { weight: 700 });
     drawOffscreen(p[0], p[1], R, slot.color);
   });
   // Emote bubbles over balls

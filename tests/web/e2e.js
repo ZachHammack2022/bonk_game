@@ -75,6 +75,8 @@ function check(cond, what) {
     await host.click("#edit-ball");
     await host.click("#profile-colors [title=Purple]");
     await host.click("#profile-patterns [data-pattern=stripes]");
+    await host.waitForSelector("#profile-extras .looks-trail [data-look=sparkle].locked");
+    check(await host.isVisible("#profile-extras .looks-hat [data-look=none].on"), "trails, hats and knockout effects are in Customize, locked for guests");
     await host.click("#profile-close");
     check((await host.textContent("#home-ball-label")).includes("Purple"), "you can pick a favourite colour and pattern");
     await host.keyboard.press("Escape");
@@ -149,6 +151,12 @@ function check(cond, what) {
       return !!S && S.you.length === 3 && S.players.length === bonkDebug.app.match.slots.length;
     }), "the match is rebuilt from changes, with your own speeds");
     check(await guest.evaluate(() => bonkDebug.app.match.slots[1].color_name) === "Green", "the match uses the picked colour");
+    check(await guest.evaluate(() => {
+      prefs.colorblind = true; applyLooks(bonkDebug.app.match);
+      const ps = bonkDebug.app.match.slots.map((x) => x.pattern);
+      prefs.colorblind = false; applyLooks(bonkDebug.app.match);
+      return new Set(ps).size === ps.length && !ps.includes("plain") && bonkDebug.app.match.slots[0].pattern === "stripes";
+    }), "colourblind mode gives every ball a pattern of its own");
 
     // The guest reloads mid-match and gets their seat back
     await guest.reload();

@@ -129,7 +129,11 @@ def test_accounts_are_off_without_google_settings():
         app = make_app(auth_config=auth.Config(client_id="", client_secret="", db=":memory:"))
         async with TestClient(TestServer(app)) as client:
             r = await client.get("/api/me")
-            assert (await r.json()) == {"accounts": False, "user": None}
+            body = await r.json()
+            assert body["accounts"] is False and body["user"] is None
+            # A guest can wear only what's free
+            free = {i["id"] for i in body["cosmetics"]["pattern"] if i["unlocked"]}
+            assert "galaxy" not in free and {"plain", "swirl"} <= free
             r = await client.get("/auth/google", allow_redirects=False)
             assert r.status == 404
             r = await client.get("/privacy")
@@ -158,7 +162,8 @@ def test_sign_in_play_and_delete(monkeypatch):
         async with TestClient(TestServer(app)) as client:
             site = str(client.make_url("")).rstrip("/")
             origin = {"Origin": site}
-            assert (await (await client.get("/api/me")).json()) == {"accounts": True, "user": None}
+            me = await (await client.get("/api/me")).json()
+            assert me["accounts"] is True and me["user"] is None
 
             # Off to Google, with state and PKCE
             r = await client.get("/auth/google?next=/r/ABCD", allow_redirects=False)

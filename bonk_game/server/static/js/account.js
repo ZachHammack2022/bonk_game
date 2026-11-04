@@ -32,6 +32,7 @@ const account = {
     let me;
     try { me = await this.api("GET", "/api/me"); } catch (e) { return; /* offline: carry on as we are */ }
     this.on = !!me.accounts;
+    if (me.cosmetics) { looks.set(me.cosmetics); renderHomeBall(); }
     const had = profileStore.user;
     if (!me.user) {
       // Signed out (here or elsewhere, or the sign-in ran out): back to the guest profile
@@ -54,7 +55,8 @@ const account = {
       }
       // A fresh guest profile from now on (its matches are in the account)
       store.set(profileStore.KEY, JSON.stringify({ ...BonkProfile.empty(randomToken()),
-        name: guest.name, color: guest.color, pattern: guest.pattern, muted: guest.muted, prefs: guest.prefs }));
+        name: guest.name, color: guest.color, pattern: guest.pattern, trail: guest.trail, hat: guest.hat, ko: guest.ko,
+        muted: guest.muted, prefs: guest.prefs }));
       store.set(profileStore.ACCOUNT_KEY, JSON.stringify({ user: res.user, profile: res.profile }));
       location.reload();
       return;
@@ -74,7 +76,8 @@ const account = {
   // Send name, ball and settings changes (a moment later: typing a name
   // sends once)
   push(p) {
-    this.pending = { name: p.name, color: p.color, own_color: p.own_color, pattern: p.pattern, muted: p.muted, prefs: p.prefs };
+    this.pending = { name: p.name, color: p.color, own_color: p.own_color, pattern: p.pattern,
+                     trail: p.trail, hat: p.hat, ko: p.ko, muted: p.muted, prefs: p.prefs };
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), 600);
   },
@@ -90,6 +93,7 @@ const account = {
     setTimeout(async () => {
       try {
         const me = await this.api("GET", "/api/me");
+        if (me.cosmetics) looks.set(me.cosmetics);  // (says if the match unlocked something)
         const p = me.user && BonkProfile.validate(me.profile);
         if (p && profileStore.user && me.user.id === profileStore.user.id) {
           profileStore.current = { ...p, name: profileStore.get().name, prefs: profileStore.get().prefs };

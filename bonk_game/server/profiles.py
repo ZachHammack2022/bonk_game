@@ -50,7 +50,8 @@ def _key(v):
 
 def empty(id_):
     return {"format": FORMAT, "v": VERSION, "id": id_, "merged": [],
-            "name": "", "color": None, "own_color": None, "pattern": "plain", "muted": False, "prefs": {},
+            "name": "", "color": None, "own_color": None, "pattern": "plain",
+            "trail": "none", "hat": "none", "ko": "pop", "muted": False, "prefs": {},
             "stats": {"matches": 0, "wins": 0, "kos": 0, "falls": 0, "deaths": 0, "pickups": 0,
                       "best_hit": 0, "awards": {}, "modes": {}, "maps": {}, "first_at": None, "last_at": None},
             "history": []}
@@ -92,6 +93,8 @@ def validate(p):
     oc = p.get("own_color")
     out["own_color"] = oc if isinstance(oc, str) and re.fullmatch(r"#[0-9a-f]{6}", oc) else None
     out["pattern"] = _text(p.get("pattern"), 16) or "plain"
+    for k, d in (("trail", "none"), ("hat", "none"), ("ko", "pop")):
+        out[k] = _text(p.get(k), 16) or d
     out["muted"] = p.get("muted") is True
     out["prefs"] = p["prefs"] if isinstance(p.get("prefs"), dict) else {}
     s = p.get("stats") if isinstance(p.get("stats"), dict) else {}

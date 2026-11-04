@@ -54,13 +54,14 @@ window.addEventListener("keydown", () => sound.unlock());
 // Effects: particles, rings, screen shake, banners
 // ---------------------------------------------------------------------------
 const fx = {
-  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [], feed: [],
-  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; this.feed = []; },
-  burst(x, y, color, n = 26, speed = 7, size = 4.5, life = 0.7, gravity = true) {
+  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [], feed: [], trails: {},
+  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; this.feed = []; this.trails = {}; },
+  // shape: how each particle is drawn (looks.js: drawPart)
+  burst(x, y, color, n = 26, speed = 7, size = 4.5, life = 0.7, gravity = true, shape = null) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.9);
       this.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - (gravity ? 2 : 0), color,
-        size: size * (0.5 + Math.random() * 0.7), life, age: 0, gravity });
+        size: size * (0.5 + Math.random() * 0.7), life, age: 0, gravity, shape });
     }
   },
   ring(x, y, color, life = 0.45) { this.rings.push({ x, y, color, life, age: 0 }); },
@@ -148,8 +149,7 @@ function onEvent(ev, state) {
       if (slots[ev.i] && slots[ev.i].id === me.token && debug.drawn && performance.now() - debug.drawn.t < 200) {
         x = clamp(debug.drawn.x, 12, W - 12); y = clamp(debug.drawn.y, 12, H - 12);
       }
-      fx.burst(x, y, c, 34, 9);
-      fx.burst(x, y, T.text, 10, 5, 3);
+      knockoutEffect(x, y, c, slots[ev.i] && slots[ev.i].ko);
       fx.kick(10);
       sound.play("death");
       fx.feed.push({ victim: ev.i, by: ev.by ?? null, wall: !!ev.wall, at: performance.now() });

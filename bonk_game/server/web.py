@@ -463,6 +463,8 @@ def make_app(rooms=None, auth_config=None, accounts=None):
     accounts = auth.setup(app, auth_config, accounts)
     if accounts is not None and app[ROOMS].recorder is None:
         app[ROOMS].recorder = accounts.record  # signed-in players' match history
+    if accounts is not None and app[ROOMS].profile_of is None:
+        app[ROOMS].profile_of = accounts.profile  # what they've unlocked (cosmetics.py)
     app.router.add_static("/static/", STATIC)
     app.on_startup.append(_start_background)
     app.on_shutdown.append(_shutdown)

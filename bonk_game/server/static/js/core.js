@@ -37,11 +37,46 @@ const PALETTE = [
   ["Red", "#ff6b6b"], ["Blue", "#4dabf7"], ["Yellow", "#ffd43b"], ["Purple", "#b197fc"], ["Orange", "#ff922b"],
   ["Green", "#40c057"], ["Pink", "#faa2c1"], ["Cyan", "#3bc9db"], ["White", "#f1f3f5"], ["Brown", "#9c6644"],
 ];
-// (The last few are for signed-in players: MEMBER_PATTERNS, as on the server)
-const MEMBER_PATTERNS = ["heart", "checker", "galaxy"];
-const PATTERNS = ["plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes", ...MEMBER_PATTERNS];
+// Patterns, as on the server (bonk_game/server/cosmetics.py; some are
+// unlocked by playing, signed in: see `looks`)
+const PATTERNS = ["plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes", "swirl", "smile",
+                  "heart", "checker", "galaxy", "flame", "bolt", "target"];
 const PATTERN_NAMES = { plain: "Plain", stripes: "Stripes", dots: "Dots", ring: "Ring", split: "Split", star: "Star", zigzag: "Zigzag", eyes: "Eyes",
-                        heart: "Heart", checker: "Checker", galaxy: "Galaxy" };
+                        swirl: "Swirl", smile: "Smile", heart: "Heart", checker: "Checker", galaxy: "Galaxy",
+                        flame: "Flame", bolt: "Bolt", target: "Target" };
+// What a ball can wear besides its colour, and what you've unlocked. The
+// server sends the catalogue with /api/me (account.js) and checks each pick.
+const looks = {
+  KINDS: ["pattern", "trail", "hat", "ko"],
+  DEFAULT: { pattern: "plain", trail: "none", hat: "none", ko: "pop" },
+  LABELS: { pattern: "Pattern", trail: "Trail", hat: "Hat", ko: "Knockout effect" },
+  catalog: null,   // {kind: [{id, name, how, unlocked, member, have, want}]}
+  item(kind, id) { return this.catalog ? this.catalog[kind].find((x) => x.id === id) : null; },
+  // Can you wear it? (Until the catalogue arrives, what you saved; the
+  // server checks anyway)
+  ok(kind, id) {
+    if (!this.catalog) return typeof id === "string" && (kind !== "pattern" || PATTERNS.includes(id));
+    const it = this.item(kind, id);
+    return !!it && it.unlocked;
+  },
+  name(kind, id) { const it = this.item(kind, id); return it ? it.name : kind === "pattern" ? PATTERN_NAMES[id] || id : id; },
+  // How to unlock it, with how far you've got
+  how(it) { return it.how + (it.want ? ` (${Math.min(it.have, it.want)} of ${it.want} so far)` : ""); },
+  // A new catalogue (after signing in, or a match): say what's newly unlocked
+  set(catalog) {
+    const before = this.catalog;
+    this.catalog = catalog;
+    if (!before) return;
+    const fresh = [];
+    for (const kind of this.KINDS) {
+      for (const it of catalog[kind] || []) {
+        const was = before[kind] && before[kind].find((x) => x.id === it.id);
+        if (it.unlocked && was && !was.unlocked) fresh.push(`${it.name} ${kind === "ko" ? "knockout" : kind}`);
+      }
+    }
+    if (fresh.length) toast(`🎉 Unlocked: ${fresh.join(", ")}! Pick it in Customize.`);
+  },
+};
 const W = 680, H = 480;
 const TICK_MS = 1000 / 30;
 const playClock = BonkClock.make(TICK_MS);  // what moment of the match to draw (clock.js)
@@ -182,12 +217,11 @@ const me = {
   set name(v) { profileStore.update((p) => ({ ...p, name: v })); },
   get color() { const c = profileStore.get().color; return c !== null && c < PALETTE.length ? c : null; },
   set color(v) { profileStore.update((p) => ({ ...p, color: v })); },
-  get pattern() {
-    const p = profileStore.get().pattern;
-    if (MEMBER_PATTERNS.includes(p) && !profileStore.user) return "plain";  // (signed out)
-    return PATTERNS.includes(p) ? p : "plain";
-  },
-  set pattern(v) { profileStore.update((p) => ({ ...p, pattern: v })); },
+  // What your ball wears (looks.KINDS): what you picked, if you can wear it
+  look(kind) { const v = profileStore.get()[kind]; return looks.ok(kind, v) ? v : looks.DEFAULT[kind]; },
+  setLook(kind, v) { profileStore.update((p) => ({ ...p, [kind]: v })); },
+  get pattern() { return this.look("pattern"); },
+  set pattern(v) { this.setLook("pattern", v); },
   // A colour of your own ("#rrggbb"): an account's perk
   get ownColor() { return profileStore.user ? profileStore.get().own_color || null : null; },
   set ownColor(v) { profileStore.update((p) => ({ ...p, own_color: v })); },
@@ -359,7 +393,7 @@ function onMessage(msg) {
       playtest.on = !!msg.playtest;
       playtest.sendErrors();
       // Bring your profile along
-      if (me.pattern !== "plain") send({ type: "pattern", pattern: me.pattern });
+      send({ type: "look", ...Object.fromEntries(looks.KINDS.map((k) => [k, me.look(k)])), auto: true });
       if (me.color !== null) send({ type: "color", color: me.color, auto: true });
       if (me.ownColor) send({ type: "own_color", color: me.ownColor, auto: true });
       break;
@@ -375,6 +409,7 @@ function onMessage(msg) {
       break;
     case "match":
       app.match = msg;
+      applyLooks(msg);
       app.states = [];
       app.last = null;
       app.results = null;
