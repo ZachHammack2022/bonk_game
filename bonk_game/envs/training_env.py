@@ -3,7 +3,7 @@ import os
 import gymnasium as gym
 import numpy as np
 
-from bonk_game.envs.utils import arena
+from bonk_game.envs.utils import arena, stepping
 from bonk_game.envs.utils.maps import DEFAULT_MAP, agent_dir, make_map
 from bonk_game.envs.utils.mechanics import player_collision
 
@@ -57,7 +57,7 @@ class BonkEnv(gym.Env):
 
     def check_collisions(self):
         for p in self.players:
-            if self.map.collide(p):
+            if self.map.collide(p) or p.doomed:
                 p.dies()
         player_collision(self.p1, self.p2)
 
@@ -82,10 +82,9 @@ class BonkEnv(gym.Env):
 
         arena.apply_action(self.p1, action)
 
-        self.map.step()
+        self.map.step(move=False)  # (stepping.advance moves its parts)
         self.check_collisions()
-        self.p1.update()
-        self.p2.update()
+        stepping.advance(self.players, self.map)
 
         # An episode is done if agent or enemy dies
         terminated = not (self.p1.alive and self.p2.alive)

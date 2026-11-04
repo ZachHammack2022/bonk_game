@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from bonk_game.envs.utils import arena
+from bonk_game.envs.utils import arena, stepping
 from bonk_game.envs.utils.controls import apply_input
 from bonk_game.envs.utils.maps import DEFAULT_MAP, make_map
 from bonk_game.envs.utils.mechanics import player_collision
@@ -165,7 +165,10 @@ class TestEnv():
         # Held players (just respawned) can't die yet
         living = [i for i in living if not self.players[i].held]
         walled = [i for i in living if self.timer.kills(self.players[i])]
-        dead = [i for i in living if self.map.collide(self.players[i]) or i in walled]
+        dead = [i for i in living if self.map.collide(self.players[i]) or i in walled
+                or self.players[i].doomed]
+        for i in living:
+            self.players[i].doomed = False
         deaths = [(i, self.players[i].x, self.players[i].y) for i in dead]
         self.kos = [(i, self.knocked_out_by(i), i in walled) for i in dead]
         points = []
@@ -255,15 +258,23 @@ class TestEnv():
         for p, a, h in zip(self.players, actions, held):
             if p.alive and not h:
                 apply_input(p, a)
-        self.map.step()
+        self.map.step(move=False)  # (stepping.advance moves its parts)
         self.timer.step()
         self.steps += 1
         deaths, points, round_over = self.check_collisions()
-        for p, h in zip(self.players, held):
+        movers = []
+        for i, (p, h) in enumerate(zip(self.players, held)):
             if h and p.held:
                 p.held -= 1
             elif p.alive and not p.held:
-                p.update()
+                movers.append(i)
+
+        def contact(a, b):
+            a, b = movers[a], movers[b]
+            self.last_hit[a] = (b, self.steps)
+            self.last_hit[b] = (a, self.steps)
+
+        stepping.advance([self.players[i] for i in movers], self.map, on_contact=contact)
 
         self.scores = [p.score for p in self.players]
         terminated = max(self.scores) >= self.winning_score
