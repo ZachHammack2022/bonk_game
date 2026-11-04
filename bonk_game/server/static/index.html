@@ -67,6 +67,11 @@
         <button id="copy-link">Copy invite link</button>
       </div>
     </header>
+    <!-- Out here while a match is on: the way back in -->
+    <div id="match-on" class="need match-on hidden">
+      <p id="match-on-text"></p>
+      <button id="back-to-match" class="primary">Back to the match</button>
+    </div>
     <div class="lobby-grid">
       <div class="card">
         <h2>Players <span id="seat-count" class="dim"></span></h2>
@@ -138,6 +143,7 @@
       <button id="replay-back">Done</button>
     </div>
     <div class="game-bar">
+      <button id="go-lobby" class="game-gear lobby-button" title="Go to the lobby: a bot plays for you, and you can come back">← Lobby</button>
       <button id="open-settings-game" class="icon-button game-gear" aria-label="Settings" title="Settings (Esc)">⚙</button>
       <div id="emotes" aria-label="Emotes">
         <button data-e="0" title="Emote (1)">👋</button>

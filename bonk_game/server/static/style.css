@@ -269,6 +269,7 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 .link-button { background: none; border-color: transparent; color: var(--dim); font-size: 14px; min-height: 36px; }
 .link-button:hover { color: var(--text); border-color: transparent; }
 .game-gear { min-height: 40px; width: 40px; background: rgba(19, 27, 43, 0.6); border-color: rgba(160, 174, 198, 0.35); }
+.game-gear.lobby-button { width: auto; padding: 0 12px; font-size: 14px; }
 .settings-card { max-width: 400px; z-index: 1; }
 .settings-card h3 { margin: 8px 0 0; font-size: 15px; }
 .set-row { display: flex; align-items: center; gap: 10px; }
@@ -342,6 +343,9 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 }
 .need p { margin: 0 0 8px; font-size: 14px; }
 .need button { width: 100%; }
+.match-on { width: 100%; max-width: 780px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.match-on p { margin: 0; flex: 1 1 220px; }
+.match-on button { width: auto; flex: none; }
 
 /* Signing in (optional): Google's button, or who you're signed in as */
 .account { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(160, 174, 198, 0.2); text-align: center; }

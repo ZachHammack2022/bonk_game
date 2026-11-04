@@ -237,6 +237,7 @@ const app = {
   retry: 0,
   fatal: false,
   restoring: null,   // the host's settings, to put back after a server restart
+  away: false,       // in the lobby while a match is on (lobby.js: goToLobby)
 };
 
 function send(msg) {
@@ -313,7 +314,7 @@ function leaveRoom(push) {
     ws.close();
   }
   replayer.stop();
-  app.ws = null; app.room = null; app.lobby = null; app.match = null; app.results = null;
+  app.ws = null; app.room = null; app.lobby = null; app.match = null; app.results = null; app.away = false;
   app.states = []; app.last = null; app.retry = 0;
   $("results").classList.add("hidden");
   $("killcam").classList.add("hidden");
@@ -399,9 +400,11 @@ function onMessage(msg) {
         if (isHost()) send({ type: "settings", ...app.restoring });
         app.restoring = null;
       }
-      if (msg.phase === "lobby") { replayer.stop(); $("killcam").classList.add("hidden"); playtest.flush(); $("feel").classList.add("hidden"); app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
+      if (msg.phase === "lobby") { app.away = false; replayer.stop(); $("killcam").classList.add("hidden"); playtest.flush(); $("feel").classList.add("hidden"); app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
       break;
     case "match":
+      app.away = false;
+      $("go-lobby").classList.remove("hidden");
       app.match = msg;
       applyLooks(msg);
       app.states = [];

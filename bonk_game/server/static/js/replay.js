@@ -174,6 +174,7 @@ function watchReplay(body) {
   $("results").classList.add("hidden");
   $("emotes").classList.add("hidden");
   $("replay-bar").classList.remove("hidden");
+  $("go-lobby").classList.add("hidden");  // (no room: Done goes home)
   $("replay-seek").max = String(states.length - 1);
   show("game");
   resize();
