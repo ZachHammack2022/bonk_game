@@ -18,6 +18,7 @@
       <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
       <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.3-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
@@ -182,6 +183,7 @@
       <button id="back-to-match" class="primary">Back to the match</button>
     </div>
     <div class="lobby-grid">
+      <div class="lobby-col">
       <div class="card players-card">
         <div class="card-head">
           <h2>Players <span id="seat-count" class="dim"></span></h2>
@@ -189,6 +191,14 @@
         </div>
         <ul id="seats" class="seats"></ul>
         <p id="spectators" class="dim small"></p>
+      </div>
+      <div class="card chat-card">
+        <h2>Chat</h2>
+        <ol id="chat-log" class="chat-log" aria-live="polite" aria-label="Chat"></ol>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" maxlength="200" placeholder="Say something (Enter to send)" autocomplete="off" aria-label="Chat message">
+        </form>
+      </div>
       </div>
       <div class="card game-card">
         <canvas id="map-preview" class="map-preview" width="340" height="240" aria-hidden="true"></canvas>
@@ -250,9 +260,17 @@
       </div>
     </div>
     <div id="killcam" class="killcam hidden"><b>KILLCAM</b><span class="dim small">click to skip</span></div>
+    <!-- Chat over the match: the latest lines fade after a few seconds -->
+    <div id="chat-overlay" class="chat-overlay">
+      <ol id="chat-feed" class="chat-feed" aria-live="polite" aria-label="Chat"></ol>
+      <form id="chat-game-form" class="chat-game-form hidden">
+        <input id="chat-game-input" maxlength="200" placeholder="Say something (Enter to send, Esc to close)" autocomplete="off" aria-label="Chat message">
+      </form>
+    </div>
     <div class="game-bar">
       <button id="go-lobby" class="game-gear lobby-button" title="Go to the lobby: a bot plays for you, and you can come back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>Lobby</button>
       <button id="open-settings-game" class="icon-button game-gear" aria-label="Settings" title="Settings (Esc)"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg></button>
+      <button id="open-chat" class="icon-button game-gear" aria-label="Chat" title="Chat (Enter or T)"><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg></button>
       <div id="emotes" aria-label="Emotes">
         <button data-e="0" title="Emote (1)">👋</button>
         <button data-e="1" title="Emote (2)">😂</button>
@@ -360,6 +378,7 @@
       <label class="check"><input id="set-mute" type="checkbox"> Mute (M)</label>
       <label class="check"><input id="set-shake" type="checkbox"> Screen shake</label>
       <label class="check"><input id="set-ping" type="checkbox"> Show ping</label>
+      <label class="check"><input id="set-chat" type="checkbox"> Chat during matches</label>
       <label class="check"><input id="set-colorblind" type="checkbox"> Colourblind mode: a different pattern on every ball</label>
       <label class="check"><input id="set-contrast" type="checkbox"> High-contrast ball colours</label>
       <h3>Controls</h3>
@@ -396,6 +415,7 @@
   <script src="/static/js/draw.js"></script>
   <script src="/static/js/looks.js"></script>
   <script src="/static/js/people.js"></script>
+  <script src="/static/js/chat.js"></script>
   <script src="/static/js/account.js"></script>
   <script src="/static/js/main.js"></script>
 </body>

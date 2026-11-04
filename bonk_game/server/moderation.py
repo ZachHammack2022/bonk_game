@@ -1,9 +1,14 @@
-"""Moderation basics (issue #36): a name filter, player reports and the
-record that goes with them.
+"""Moderation basics (issue #36): a name and chat filter, player reports
+and the record that goes with them.
 
-- Names: clean_name() replaces an offensive name with "Player NN" rather
-  than refusing to join. It catches common spellings (f4ck, f.u.c.k,
-  fuuuck), not everything: the lists are short on purpose.
+- Words: better-profanity's list (a few thousand words and their look-alike
+  spellings), less the mild words that are part of playing a game ("kill",
+  "hell"; GAME_WORDS), plus this file's own short lists, which also catch
+  slurs written into longer words and spellings like f.u.c.k or fuuuck.
+- Names (guests' and accounts' alike): clean_name() replaces an offensive
+  name with "Player NN" rather than refusing to join.
+- Chat: clean_chat() stars out offensive words ("you ****") and keeps the
+  rest of the message.
 - Mute: on your own screen only, so it lives in the browser (looks.js).
 - Reports: a player reports someone from the lobby or the results screen.
   Each report is logged (event "player_report") with the room, both names,
@@ -27,6 +32,9 @@ import logging
 import random
 import re
 import time
+import unicodedata
+
+from better_profanity import profanity
 
 from . import metrics
 
@@ -37,6 +45,12 @@ REPORT_NOTE_LEN = 200
 REASONS = {"name": "Offensive name", "emotes": "Spamming emotes", "cheating": "Cheating",
            "other": "Something else"}
 RECENT_KEPT = 40           # events a room remembers, for reports
+CHAT_LEN = 200             # characters in a chat message
+# Words better-profanity counts that are fine in a game's chat
+GAME_WORDS = ("kill", "kills", "killed", "killing", "killer", "die", "died", "dead", "death", "hell",
+              "damn", "god", "crap", "sucks", "suck", "stupid", "dumb", "idiot", "loser", "noob",
+              "hate", "shoot", "bloody", "weed", "drunk", "fart", "butt", "poop", "screw", "pissed")
+profanity.load_censor_words(whitelist_words=list(GAME_WORDS))
 
 # Look-alike characters, so "f4ck" and "$hit" count
 _LEET = str.maketrans({"0": "o", "1": "i", "!": "i", "|": "i", "3": "e", "4": "a", "@": "a",
@@ -79,7 +93,27 @@ def offensive(name):
     if any(w in _WORDS or _squeeze(w) in _WORDS for w in words):
         return True
     # "f u c k" and "d.i.c.k": the name is one word spelt out
-    return letters in _WORDS or _squeeze(letters) in _WORDS
+    if letters in _WORDS or _squeeze(letters) in _WORDS:
+        return True
+    # better-profanity's longer list (whole words, and its look-alikes)
+    return profanity.contains_profanity(str(name or ""))
+
+
+_WORD = re.compile(r"[^\s]+")
+
+
+def clean_chat(text):
+    """(the message to show, whether anything was starred out), or (None,
+    False) if there's nothing left. Control characters and extra spaces go,
+    it's cut to CHAT_LEN, and each offensive word becomes stars."""
+    text = " ".join(str(text or "").split())  # (tabs and newlines are spaces)
+    text = "".join(c for c in text if unicodedata.category(c)[0] != "C")[:CHAT_LEN].strip()
+    if not text:
+        return None, False
+    starred = profanity.censor(text, "*")
+    # This file's own lists, word by word (slurs inside longer words too)
+    starred = _WORD.sub(lambda m: "*" * 4 if "*" not in m.group() and offensive(m.group()) else m.group(), starred)
+    return starred, starred != text
 
 
 def clean_name(name, rng=random):

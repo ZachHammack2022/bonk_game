@@ -45,7 +45,15 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.code === "Escape" && !$("stats").classList.contains("hidden")) { $("stats").classList.add("hidden"); return; }
   if (e.code === "Escape" && !e.target.matches("input")) { openSettings(); return; }
-  if (e.code === "KeyM" && !e.target.matches("input")) { sound.toggle(); return; }
+  // Typing (chat, names): not game keys
+  if (e.target.matches("input, textarea, select")) return;
+  if (e.code === "KeyM") { sound.toggle(); return; }
+  // Chat during a match (chat.js)
+  if ((e.code === "Enter" || e.code === "KeyT") && !(e.code in KEYMAP) && app.match && !$("game").classList.contains("hidden")) {
+    e.preventDefault();
+    openGameChat();
+    return;
+  }
   const digit = /^Digit([1-4])$/.exec(e.code);
   if (digit && playing()) { sendEmote(+digit[1] - 1); return; }
   if (!(e.code in KEYMAP) || !playing()) return;

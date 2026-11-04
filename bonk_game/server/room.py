@@ -60,6 +60,9 @@ EMOTE_GAP = 0.8          # seconds between one person's emotes
 AUTO_START = 2.0         # quick-play rooms: seconds from someone joining to the match starting
 AUTO_NEXT = 10.0         # and from the results to the next match
 LISTED = 200             # rooms the game browser lists (it filters and pages them)
+CHAT_KEPT = 50           # chat lines a room keeps, for people who join
+CHAT_RATE = 0.5          # chat messages a second, per person, on average
+CHAT_BURST = 5           # and in a burst
 
 
 _PREVIEWS = {}
@@ -102,6 +105,7 @@ class Member:
         self.hat = "none"
         self.ko = "pop"
         self.last_emote = 0.0
+        self.chat_bucket = limits.TokenBucket(CHAT_RATE, CHAT_BURST)
         self.last_report = None  # when they last sent a playtest report
         self.errors_sent = 0     # client errors logged for them
         self.account = None      # their account id, when signed in (accounts.py)
@@ -149,6 +153,7 @@ class Room:
         self.waiting = []          # tokens waiting to take over a bot's seat in this match
         self.match_accounts = []   # slot -> account of whoever plays it (for match history)
         self.recent = collections.deque(maxlen=moderation.RECENT_KEPT)  # for reports
+        self.chat = collections.deque(maxlen=CHAT_KEPT)  # the latest chat lines
         self.created = time.monotonic()
         self.empty_since = time.monotonic()
 
@@ -199,12 +204,14 @@ class Room:
             raise PasswordNeeded(wrong=bool(password))
         m = self.members.get(token)
         notice = None
+        joined = False
         if m is None:
             if len(self.members) >= limits.MAX_MEMBERS:
                 raise RoomFull("This room is full.")
             clean, notice = self._name(token, name)
             m = Member(token, clean, send)
             self.members[token] = m
+            joined = True
         else:
             m.send, m.connected, m.left_at = send, True, None
             if name:
@@ -233,6 +240,8 @@ class Room:
         elif self.results is not None:
             await m.send(self.results)
         await self.broadcast_lobby()
+        if joined:
+            await self.say(f"{m.name} joined")  # (after "welcome", which has the chat so far)
         if self.match is not None and token not in self.match_tokens:
             await self.wait_for_seat(token)
         elif self.match is None and self.results is None:
@@ -271,7 +280,7 @@ class Room:
         gone = [t for t, m in self.members.items()
                 if not m.connected and now - m.left_at > LEAVE_GRACE]
         for t in gone:
-            del self.members[t]
+            await self.say(f"{self.members.pop(t).name} left")
         if self.host not in self.members:
             live = self.connected
             self.host = live[0].token if live else next(iter(self.members), None)
@@ -314,6 +323,8 @@ class Room:
             "team_size": modes.TEAM_SIZE,
             "team_palettes": [list(c) for c in modes.TEAM_COLORS],
             "playtest": playtest.ENABLED,  # send playtest reports (playtest.py)
+            "chat": list(self.chat),       # the latest chat lines
+            "chat_len": moderation.CHAT_LEN,
         }
 
     def lobby(self):
@@ -427,6 +438,9 @@ class Room:
             return
         if kind == "emote":
             await self.emote(token, msg.get("id"))
+            return
+        if kind == "chat":
+            await self.chat_message(token, msg.get("text"))
             return
         if kind == "leave":
             await self.leave(token)
@@ -546,6 +560,32 @@ class Room:
         self.note("emote", who=m.name, id=emote)
         await self.broadcast({"type": "emote", "slot": self.match_tokens.index(token), "id": emote})
 
+    async def say(self, text):
+        """A line in the chat from the room itself ("Sam joined")."""
+        line = {"type": "chat", "system": True, "text": text, "at": int(time.time() * 1000)}
+        self.chat.append(line)
+        await self.broadcast(line)
+
+    async def chat_message(self, token, text):
+        """Someone says something: to everyone in the room (in the lobby and
+        during a match), with offensive words starred out (moderation.py).
+        A few messages a second at most; past that, they're told to slow down."""
+        m = self.members.get(token)
+        if m is None or not isinstance(text, str):
+            return
+        clean, starred = moderation.clean_chat(text)
+        if clean is None:
+            return
+        if not m.chat_bucket.allow():
+            await m.send({"type": "notice", "message": "You're chatting too fast. Wait a moment."})
+            return
+        if starred:
+            metrics.event("chat_filtered", logging.INFO, room=self.code, name=m.name)
+        self.note("chat", who=m.name, text=clean)
+        line = {"type": "chat", "id": m.pid, "name": m.name, "text": clean, "at": int(time.time() * 1000)}
+        self.chat.append(line)
+        await self.broadcast(line)
+
     async def kick(self, token):
         """The host removes someone. They can't come back to this room."""
         m = self.members.get(token)
@@ -565,6 +605,7 @@ class Room:
         self.votes.discard(token)
         if token in self.waiting:
             self.waiting.remove(token)
+        await self.say(f"{m.name} was removed by the host")
         await self.broadcast_lobby()
 
     async def leave(self, token):
@@ -575,6 +616,7 @@ class Room:
         if m is None:
             return
         self.note("leave", who=m.name)
+        await self.say(f"{m.name} left")
         if self.match is not None and token in self.match_tokens:
             self.match.stand_in(self.match_tokens.index(token))
         self.votes.discard(token)

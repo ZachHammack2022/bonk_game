@@ -329,6 +329,7 @@ $("person-mute").addEventListener("change", () => {
   applyLooks(app.match);
   if (app.lobby && app.welcome) renderLobby();
   renderPeople();
+  chat.render();
   if (app.results && !$("results").classList.contains("hidden")) showResults(app.results, true);
 });
 $("report-send").addEventListener("click", () => {

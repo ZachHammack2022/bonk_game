@@ -22,7 +22,7 @@ import secrets
 import sqlite3
 import time
 
-from bonk_game.server import profiles
+from bonk_game.server import moderation, profiles
 
 SESSION_DAYS = 90
 SCHEMA = """
@@ -82,6 +82,8 @@ class Accounts:
         uid = "u" + secrets.token_hex(8)
         profile = profiles.empty("acct-" + secrets.token_hex(8))
         profile["name"] = " ".join(name.split())[:16]
+        if moderation.offensive(profile["name"]):
+            profile["name"] = ""
         with self.db:
             self.db.execute("BEGIN")
             self.db.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)",
