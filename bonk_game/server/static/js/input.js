@@ -3,8 +3,8 @@
 "use strict";
 
 // ---------------------------------------------------------------------------
-// Input: WASD (or your keys) or arrows, Space/Shift for heavy; touch buttons
-// on phones
+// Input: WASD (or your keys) or arrows, Space/Shift for heavy; a joystick
+// and a heavy button on touch screens
 // ---------------------------------------------------------------------------
 const held = { keys: new Set(), touch: [0, 0, 0, 0, 0], pad: [0, 0, 0, 0, 0] };
 let lastSent = "";
@@ -62,19 +62,95 @@ window.addEventListener("blur", () => { held.keys.clear(); held.touch.fill(0); h
 // Resend now and then in case a message was lost
 setInterval(() => { if (playing()) sendInput(true); }, 1000);
 
-if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
+// Touch: a joystick on the left half of the screen and heavy on the right.
+// The joystick starts wherever your thumb lands (so you don't have to find
+// it), and you steer by dragging from there: left/right past a small dead
+// zone, up further to jump (fly, on Classic), down to push down. Each half
+// follows its own finger, so you can move and go heavy at once.
+const STICK_RANGE = 48;  // px from the centre the knob can go
+const touchStick = { id: null, x0: 0, y0: 0 };
+const touchHeavy = { id: null };
+
+function stickButtons(dx, dy) {
+  const r = STICK_RANGE;
+  return [dy < -0.55 * r ? 1 : 0, dx < -0.3 * r ? 1 : 0, dy > 0.55 * r ? 1 : 0, dx > 0.3 * r ? 1 : 0];
+}
+
+function setTouch(b) {
+  if (b.some((v, k) => v !== held.touch[k])) { held.touch = b; sendInput(); }
+}
+
+function initTouch() {
   document.body.classList.add("touch");
   $("touch").classList.remove("hidden");
-  for (const btn of $("touch").querySelectorAll("button")) {
-    const i = +btn.dataset.b;
-    const down = (e) => { e.preventDefault(); held.touch[i] = 1; btn.classList.add("down"); sendInput(); sound.unlock(); };
-    const up = (e) => { e.preventDefault(); held.touch[i] = 0; btn.classList.remove("down"); sendInput(); };
-    btn.addEventListener("pointerdown", down);
-    btn.addEventListener("pointerup", up);
-    btn.addEventListener("pointercancel", up);
-    btn.addEventListener("pointerleave", up);
-  }
+  const zone = $("move-zone"), stick = $("stick"), knob = stick.querySelector(".knob");
+  const place = (x, y) => {
+    // (in the zone's own coordinates; null puts it back where it rests)
+    stick.style.left = x === null ? "" : `${x}px`;
+    stick.style.top = y === null ? "" : `${y}px`;
+  };
+  zone.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (touchStick.id !== null) return;
+    sound.unlock();
+    zone.setPointerCapture(e.pointerId);
+    const box = zone.getBoundingClientRect();
+    touchStick.id = e.pointerId; touchStick.x0 = e.clientX; touchStick.y0 = e.clientY;
+    place(e.clientX - box.left, e.clientY - box.top);
+    stick.classList.add("active");
+  });
+  zone.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== touchStick.id) return;
+    e.preventDefault();
+    const dx = e.clientX - touchStick.x0, dy = e.clientY - touchStick.y0;
+    const d = Math.hypot(dx, dy), k = d > STICK_RANGE ? STICK_RANGE / d : 1;
+    knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+    const b = stickButtons(dx, dy);
+    setTouch([b[0], b[1], b[2], b[3], held.touch[4]]);
+  });
+  const stickUp = (e) => {
+    if (e.pointerId !== touchStick.id) return;
+    touchStick.id = null;
+    knob.style.transform = "";
+    stick.classList.remove("active");
+    place(null, null);
+    setTouch([0, 0, 0, 0, held.touch[4]]);
+  };
+  zone.addEventListener("pointerup", stickUp);
+  zone.addEventListener("pointercancel", stickUp);
+
+  const hz = $("heavy-zone"), hb = $("heavy-btn");
+  hz.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (touchHeavy.id !== null) return;
+    sound.unlock();
+    hz.setPointerCapture(e.pointerId);
+    touchHeavy.id = e.pointerId;
+    hb.classList.add("down");
+    setTouch([...held.touch.slice(0, 4), 1]);
+  });
+  const heavyUp = (e) => {
+    if (e.pointerId !== touchHeavy.id) return;
+    touchHeavy.id = null;
+    hb.classList.remove("down");
+    setTouch([...held.touch.slice(0, 4), 0]);
+  };
+  hz.addEventListener("pointerup", heavyUp);
+  hz.addEventListener("pointercancel", heavyUp);
+
+  // Only while you're playing: not over the results, a replay or the killcam
+  // (which you tap to skip)
+  const sync = () => {
+    requestAnimationFrame(sync);
+    const off = !playing() || replayer.active;
+    if (off !== $("touch").classList.contains("off")) {
+      $("touch").classList.toggle("off", off);
+      if (off) { stickUp({ pointerId: touchStick.id }); heavyUp({ pointerId: touchHeavy.id }); }
+    }
+  };
+  requestAnimationFrame(sync);  // (once every script has loaded: replayer is in replay.js)
 }
+if ("ontouchstart" in window || navigator.maxTouchPoints > 0) initTouch();
 
 // ---------------------------------------------------------------------------
 // Gamepads (any controller the browser maps to the "standard" layout: Xbox,

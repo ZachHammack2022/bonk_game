@@ -37,7 +37,7 @@ Going **heavy** makes you 5x heavier for a moment, so you hit harder and get kno
 
 On a gamepad, Y waves, Start opens settings, and A votes to play again on the results screen. Any controller the browser knows (Xbox, PlayStation, Switch Pro and most others) works; press a button on it once the page is open.
 
-- On phones and tablets there are on-screen buttons. M mutes.
+- On phones and tablets, touch anywhere on the left half of the screen and drag to move: the joystick starts where your thumb lands, and pushing up jumps. Touch anywhere on the right half to go heavy. Both are see-through, over the game. M mutes.
 - Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it on a worse connection, add `?net=mobile` to the page address (see [Simulating bad networks](#simulating-bad-networks)); `?predict=0` turns prediction off for comparison.
 - If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
 - People who join during a match watch it and play in the next one.
