@@ -335,3 +335,12 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 .privacy-link { display: block; text-align: center; margin-top: 4px; }
 .home-footer { margin-top: 18px; font-size: 13px; }
 .home-footer a { color: var(--dim); }
+
+/* Members' perks: any colour (a colour picker in a swatch), locked for guests */
+.swatch.own { position: relative; display: inline-flex; align-items: center; justify-content: center; font-size: 15px;
+  background: conic-gradient(#ef5350, #ffd166, #66bb6a, #42a5f5, #ab47bc, #ef5350); cursor: pointer; overflow: hidden; }
+.swatch.own input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.swatch.own.locked, .pattern.locked { opacity: 0.45; }
+.pattern.locked { position: relative; }
+.pattern.locked::after { content: "🔒"; position: absolute; right: -2px; bottom: -4px; font-size: 12px; }
+.own-note { width: 100%; margin: 2px 0 0; }

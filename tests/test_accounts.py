@@ -274,3 +274,36 @@ def test_google_review_pages(monkeypatch):
     assert "google-site-verification" not in web_mod.render_index()
     monkeypatch.setattr(web_mod, "SITE_VERIFICATION", 'abc"123')
     assert '<meta name="google-site-verification" content="abc&quot;123">' in web_mod.render_index()
+
+
+def test_account_perks_are_checked_by_the_server():
+    """Any colour and the member patterns are for signed-in players."""
+    from bonk_game.server.room import Room
+
+    class Inbox:
+        def __init__(self):
+            self.msgs = []
+
+        async def __call__(self, msg):
+            self.msgs.append(json.loads(msg) if isinstance(msg, str) else msg)
+
+    async def go():
+        room = Room("ABCD")
+        guest, member = Inbox(), Inbox()
+        await room.join("g", "Guest", guest)
+        await room.join("m", "Member", member, account="u1")
+        assert member.msgs[0]["signed_in"] and not guest.msgs[0]["signed_in"]
+        await room.handle("g", {"type": "own_color", "color": "#123456"})
+        assert guest.msgs[-2]["message"] == "Sign in to pick any colour." and room.members["g"].own_color is None
+        await room.handle("g", {"type": "pattern", "pattern": "galaxy"})
+        assert room.members["g"].pattern == "plain"
+        await room.handle("m", {"type": "own_color", "color": "#123456"})
+        await room.handle("m", {"type": "pattern", "pattern": "galaxy"})
+        await room.handle("m", {"type": "own_color", "color": "red; x"})  # (refused)
+        seat = next(s for s in member.msgs[-1]["seats"] if s["id"] == "m")
+        assert seat["own_color"] == "#123456" and seat["pattern"] == "galaxy"
+        await room.start()
+        slot = next(s for s in room.match.describe()["slots"] if s["id"] == "m")
+        assert slot["color"] == "#123456" and slot["color_name"] == "Custom"
+        await room.stop()
+    run(go())

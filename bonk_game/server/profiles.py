@@ -11,6 +11,7 @@ slot with how that player did, ready for record() after adding the match's
 id, time, mode and map (history_entry).
 """
 import math
+import re
 
 FORMAT = "bonk-profile"
 VERSION = 1
@@ -49,7 +50,7 @@ def _key(v):
 
 def empty(id_):
     return {"format": FORMAT, "v": VERSION, "id": id_, "merged": [],
-            "name": "", "color": None, "pattern": "plain", "muted": False, "prefs": {},
+            "name": "", "color": None, "own_color": None, "pattern": "plain", "muted": False, "prefs": {},
             "stats": {"matches": 0, "wins": 0, "kos": 0, "falls": 0, "deaths": 0, "pickups": 0,
                       "best_hit": 0, "awards": {}, "modes": {}, "maps": {}, "first_at": None, "last_at": None},
             "history": []}
@@ -88,6 +89,8 @@ def validate(p):
     out["name"] = _text(p.get("name"), 16)
     c = p.get("color")
     out["color"] = c if isinstance(c, int) and not isinstance(c, bool) and 0 <= c < 10 else None
+    oc = p.get("own_color")
+    out["own_color"] = oc if isinstance(oc, str) and re.fullmatch(r"#[0-9a-f]{6}", oc) else None
     out["pattern"] = _text(p.get("pattern"), 16) or "plain"
     out["muted"] = p.get("muted") is True
     out["prefs"] = p["prefs"] if isinstance(p.get("prefs"), dict) else {}

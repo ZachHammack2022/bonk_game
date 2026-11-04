@@ -99,7 +99,8 @@ function renderLobby() {
     }
     if (seatInfo.kind === "human") {
       const you = seatInfo.id === me.token;
-      const li = seat(seatInfo.color, seatInfo.name + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you, seatInfo.pattern);
+      const li = seat(seatInfo.color, seatInfo.name + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you, seatInfo.pattern,
+                      seatInfo.own_color);
       if (you) {
         const ball = li.querySelector(".ball");
         ball.classList.add("pick");
@@ -115,7 +116,7 @@ function renderLobby() {
         }));
       }
       ul.appendChild(li);
-      if (you && picker.open) ul.appendChild(colorPicker(seatInfo.color));
+      if (you && picker.open) ul.appendChild(colorPicker(seatInfo.color, seatInfo.own_color));
     } else {
       const b = seatInfo.bot;
       const li = seat(seatInfo.color, botLabel(seatInfo.kind), "", false);
@@ -187,7 +188,7 @@ function removeButton(title, onClick) {
   return rm;
 }
 
-function colorPicker(current) {
+function colorPicker(current, own) {
   const li = document.createElement("li");
   li.className = "picker";
   const taken = new Set(app.lobby.seats.filter((x) => x.kind === "human" && x.id !== me.token).map((x) => x.color));
@@ -196,22 +197,59 @@ function colorPicker(current) {
   const allowed = mine && mine.team !== null && mine.team !== undefined ? new Set(app.welcome.team_palettes[mine.team]) : null;
   app.welcome.colors.forEach((c, i) => {
     const b = document.createElement("button");
-    b.className = "swatch" + (i === current ? " on" : "");
+    b.className = "swatch" + (i === current && !own ? " on" : "");
     b.style.background = c;
     b.title = app.welcome.color_names[i];
     b.setAttribute("aria-label", app.welcome.color_names[i]);
     b.disabled = taken.has(i) || (allowed !== null && !allowed.has(i));
     b.addEventListener("click", () => {
-      me.color = i; saveProfile();
+      me.color = i;
+      if (me.ownColor) { me.ownColor = null; send({ type: "own_color", color: null }); }
+      saveProfile();
       send({ type: "color", color: i });
     });
     li.appendChild(b);
   });
-  li.appendChild(patternRow(mine ? mine.pattern : me.pattern, mine ? app.welcome.colors[mine.color] : T.faint, (p) => {
+  // Any colour (signed in; not in teams, where colours show your side)
+  if (allowed === null) {
+    li.appendChild(ownColorButton(own || me.ownColor, (hex) => {
+      me.ownColor = hex; saveProfile();
+      send({ type: "own_color", color: hex });
+    }));
+    if (me.ownColor && !own) {
+      const note = document.createElement("p");
+      note.className = "dim small own-note";
+      note.textContent = "Your colour is too close to someone else's here, so you have a palette colour this time.";
+      li.appendChild(note);
+    }
+  }
+  li.appendChild(patternRow(mine ? mine.pattern : me.pattern, own || (mine ? app.welcome.colors[mine.color] : T.faint), (p) => {
     me.pattern = p; saveProfile();
     send({ type: "pattern", pattern: p });
   }));
   return li;
+}
+
+// The "any colour" swatch: a colour picker when signed in, a lock (and how
+// to get it) for guests. onPick(hex) when a colour is picked.
+function ownColorButton(current, onPick) {
+  const wrap = document.createElement("label");
+  wrap.className = "swatch own" + (current ? " on" : "") + (profileStore.user ? "" : " locked");
+  wrap.title = profileStore.user ? "Any colour" : "Any colour: sign in to unlock";
+  if (current) wrap.style.background = current;
+  else wrap.textContent = profileStore.user ? "🎨" : "🔒";
+  if (!profileStore.user) {
+    wrap.setAttribute("role", "button");
+    wrap.addEventListener("click", () => toast("Sign in (on the home page) to pick any colour you like."));
+    return wrap;
+  }
+  const input = document.createElement("input");
+  input.type = "color";
+  input.value = current || "#ff8800";
+  input.setAttribute("aria-label", "Any colour");
+  input.addEventListener("change", () => onPick(input.value.toLowerCase()));
+  wrap.appendChild(input);
+  return wrap;
 }
 
 // A row of buttons, one per pattern, drawn on a ball of `color`
@@ -225,7 +263,12 @@ function patternRow(current, color, onPick) {
     b.setAttribute("aria-label", PATTERN_NAMES[p]);
     b.dataset.pattern = p;
     b.appendChild(ballCanvas(30, color, p));
-    b.addEventListener("click", () => onPick(p));
+    if (MEMBER_PATTERNS.includes(p) && !profileStore.user) {
+      // An account's perk: shown, locked
+      b.classList.add("locked");
+      b.title = `${PATTERN_NAMES[p]}: sign in to unlock`;
+      b.addEventListener("click", () => toast(`Sign in (on the home page) to use ${PATTERN_NAMES[p]} and the other members' patterns.`));
+    } else b.addEventListener("click", () => onPick(p));
     row.appendChild(b);
   }
   return row;
@@ -246,46 +289,47 @@ function ballCanvas(size, color, pattern) {
 
 // Home screen: your ball, and the editor for it
 function renderHomeBall() {
-  const color = me.color === null ? PALETTE[0][1] : PALETTE[me.color][1];
   const el = $("home-ball");
   el.innerHTML = "";
-  el.appendChild(ballCanvas(40, color, me.pattern));
-  $("home-ball-label").textContent = `${me.color === null ? "Any colour" : PALETTE[me.color][0]}, ${PATTERN_NAMES[me.pattern].toLowerCase()}`;
+  el.appendChild(ballCanvas(40, me.ballHex, me.pattern));
+  const name = me.ownColor ? "Your own colour" : me.color === null ? "Any colour" : PALETTE[me.color][0];
+  $("home-ball-label").textContent = `${name}, ${PATTERN_NAMES[me.pattern].toLowerCase()}`;
 }
 function renderProfileEditor() {
   const box = $("profile-colors");
   box.innerHTML = "";
   const any = document.createElement("button");
-  any.className = "swatch any" + (me.color === null ? " on" : "");
+  any.className = "swatch any" + (me.color === null && !me.ownColor ? " on" : "");
   any.title = "Any colour"; any.textContent = "?";
   any.setAttribute("aria-label", "Any colour");
-  any.addEventListener("click", () => { me.color = null; saveProfile(); renderProfileEditor(); });
+  any.addEventListener("click", () => { me.color = null; if (me.ownColor) me.ownColor = null; saveProfile(); renderProfileEditor(); });
   box.appendChild(any);
   PALETTE.forEach(([name, hex], i) => {
     const b = document.createElement("button");
-    b.className = "swatch" + (i === me.color ? " on" : "");
+    b.className = "swatch" + (i === me.color && !me.ownColor ? " on" : "");
     b.style.background = hex;
     b.title = name;
     b.setAttribute("aria-label", name);
-    b.addEventListener("click", () => { me.color = i; saveProfile(); renderProfileEditor(); });
+    b.addEventListener("click", () => { me.color = i; if (me.ownColor) me.ownColor = null; saveProfile(); renderProfileEditor(); });
     box.appendChild(b);
   });
+  box.appendChild(ownColorButton(me.ownColor, (hex) => { me.ownColor = hex; saveProfile(); renderProfileEditor(); }));
   const pat = $("profile-patterns");
   pat.innerHTML = "";
-  pat.appendChild(patternRow(me.pattern, me.color === null ? PALETTE[0][1] : PALETTE[me.color][1], (p) => {
+  pat.appendChild(patternRow(me.pattern, me.ballHex, (p) => {
     me.pattern = p; saveProfile(); renderProfileEditor();
   }));
   $("profile-preview").innerHTML = "";
-  $("profile-preview").appendChild(ballCanvas(72, me.color === null ? PALETTE[0][1] : PALETTE[me.color][1], me.pattern));
+  $("profile-preview").appendChild(ballCanvas(72, me.ballHex, me.pattern));
 }
 $("edit-ball").addEventListener("click", () => { renderProfileEditor(); $("profile").classList.remove("hidden"); });
 $("profile-close").addEventListener("click", () => $("profile").classList.add("hidden"));
 $("profile").addEventListener("click", (e) => { if (e.target === $("profile")) $("profile").classList.add("hidden"); });
 
-function seat(color, label, tag, you, pattern = "plain") {
+function seat(color, label, tag, you, pattern = "plain", own = null) {
   const li = document.createElement("li");
   li.className = "seat" + (you ? " you" : "");
-  const ball = ballCanvas(22, color === null ? T.faint : app.welcome.colors[color], pattern);
+  const ball = ballCanvas(22, own || (color === null ? T.faint : app.welcome.colors[color]), pattern);
   ball.classList.add("ball");
   const who = document.createElement("span");
   who.className = "who";

@@ -252,6 +252,41 @@ function drawPattern(g, x, y, r, pattern, fill) {
         dot(x + s * r * 0.36 + r * 0.07, y - r * 0.08, r * 0.13, "#1d2433");
       }
       break;
+    // Members' patterns (signed in)
+    case "heart": {
+      const s = r * 0.62, cy = y + r * 0.08;
+      g.beginPath();
+      g.moveTo(x, cy + s * 0.75);
+      g.bezierCurveTo(x - s * 1.2, cy - s * 0.1, x - s * 0.55, cy - s * 0.95, x, cy - s * 0.38);
+      g.bezierCurveTo(x + s * 0.55, cy - s * 0.95, x + s * 1.2, cy - s * 0.1, x, cy + s * 0.75);
+      g.fillStyle = "#ffffff"; g.globalAlpha *= 0.85; g.fill(); g.globalAlpha /= 0.85;
+      break;
+    }
+    case "checker": {
+      const n = 4, c = (2 * r) / n;
+      g.save();
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.clip();
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if ((i + j) % 2) g.fillRect(x - r + i * c, y - r + j * c, c, c);
+      g.restore();
+      break;
+    }
+    case "galaxy": {
+      // A swirl of little stars
+      g.lineWidth = r * 0.14; g.lineCap = "round";
+      for (const arm of [0, Math.PI]) {
+        g.beginPath();
+        for (let k = 0; k <= 12; k++) {
+          const t = k / 12, a = arm + t * Math.PI * 1.3, rr = r * (0.12 + 0.68 * t);
+          const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+          if (k) g.lineTo(px, py); else g.moveTo(px, py);
+        }
+        g.stroke();
+      }
+      for (const [a, d, s] of [[0.6, 0.55, 0.09], [2.4, 0.7, 0.07], [3.9, 0.45, 0.08], [5.3, 0.72, 0.06], [1.5, 0.3, 0.06]]) {
+        dot(x + Math.cos(a) * r * d, y + Math.sin(a) * r * d, r * s, "#ffffff");
+      }
+      break;
+    }
   }
 }
 

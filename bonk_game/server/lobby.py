@@ -10,15 +10,25 @@ tested (and read) without a Room. room.py calls them.
   people picked where possible.
 - lineup(): the seats as the lobby shows them.
 """
+import math
+import re
+
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
 from bonk_game.server import modes
 from bonk_game.server.match import is_bot
+from bonk_game.ui import theme
 
 NAME_LEN = 16
 FIRST_TO_RANGE = (1, 100)
-# Ball patterns people can pick (the client draws them)
-PATTERNS = ("plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes")
+# Ball patterns people can pick (the client draws them). The last few are
+# for signed-in players only (an account's perks, with any colour: own_colors)
+MEMBER_PATTERNS = ("heart", "checker", "galaxy")
+PATTERNS = ("plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes") + MEMBER_PATTERNS
+# A colour of your own has to be at least this far (in RGB) from everyone
+# else's, so balls stay easy to tell apart
+MIN_COLOR_GAP = 70
+HEX_COLOR = re.compile(r"^#[0-9a-f]{6}$")
 DEFAULT_MAP = "platform"
 # Room settings besides the map, mode and goal
 ROUND_TIMES = (None, 0, 20, 30, 45, 60, 90)   # seconds before sudden death; None: the map's own
@@ -170,15 +180,40 @@ def colors_for(picks, n_bots, teams=None):
     return out
 
 
+def _rgb(hex_color):
+    return tuple(int(hex_color[k:k + 2], 16) for k in (1, 3, 5))
+
+
+def own_colors(colors, wanted, teams=None):
+    """Signed-in players' own colours, where they can have them: a hex
+    colour per seat, or None to use the palette colour (colors[k], an index
+    into theme.PLAYER_COLORS). `wanted`: each seat's own colour (or None).
+    Not in the teams mode (colours show your side), and not if it's close to
+    a colour someone else has (first come, first served)."""
+    out = [None] * len(colors)
+    if teams is not None:
+        return out
+    taken = [theme.PLAYER_COLORS[c][:3] for k, c in enumerate(colors) if not wanted[k]]
+    for k, w in enumerate(wanted):
+        if not w:
+            continue
+        rgb = _rgb(w)
+        if all(math.dist(rgb, t) >= MIN_COLOR_GAP for t in taken):
+            out[k] = w
+            taken.append(rgb)
+    return out
+
+
 def lineup(settings, members, people):
     """The seats as they'd be if the match started now, for the lobby.
     `members`: token -> Member; `people`: the connected members' tokens."""
     humans, bots = seats(settings, people)
     teams = teams_for(settings["mode"], [members[t].team for t in humans], len(bots))
     colors = colors_for([members[t].color for t in humans], len(bots), teams)
+    own = own_colors(colors, [members[t].own_color for t in humans] + [None] * len(bots), teams)
     team = lambda k: None if teams is None else teams[k]
     out = [{"id": t, "name": members[t].name, "kind": "human", "color": c, "team": team(k),
-            "pattern": members[t].pattern}
+            "pattern": members[t].pattern, "own_color": own[k]}
            for k, (t, c) in enumerate(zip(humans, colors))]
     out += [{"id": None, "kind": b, "bot": k, "color": c, "team": team(len(humans) + k)}
             for k, (b, c) in enumerate(zip(bots, colors[len(humans):]))]

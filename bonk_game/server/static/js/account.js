@@ -74,7 +74,7 @@ const account = {
   // Send name, ball and settings changes (a moment later: typing a name
   // sends once)
   push(p) {
-    this.pending = { name: p.name, color: p.color, pattern: p.pattern, muted: p.muted, prefs: p.prefs };
+    this.pending = { name: p.name, color: p.color, own_color: p.own_color, pattern: p.pattern, muted: p.muted, prefs: p.prefs };
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), 600);
   },

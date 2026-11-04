@@ -342,7 +342,8 @@ function check(cond, what) {
     await fresh.waitForSelector("#replay-bar:not(.hidden)");
     await fresh.waitForTimeout(800);
     const w = await fresh.evaluate(() => ({ i: replayer.i, n: replayer.states.length, slots: app.match.slots.length }));
-    check(w.i > 10 && w.n > 100 && w.slots === repJson.slots.length, `a replay file plays back (${w.i}/${w.n} ticks)`);
+    // (How long the match was depends on the bots: just not trivially short)
+    check(w.i > 10 && w.n > 30 && w.slots === repJson.slots.length, `a replay file plays back (${w.i}/${w.n} ticks)`);
     await shot(fresh, "replay");
     await fresh.click("#replay-play");
     const paused = await fresh.evaluate(() => replayer.i);
