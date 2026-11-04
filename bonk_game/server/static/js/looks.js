@@ -280,7 +280,7 @@ function applyLooks(M) {
     if (teams) { const t = s.team || 0; return CONTRAST_TEAMS[t][perTeam[t]++ % CONTRAST_TEAMS[t].length]; }
     return CONTRAST[i % CONTRAST.length];
   });
-  const mine = M.slots.findIndex((s) => s.id === me.token);
+  const mine = M.slots.findIndex((s) => s.id === me.id);
   const want = me.ownColor || (me.color !== null ? PALETTE[me.color][1] : null);
   if (mine >= 0 && want && !teams && !prefs.contrast) {
     colors[mine] = want;
@@ -319,6 +319,7 @@ function applyLooks(M) {
       s.color_name = now;
       if (s.kind !== "human" && s.base.name.startsWith(s.base.color_name + " ")) s.name = now + s.base.name.slice(s.base.color_name.length);
     }
+    if (isMuted(s.id)) s.name = MUTED_NAME;  // (people.js)
   });
   if (M.base_team_colors) M.team_colors = prefs.contrast ? CONTRAST_TEAM_HEX.slice() : M.base_team_colors;
 }

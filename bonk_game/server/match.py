@@ -139,6 +139,23 @@ class Match:
             self.stand_ins[slot] = Bot(self.env, slot, bot_level(STAND_IN))
             self.inputs[slot] = NO_BUTTONS
 
+    def can_drop_in(self):
+        """Can someone take over a bot's seat now? In modes where balls
+        respawn, any time; otherwise between rounds, so nobody appears in
+        the middle of one."""
+        return not self.done and (self.mode.respawns or self.phase in ("countdown", "scored"))
+
+    def take_seat(self, slot, info):
+        """Someone who joined during the match takes over a bot's seat
+        (#35). info: their slot dict (name, id, colour, look). They keep the
+        bot's score and colour; the stats start again, as they're theirs."""
+        self.slots[slot] = {**info, "kind": "human", "color": self.colors[slot],
+                            "team": self.slots[slot].get("team")}
+        self.controllers[slot] = None
+        self.stand_ins.pop(slot, None)
+        self.inputs[slot] = NO_BUTTONS
+        self.stats[slot] = new_stats()
+
     def release(self, slot):
         """The human is back: stop the stand-in bot."""
         self.stand_ins.pop(slot, None)
@@ -299,16 +316,17 @@ class Match:
             "respawn_hold": round(self.env.respawn_hold / TICK_HZ, 2),
             "physics": self.physics(),
             "powerups": powerups.describe() if self.powerups else None,
-            "slots": [
-                {"name": s["name"], "kind": s["kind"], "id": s.get("id"),
-                 "team": self.env.teams[i] if self.mode.id == "teams" else None,
-                 "pattern": s.get("pattern", "plain"),
-                 "trail": s.get("trail", "none"), "hat": s.get("hat", "none"), "ko": s.get("ko", "pop"),
-                 "color": s.get("own_color") or theme_color(self.colors[i]),
-                 "color_name": "Custom" if s.get("own_color") else theme.PLAYER_NAMES[self.colors[i]]}
-                for i, s in enumerate(self.slots)
-            ],
+            "slots": [self.describe_slot(i) for i in range(len(self.slots))],
         }
+
+    def describe_slot(self, i):
+        s = self.slots[i]
+        return {"name": s["name"], "kind": s["kind"], "id": s.get("id"),
+                "team": self.env.teams[i] if self.mode.id == "teams" else None,
+                "pattern": s.get("pattern", "plain"),
+                "trail": s.get("trail", "none"), "hat": s.get("hat", "none"), "ko": s.get("ko", "pop"),
+                "color": s.get("own_color") or theme_color(self.colors[i]),
+                "color_name": "Custom" if s.get("own_color") else theme.PLAYER_NAMES[self.colors[i]]}
 
     def physics(self):
         """Constants the client needs to predict its own ball (predict.js)."""

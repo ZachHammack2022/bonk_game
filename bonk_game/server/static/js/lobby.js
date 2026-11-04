@@ -78,8 +78,10 @@ function renderLobby() {
   $("gravity").disabled = !host;
   $("power-ups").checked = !!s.power_ups;
   $("power-ups").disabled = !host;
+  $("public-room").checked = !!s.public;
+  $("public-room").disabled = !host;
   const teams = s.mode === "teams";
-  const mine = L.seats.find((x) => x.id === me.token);
+  const mine = L.seats.find((x) => x.id === me.id);
   $("switch-team").classList.toggle("hidden", !teams || !mine);
   if (teams && mine) $("switch-team").textContent = `Switch to ${Wm.team_names[1 - mine.team]}`;
 
@@ -98,9 +100,9 @@ function renderLobby() {
       ul.appendChild(head);
     }
     if (seatInfo.kind === "human") {
-      const you = seatInfo.id === me.token;
-      const li = seat(seatInfo.color, seatInfo.name + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you, seatInfo.pattern,
-                      seatInfo.own_color, seatInfo.hat);
+      const you = seatInfo.id === me.id;
+      const li = seat(seatInfo.color, shownName(seatInfo.id, seatInfo.name) + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you,
+                      seatInfo.pattern, seatInfo.own_color, seatInfo.hat);
       if (you) {
         const ball = li.querySelector(".ball");
         ball.classList.add("pick");
@@ -110,10 +112,13 @@ function renderLobby() {
         const toggle = () => { picker.open = !picker.open; renderLobby(); };
         ball.addEventListener("click", toggle);
         ball.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
-      } else if (host) {
-        li.appendChild(removeButton("Remove from room", () => {
-          if (confirm(`Remove ${seatInfo.name} from the room?`)) send({ type: "kick", id: seatInfo.id });
-        }));
+      } else {
+        li.appendChild(personButton(seatInfo.id, seatInfo.name));
+        if (host) {
+          li.appendChild(removeButton("Remove from room", () => {
+            if (confirm(`Remove ${seatInfo.name} from the room?`)) send({ type: "kick", id: seatInfo.id });
+          }));
+        }
       }
       ul.appendChild(li);
       if (you && picker.open) ul.appendChild(colorPicker(seatInfo.color, seatInfo.own_color));
@@ -144,7 +149,7 @@ function renderLobby() {
     }
   }
   for (const m of L.members.filter((m) => !m.connected)) {
-    const li = seat(null, m.name, "reconnecting…", false);
+    const li = seat(null, shownName(m.id, m.name), "reconnecting…", false);
     li.classList.add("away");
     ul.appendChild(li);
   }
@@ -171,7 +176,7 @@ function renderLobby() {
 
   // Rematch votes on the results screen
   if (L.phase === "results") {
-    const voted = L.votes.includes(me.token);
+    const voted = L.votes.includes(me.id);
     $("vote").textContent = voted ? `Waiting for others… ${L.votes.length}/${here}` : `Play again  ${L.votes.length}/${here}`;
     $("vote").classList.toggle("primary", !voted);
   }
@@ -191,9 +196,9 @@ function removeButton(title, onClick) {
 function colorPicker(current, own) {
   const li = document.createElement("li");
   li.className = "picker";
-  const taken = new Set(app.lobby.seats.filter((x) => x.kind === "human" && x.id !== me.token).map((x) => x.color));
+  const taken = new Set(app.lobby.seats.filter((x) => x.kind === "human" && x.id !== me.id).map((x) => x.color));
   // In teams, each side has its own colours
-  const mine = app.lobby.seats.find((x) => x.id === me.token);
+  const mine = app.lobby.seats.find((x) => x.id === me.id);
   const allowed = mine && mine.team !== null && mine.team !== undefined ? new Set(app.welcome.team_palettes[mine.team]) : null;
   app.welcome.colors.forEach((c, i) => {
     const b = document.createElement("button");
@@ -346,8 +351,9 @@ $("mode").addEventListener("change", () => send({ type: "settings", mode: $("mod
 $("round-time").addEventListener("change", () => send({ type: "settings", round_time: JSON.parse($("round-time").value) }));
 $("gravity").addEventListener("change", () => send({ type: "settings", gravity: $("gravity").value }));
 $("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
+$("public-room").addEventListener("change", () => send({ type: "settings", public: $("public-room").checked }));
 $("switch-team").addEventListener("click", () => {
-  const mine = app.lobby.seats.find((x) => x.id === me.token);
+  const mine = app.lobby.seats.find((x) => x.id === me.id);
   if (mine) send({ type: "team", team: 1 - mine.team });
 });
 $("add-needed").addEventListener("click", (e) => {

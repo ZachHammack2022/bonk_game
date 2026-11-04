@@ -2,7 +2,8 @@
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";
 
-function showResults(msg) {
+// quiet: just redraw it (someone was muted), without the confetti
+function showResults(msg, quiet) {
   const slots = msg.slots || (app.match && app.match.slots) || [];
   applyLooks({ mode: msg.mode, slots });  // (as the match looked on your screen)
   const w = msg.winner;
@@ -10,7 +11,7 @@ function showResults(msg) {
   const M = app.match || {};
   const teamWin = msg.winner_team;
   if (msg.team_scores) {
-    const mine = slots.find((x) => x.id === me.token);
+    const mine = slots.find((x) => x.id === me.id);
     if (teamWin === null || teamWin === undefined) { el.textContent = "Draw!"; el.style.color = T.text; }
     else {
       el.textContent = mine && mine.team === teamWin ? "Your team wins!" : `${M.team_names[teamWin]} wins!`;
@@ -21,7 +22,7 @@ function showResults(msg) {
     el.style.color = T.text;
   } else {
     const s = slots[w];
-    el.textContent = s && s.id === me.token ? "You win!" : `${s ? s.name : "?"} wins!`;
+    el.textContent = s && s.id === me.id ? "You win!" : `${s ? s.name : "?"} wins!`;
     el.style.color = s ? s.color : T.text;
   }
   const ol = $("standings");
@@ -32,7 +33,7 @@ function showResults(msg) {
     for (const t of [0, 1].sort((a, b) => msg.team_scores[b] - msg.team_scores[a])) {
       const li = document.createElement("li");
       const name = document.createElement("span");
-      name.textContent = M.team_names[t] + ": " + slots.filter((s) => s.team === t).map((s) => s.id === me.token ? "You" : s.name).join(", ");
+      name.textContent = M.team_names[t] + ": " + slots.filter((s) => s.team === t).map((s) => s.id === me.id ? "You" : s.name).join(", ");
       name.style.color = M.team_colors[t];
       const score = document.createElement("span");
       score.className = "score";
@@ -48,16 +49,21 @@ function showResults(msg) {
     ball.className = "ball";
     Object.assign(ball.style, { width: "16px", height: "16px", borderRadius: "50%", background: s.color, flex: "none" });
     const name = document.createElement("span");
-    name.textContent = s.id === me.token ? `${s.name} (you)` : s.name;
+    name.textContent = s.id === me.id ? `${s.name} (you)` : s.name;
     const score = document.createElement("span");
     score.className = "score";
     score.textContent = unit(msg.scores[i]);
     li.append(ball, name, score);
+    if (s.kind === "human" && s.id && s.id !== me.id && !msg.replay) li.append(personButton(s.id, s.base ? s.base.name : s.name));
     ol.appendChild(li);
   }
   renderAwards(msg, slots);
   $("results").classList.remove("hidden");
   $("emotes").classList.add("hidden");
+  const quick = !!(app.lobby && app.lobby.quick);
+  $("next-help").classList.toggle("hidden", quick);
+  $("next-quick").classList.toggle("hidden", !quick);
+  if (quiet) return;
   if (w !== null && w !== undefined) fx.confetti(slots[w] ? slots[w].color : T.accent);
   else if (teamWin !== null && teamWin !== undefined && M.team_colors) fx.confetti(M.team_colors[teamWin]);
 }
@@ -98,7 +104,7 @@ function renderAwards(msg, slots) {
       if (k) who.append(" & ");
       const name = document.createElement("b");
       name.style.color = s.color;
-      name.textContent = s.id === me.token ? "You" : s.name;
+      name.textContent = s.id === me.id ? "You" : s.name;
       who.append(name);
     }
     who.append(" · " + awardDetail(a));

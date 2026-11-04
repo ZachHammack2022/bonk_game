@@ -285,7 +285,6 @@ function check(cond, what) {
     // The server restarts for an update: open tabs are told, reconnect to the
     // new server and get their room back, with the same host and settings
     const settings = await host.evaluate(() => bonkDebug.app.lobby.settings);
-    const hostToken = await host.evaluate(() => bonkDebug.app.welcome.you);
     restarting = true;
     const exited = new Promise((r) => server.once("exit", r));
     server.kill("SIGTERM");
@@ -298,7 +297,7 @@ function check(cond, what) {
     await guest.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 2, null, { timeout: 30000 });
     await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 3);
     const after = await host.evaluate(() => bonkDebug.app.lobby);
-    check(after.room === url.split("/r/")[1] && after.host === hostToken, "after a restart the room comes back, with the same host");
+    check(after.room === url.split("/r/")[1] && after.host === (await host.evaluate(() => bonkDebug.app.welcome.you)), "after a restart the room comes back, with the same host");
     check(JSON.stringify(after.settings) === JSON.stringify(settings), "and the same settings");
     restarting = false;
 
@@ -367,6 +366,47 @@ function check(cond, what) {
     await fresh.waitForSelector("#home:not(.hidden)");
     const notReplay = (await fetch(base + "/api/replay", { method: "POST", body: "{}" })).status;
     check(notReplay === 400, "a file that isn't a replay is refused");
+
+    // Quick play (#35): straight into a public match against bots. Someone
+    // else sees it listed, joins while it's on and takes over a bot's seat
+    const q1 = await open("quick1");
+    await q1.goto(base + "/");
+    await q1.fill("#name", "Quinn");
+    await q1.click("#quick");
+    await q1.waitForSelector("#game:not(.hidden)", { timeout: 8000 });
+    check(true, "Quick play puts you in a match within seconds");
+    const q2 = await open("quick2");
+    await q2.goto(base + "/");
+    await q2.waitForSelector("#public-list li");
+    check((await q2.textContent("#public-list")).includes("Knockouts · Floating Platform"), "public rooms are listed on the home page");
+    await shot(q2, "public");
+    await q2.fill("#name", "sh1thead");
+    await q2.click("#public-list li button");
+    await q2.waitForSelector("#game:not(.hidden)");
+    await q2.waitForFunction(() => app.match.slots.some((s) => s.id === me.id), null, { timeout: 5000 });
+    check(true, "joining while a match is on takes over a bot's seat");
+    const q2name = await q2.evaluate(() => app.match.slots.find((s) => s.id === me.id).name);
+    check(/^Player \d\d$/.test(q2name), `an offensive name is replaced (${q2name})`);
+    await q1.waitForFunction((n) => app.match.slots.some((s) => s.kind === "human" && s.name === n), q2name);
+    check(!(await q1.evaluate(() => JSON.stringify(app.lobby).includes(me.token))), "nobody is sent anyone's token");
+    // Mute them (from settings, during the match): their emotes and name go
+    await q1.keyboard.press("Escape");
+    await q1.click("#people-list .person-btn");
+    await q1.check("#person-mute");
+    await shot(q1, "person");
+    await q1.selectOption("#report-reason", "name");
+    await q1.click("#report-send");
+    await q1.waitForFunction(() => /Thanks/.test(document.querySelector("#toast").textContent));
+    await q1.click("#person-close");
+    await q1.click("#settings-close");
+    check(await q1.evaluate(() => app.match.slots.some((s) => s.name === "Muted player")), "a muted player's name is hidden");
+    await q2.keyboard.press("Digit1");
+    await q2.waitForTimeout(500);
+    check(await q1.evaluate(() => !bonkDebug.fx.emotes.some((e) => app.match.slots[e.slot].name === "Muted player")), "and their emotes");
+    const playerReports = await (await fetch(base + "/api/reports")).json();
+    check(playerReports.items.length === 1 && playerReports.items[0].reported.name === q2name && playerReports.items[0].reporter.name === "Quinn",
+      "a report reaches the server");
+    await q1.close(); await q2.close();
 
     // Saved before profiles: the old settings come along
     const old = await open("old");

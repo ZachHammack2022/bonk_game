@@ -17,6 +17,8 @@
 //   net.js       network timing and predicting your own ball (predict.js)
 //   replay.js    the killcam, and watching replay files
 //   draw.js      drawing the match
+//   looks.js     trails, hats, knockout effects, and how balls look on your screen
+//   people.js    Quick play and public rooms; muting and reporting people
 //   account.js   signing in with Google (optional) and your account
 //   main.js      start up
 // Code that runs as a file loads may only use what earlier files define.
@@ -137,6 +139,7 @@ function status(text) {
 }
 function show(screen) {
   for (const id of ["home", "lobby", "game"]) $(id).classList.toggle("hidden", id !== screen);
+  watchPublic(screen === "home");  // (people.js)
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +254,7 @@ function send(msg) {
   const go = () => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
   if (fakeNet) fakeNet.up(go); else go();
 }
-const isHost = () => app.lobby && app.lobby.host === me.token;
+const isHost = () => app.lobby && app.lobby.host === me.id;
 
 // ---------------------------------------------------------------------------
 // Home screen
@@ -377,7 +380,7 @@ function refreshForNewVersion(text) {
 // Add a finished match to your history, if you played in it
 function recordMatch(msg) {
   const slots = msg.slots || [];
-  const i = slots.findIndex((s) => s.id === me.token);
+  const i = slots.findIndex((s) => s.id === me.id);
   if (i < 0 || !msg.summaries || !msg.match_id) return;
   profileStore.record({ id: msg.match_id, at: msg.at, mode: msg.mode, map: msg.map, ...msg.summaries[i],
                         players: slots.length, people: slots.filter((s) => s.kind === "human").length });
@@ -387,6 +390,7 @@ function onMessage(msg) {
   switch (msg.type) {
     case "welcome":
       app.welcome = msg;
+      me.id = msg.you;  // how the others know you (your token stays a secret)
       app.retry = 0;
       status("");
       fillMapOptions();
@@ -418,11 +422,11 @@ function onMessage(msg) {
       replayer.recent = [];
       $("killcam").classList.add("hidden");
       $("replay-bar").classList.add("hidden");
-      playtest.start(!msg.slots.some((x) => x.id === me.token));
+      playtest.start(!msg.slots.some((x) => x.id === me.id));
       fx.reset();
       $("results").classList.add("hidden");
       // Emotes are for players, not people watching
-      $("emotes").classList.toggle("hidden", !msg.slots.some((x) => x.id === me.token));
+      $("emotes").classList.toggle("hidden", !msg.slots.some((x) => x.id === me.id));
       show("game");
       resize();
       break;
@@ -447,7 +451,16 @@ function onMessage(msg) {
       for (const ev of S.events || []) onEvent(ev, S);
       break;
     }
+    case "seat": {
+      // Someone who joined during the match took over a bot's seat (maybe you)
+      if (!app.match) break;
+      app.match.slots[msg.slot] = msg.info;
+      applyLooks(app.match);
+      if (msg.info.id === me.id) { $("emotes").classList.remove("hidden"); sendInput(true); }
+      break;
+    }
     case "emote":
+      if (app.match && app.match.slots[msg.slot] && isMuted(app.match.slots[msg.slot].id)) break;
       fx.emotes.push({ slot: msg.slot, id: msg.id, at: performance.now() });
       break;
     case "results":

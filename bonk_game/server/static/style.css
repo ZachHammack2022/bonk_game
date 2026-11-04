@@ -101,6 +101,19 @@ button:disabled { opacity: 0.5; cursor: default; }
 .row { display: flex; gap: 8px; }
 .row input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: 4px; }
 .or { text-align: center; color: var(--faint); font-size: 13px; margin-top: 6px; }
+.quick-help { margin: -4px 0 4px; text-align: center; }
+
+/* Public rooms on the home page (people.js) */
+.public h3 { font-size: 15px; margin: 8px 0 6px; }
+.public-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px;
+               max-height: 260px; overflow-y: auto; }
+.public-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px;
+                  background: var(--panel-light); }
+.public-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.public-info b, .public-info span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-btn { font-weight: 800; }
+#person { z-index: 20; }  /* (over settings, where it can be opened from) */
+#standings .person-btn { margin-left: 4px; }
 
 /* --- lobby --------------------------------------------------------------- */
 .lobby-head {
@@ -142,7 +155,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .seat .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seat .tag { font-size: 12px; color: var(--dim); font-weight: 500; }
 .seat select { padding: 6px 8px; min-height: 36px; }
-.seat .remove { padding: 4px 10px; min-height: 36px; }
+.seat .remove, .seat .person-btn, #standings .person-btn { padding: 4px 10px; min-height: 36px; }
 
 body:not(.is-host) .host-only { display: none !important; }
 body.is-host .guest-only { display: none !important; }

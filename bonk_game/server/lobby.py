@@ -15,11 +15,11 @@ import re
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import cosmetics, modes
+from bonk_game.server import cosmetics, moderation, modes
 from bonk_game.server.match import is_bot
 from bonk_game.ui import theme
 
-NAME_LEN = 16
+NAME_LEN = moderation.NAME_LEN
 FIRST_TO_RANGE = (1, 100)
 # Ball patterns people can pick (the client draws them). Some are for
 # signed-in players, unlocked by playing (cosmetics.py)
@@ -32,17 +32,27 @@ DEFAULT_MAP = "platform"
 # Room settings besides the map, mode and goal
 ROUND_TIMES = (None, 0, 20, 30, 45, 60, 90)   # seconds before sudden death; None: the map's own
 GRAVITY = {"low": 0.6, "normal": 1.0, "high": 1.4}
+QUICK_BOTS = 3   # bots in a room Quick play makes
 
 
 def default_settings():
+    """public: listed on the home page for anyone to join (#35); private
+    rooms are reached by their link or code only."""
     return {"map": DEFAULT_MAP, "first_to": 5, "bots": ["bot:medium"],
             "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal",
-            "power_ups": False}
+            "power_ups": False, "public": False}
+
+
+def quick_settings():
+    """A room Quick play makes when no public room has space: Knockouts
+    (people can drop in at any time) on Platform, with bots to play against."""
+    return {**default_settings(), "mode": "knockouts", "first_to": modes.MODES["knockouts"].goal_default,
+            "bots": ["bot:medium"] * QUICK_BOTS, "public": True}
 
 
 def clean_name(name):
-    name = " ".join(str(name or "").split())[:NAME_LEN]
-    return name or "Player"
+    """Tidied, and not offensive (moderation.py)."""
+    return moderation.clean_name(name)[0]
 
 
 def bot_label(kind, short=False):
@@ -106,6 +116,10 @@ def check_settings(settings, msg, people, bot_options):
         if not isinstance(msg["power_ups"], bool):
             return settings, "Power-ups should be on or off."
         s["power_ups"] = msg["power_ups"]
+    if "public" in msg:
+        if not isinstance(msg["public"], bool):
+            return settings, "Public should be on or off."
+        s["public"] = msg["public"]
     if "gravity" in msg:
         if msg["gravity"] not in GRAVITY:
             return settings, "Unknown gravity."
@@ -205,13 +219,14 @@ def own_colors(colors, wanted, teams=None):
 
 def lineup(settings, members, people):
     """The seats as they'd be if the match started now, for the lobby.
-    `members`: token -> Member; `people`: the connected members' tokens."""
+    `members`: token -> Member; `people`: the connected members' tokens.
+    People are shown by their public id (Member.pid), never their token."""
     humans, bots = seats(settings, people)
     teams = teams_for(settings["mode"], [members[t].team for t in humans], len(bots))
     colors = colors_for([members[t].color for t in humans], len(bots), teams)
     own = own_colors(colors, [members[t].own_color for t in humans] + [None] * len(bots), teams)
     team = lambda k: None if teams is None else teams[k]
-    out = [{"id": t, "name": members[t].name, "kind": "human", "color": c, "team": team(k),
+    out = [{"id": members[t].pid, "name": members[t].name, "kind": "human", "color": c, "team": team(k),
             **members[t].look(), "own_color": own[k]}
            for k, (t, c) in enumerate(zip(humans, colors))]
     out += [{"id": None, "kind": b, "bot": k, "color": c, "team": team(len(humans) + k)}

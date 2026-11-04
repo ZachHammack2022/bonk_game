@@ -128,13 +128,13 @@ function drawFeed(now) {
 
 function isMe(i) {
   const s = app.match && app.match.slots[i];
-  return !!s && s.id === me.token;
+  return !!s && s.id === me.id;
 }
 
 function slotName(i) {
   const s = app.match && app.match.slots[i];
   if (!s) return "?";
-  return s.id === me.token ? "You" : s.name;
+  return s.id === me.id ? "You" : s.name;
 }
 
 function onEvent(ev, state) {
@@ -146,7 +146,7 @@ function onEvent(ev, state) {
       const c = slots[ev.i] ? slots[ev.i].color : T.text;
       let x = clamp(ev.x, 12, W - 12), y = clamp(ev.y, 12, H - 12);
       // Your own ball was drawn ahead of the server (prediction): burst where you saw it
-      if (slots[ev.i] && slots[ev.i].id === me.token && debug.drawn && performance.now() - debug.drawn.t < 200) {
+      if (slots[ev.i] && slots[ev.i].id === me.id && debug.drawn && performance.now() - debug.drawn.t < 200) {
         x = clamp(debug.drawn.x, 12, W - 12); y = clamp(debug.drawn.y, 12, H - 12);
       }
       knockoutEffect(x, y, c, slots[ev.i] && slots[ev.i].ko);
@@ -170,7 +170,7 @@ function onEvent(ev, state) {
       sound.play("point");
       const M = app.match;
       if (ev.team !== undefined) {
-        const mine = M.slots.find((x) => x.id === me.token);
+        const mine = M.slots.find((x) => x.id === me.id);
         const ours = mine && mine.team === ev.team;
         fx.say(`${M.team_names[ev.team]} scores!`, M.team_colors[ev.team]);
         if (mine) fx.tell(ours ? "Nice!" : "Ouch", ours ? T.accent : T.dim);

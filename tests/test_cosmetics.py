@@ -74,10 +74,10 @@ def test_the_room_checks_what_you_have_unlocked():
         assert member.msgs[-2]["message"].startswith("Not unlocked yet: Win 25 matches (12 of 25)")
         m = room.members["m"]
         assert (m.trail, m.hat, m.ko) == ("rainbow", "none", "stars")
-        seat = next(s for s in member.msgs[-1]["seats"] if s["id"] == "m")
+        seat = next(s for s in member.msgs[-1]["seats"] if s["id"] == room.members["m"].pid)
         assert seat["trail"] == "rainbow" and seat["ko"] == "stars"
         await room.start()
-        slot = next(s for s in room.match.describe()["slots"] if s["id"] == "m")
+        slot = next(s for s in room.match.describe()["slots"] if s["id"] == room.members["m"].pid)
         assert (slot["pattern"], slot["trail"], slot["hat"], slot["ko"]) == ("plain", "rainbow", "none", "stars")
         await room.stop()
     asyncio.run(go())

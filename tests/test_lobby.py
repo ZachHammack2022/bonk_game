@@ -72,11 +72,12 @@ def test_colours_first_come_first_served_and_team_palettes():
 
 
 def test_the_lineup_shows_people_then_bots():
-    members = {t: SimpleNamespace(name=t.upper(), team=None, color=None, own_color=None,
+    members = {t: SimpleNamespace(name=t.upper(), pid="p" + t, team=None, color=None, own_color=None,
                                   look=lambda: {"pattern": "dots", "trail": "none", "hat": "cap", "ko": "pop"})
                for t in ("a", "b")}
     seats = lobby.lineup({**lobby.default_settings(), "bots": ["bot:hard"]}, members, ["a", "b"])
     assert [s["kind"] for s in seats] == ["human", "human", "bot:hard"]
+    assert seats[0]["id"] == "pa"  # (their public id, never the token)
     assert seats[0]["name"] == "A" and seats[0]["pattern"] == "dots" and seats[2]["bot"] == 0
     assert seats[0]["hat"] == "cap" and "hat" not in seats[2]
 

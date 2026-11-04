@@ -40,6 +40,7 @@ const menu = { capture: null };  // the action waiting for a key press
 
 function openSettings() {
   renderSettings();
+  renderPeople();  // (people.js)
   $("settings").classList.remove("hidden");
   held.keys.clear(); sendInput();
 }
