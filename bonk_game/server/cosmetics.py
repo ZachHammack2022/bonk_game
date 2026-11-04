@@ -12,7 +12,9 @@ Four kinds of thing, each a list of (id, name, need):
 - ("wins", 5) and so on: signed in, with that many in your stats (the
                          server records every match an account plays, so
                          these are earned by playing)
-- ("award", "kos", 3):   signed in, and won that award that many times
+
+Nothing is ever locked behind the end-of-match awards (most knockouts,
+hardest hit, survivor...): they're for fun, not a grind.
 
 The browser gets the catalogue and what you've unlocked from /api/cosmetics
 (web.py), so this file is the only list. The server checks every pick
@@ -29,7 +31,7 @@ CATALOG = {
         ("smile", "Smile", None),
         ("heart", "Heart", "account"), ("checker", "Checker", "account"), ("galaxy", "Galaxy", "account"),
         ("flame", "Flame", ("wins", 5)), ("bolt", "Bolt", ("kos", 50)),
-        ("target", "Target", ("award", "hit", 3)),
+        ("target", "Target", "account"),
     ],
     "trail": [
         ("none", "None", None),
@@ -43,7 +45,7 @@ CATALOG = {
         ("cap", "Cap", "account"),
         ("party", "Party hat", ("matches", 25)),
         ("tophat", "Top hat", ("wins", 25)),
-        ("halo", "Halo", ("award", "survivor", 5)),
+        ("halo", "Halo", "account"),
         ("horns", "Horns", ("kos", 250)),
     ],
     "ko": [
@@ -57,15 +59,11 @@ CATALOG = {
 IDS = {kind: tuple(i for i, _, _ in items) for kind, items in CATALOG.items()}
 _NEED = {(kind, i): need for kind, items in CATALOG.items() for i, _, need in items}
 STAT_WORDS = {"matches": ("Play", "matches"), "wins": ("Win", "matches"), "kos": ("Knock out", "players")}
-AWARD_NAMES = {"kos": "Most knockouts", "hit": "Hardest hit", "falls": "Butterfingers",
-               "pickups": "Power hungry", "survivor": "Survivor"}
 
 
 def _progress(need, profile):
-    """(have, want) for a stat or award need."""
+    """(have, want) for a stat need."""
     stats = profile["stats"] if profile else {}
-    if need[0] == "award":
-        return (stats.get("awards") or {}).get(need[1], 0), need[2]
     return stats.get(need[0], 0), need[1]
 
 
@@ -91,9 +89,6 @@ def how(need):
         return ""
     if need == "account":
         return "Sign in to use it."
-    if need[0] == "award":
-        n = need[2]
-        return f"Win the {AWARD_NAMES.get(need[1], need[1])} award {n} time{'s' if n != 1 else ''} (signed in)."
     verb, noun = STAT_WORDS[need[0]]
     return f"{verb} {need[1]} {noun} (signed in)."
 
