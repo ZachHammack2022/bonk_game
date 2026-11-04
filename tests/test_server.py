@@ -259,7 +259,7 @@ def test_full_match_over_websockets(monkeypatch):
                     break
             assert "match" in kinds and "state" in kinds
             # (at least: two knockouts in the same tick both count)
-        assert msg["type"] == "results" and max(msg["scores"]) >= 1
+            assert msg["type"] == "results" and max(msg["scores"]) >= 1
             assert len(msg["slots"]) == 4
             await ws.close()
 
