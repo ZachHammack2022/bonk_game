@@ -26,7 +26,7 @@ import traceback
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import delta, limits, lobby, metrics, modes, playtest, replay
+from bonk_game.server import delta, limits, lobby, metrics, modes, playtest, profiles, replay
 from bonk_game.server.lobby import GRAVITY, PATTERNS, ROUND_TIMES, bot_label, clean_name, map_order
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
@@ -61,13 +61,17 @@ class Member:
         self.last_emote = 0.0
         self.last_report = None  # when they last sent a playtest report
         self.errors_sent = 0     # client errors logged for them
+        self.account = None      # their account id, when signed in (accounts.py)
 
 
 class Room:
-    def __init__(self, code, agents=None):
-        """agents: optional AgentStore for trained agents (see web.py)."""
+    def __init__(self, code, agents=None, recorder=None):
+        """agents: optional AgentStore for trained agents (see web.py).
+        recorder(account, entry): adds a match to a signed-in player's
+        history (accounts.Accounts.record), if accounts are on."""
         self.code = code
         self.agents = agents
+        self.recorder = recorder
         self.members = {}          # token -> Member, in join order
         self.host = None
         self.settings = lobby.default_settings()
@@ -77,7 +81,7 @@ class Room:
         self.task = None
         self.encoder = None        # the match's state messages (delta.py)
         self.last_replay = None    # the last finished match, as a replay file (replay.py)
-        self.banned = set()        # tokens the host removed
+        self.banned = set()        # tokens (and accounts) the host removed
         self.votes = set()         # tokens that want a rematch (on the results screen)
         self.closing = False       # the server is restarting: no new matches
         self.reopened_at = None    # made again after a server restart (see web.py)
@@ -89,11 +93,12 @@ class Room:
     def connected(self):
         return [m for m in self.members.values() if m.connected]
 
-    async def join(self, token, name, send, was_host=False):
+    async def join(self, token, name, send, was_host=False, account=None):
         """Add (or reconnect) a member. Returns the Member. was_host: they
         were the host before a server restart, and get it back if they come
-        back soon after (whoever reconnects first doesn't keep it)."""
-        if token in self.banned:
+        back soon after (whoever reconnects first doesn't keep it).
+        account: their account id, if they're signed in."""
+        if token in self.banned or (account is not None and account in self.banned):
             raise RoomFull("The host removed you from this room.")
         m = self.members.get(token)
         if m is None:
@@ -105,6 +110,7 @@ class Room:
             m.send, m.connected, m.left_at = send, True, None
             if name:
                 m.name = clean_name(name)
+        m.account = account
         if self.host is None or self.host not in self.members:
             self.host = token
         if (was_host and self.reopened_at is not None
@@ -356,6 +362,8 @@ class Room:
         if m is None or token == self.host:
             return
         self.banned.add(token)
+        if m.account is not None:
+            self.banned.add(m.account)  # (signed in: on any browser)
         if m.connected:
             await m.send({"type": "error", "message": "The host removed you from this room.",
                           "fatal": True})
@@ -468,6 +476,10 @@ class Room:
         began_at = time.time()
         next_t = began
         why = "finished"
+        # Who's signed in, as the match starts (a stand-in bot plays for
+        # anyone who drops out; the match still counts for them)
+        match_accounts = [self.members[t].account if t in self.members else None
+                          for t in self.match_tokens]
         try:
             while not match.finished:
                 t0 = time.perf_counter()
@@ -493,6 +505,7 @@ class Room:
             self.last_replay = replay.record(match, match.tick_count, self.results["match_id"], int(began_at))
             self.results["replay"] = True  # GET /api/rooms/<code>/replay
             self.results["slots"] = match.describe()["slots"]
+            self._record(match_accounts)
         except asyncio.CancelledError:
             why = "stopped"
             raise
@@ -516,6 +529,19 @@ class Room:
             await self.broadcast({"type": "error", "message": "Something went wrong in that match. Sorry!"})
         await self.broadcast_lobby()
 
+    def _record(self, accounts):
+        """Add the match to each signed-in player's history."""
+        if self.recorder is None:
+            return
+        for slot, account in enumerate(accounts):
+            if account is None:
+                continue
+            try:
+                self.recorder(account, profiles.history_entry(self.results, slot, self.results["match_id"],
+                                                              self.results["at"], self.results["map"]))
+            except Exception as e:  # never lose the results over it
+                metrics.event("error", logging.ERROR, room=self.code, where="record", error=repr(e))
+
     async def stop(self):
         if self.task is not None:
             self.task.cancel()
@@ -527,9 +553,10 @@ def valid_code(code):
 
 
 class RoomManager:
-    def __init__(self, agents=None, rng=None):
+    def __init__(self, agents=None, rng=None, recorder=None):
         self.rooms = {}
         self.agents = agents
+        self.recorder = recorder   # (see Room)
         self.rng = rng or random.Random()
         self.draining = False      # shutting down: no new rooms or matches
 
@@ -547,7 +574,7 @@ class RoomManager:
                 raise RuntimeError("no free room codes")
         elif not valid_code(code) or code in self.rooms:
             raise ValueError(f"bad room code {code!r}")
-        self.rooms[code] = Room(code, self.agents)
+        self.rooms[code] = Room(code, self.agents, self.recorder)
         metrics.STATS.rooms_created += 1
         metrics.event("room_created", room=code, rooms=len(self.rooms))
         return self.rooms[code]

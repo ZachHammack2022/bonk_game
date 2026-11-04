@@ -26,6 +26,18 @@
         <input id="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
         <button type="submit">Join</button>
       </form>
+      <div id="account" class="account hidden">
+        <div id="account-out">
+          <button id="sign-in" class="google-button">
+            <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
+            Sign in with Google
+          </button>
+          <p class="dim small">Optional: keeps your stats on every device. Or just play as a guest.</p>
+        </div>
+        <div id="account-in" class="hidden">
+          <p class="small">Signed in as <b id="account-who"></b> <button id="sign-out" class="link-button">Sign out</button></p>
+        </div>
+      </div>
       <div class="home-links">
         <button id="open-stats" class="link-button">📊 Your stats</button>
         <button id="open-replay" class="link-button">🎞 Watch a replay</button>
@@ -33,6 +45,7 @@
         <button id="open-settings-home" class="link-button">⚙ Settings</button>
       </div>
     </div>
+    <footer class="home-footer"><a href="/privacy">Privacy policy</a></footer>
   </section>
 
   <!-- Lobby: who's here, the host's settings -->
@@ -179,8 +192,10 @@
         <button id="stats-import">Add from a file</button>
         <input id="stats-file" type="file" accept="application/json,.json" hidden>
       </div>
-      <p class="dim small">Move your stats to another browser, or keep them for when accounts arrive.</p>
+      <p id="stats-where" class="dim small">Kept in this browser. Move them to another one with a file.</p>
       <button id="stats-close" class="primary">Done</button>
+      <button id="delete-account" class="link-button danger hidden">Delete my account</button>
+      <a class="dim small privacy-link" href="/privacy" target="_blank" rel="noopener">Privacy</a>
     </div>
   </div>
 
@@ -223,6 +238,7 @@
   <script src="/static/js/net.js"></script>
   <script src="/static/js/replay.js"></script>
   <script src="/static/js/draw.js"></script>
+  <script src="/static/js/account.js"></script>
   <script src="/static/js/main.js"></script>
 </body>
 </html>

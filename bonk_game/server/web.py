@@ -17,6 +17,10 @@ Routes:
                          is set, send it as "Authorization: Bearer <token>".
     GET  /api/playtest   the latest playtest reports and browser errors
                          (playtest.py; same token as /metrics)
+    GET  /privacy        what the site keeps about people
+    /auth/..., /api/me   signing in with Google and your account, when
+                         GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set
+                         (auth.py, accounts.py)
 
 The page is served with every /static/ URL ending in ?v=<VERSION>, a hash
 of the client files, so browsers can cache them for good and still pick up
@@ -53,6 +57,7 @@ and closes. Browsers reconnect to the new server and reopen their room.
 import asyncio
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
@@ -64,7 +69,7 @@ import traceback
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server import delta, limits, metrics, modes, playtest, replay
+from bonk_game.server import auth, delta, limits, metrics, modes, playtest, replay
 from bonk_game.server.room import RoomFull, RoomManager, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -87,6 +92,13 @@ REPLAY_CHUNK = 30           # ticks simulated between letting the rooms run
 PROTOCOL = 1
 DRAIN_SECONDS = limits._env("BONK_DRAIN_SECONDS", 120.0)
 METRICS_TOKEN = os.environ.get("BONK_METRICS_TOKEN", "")
+# Proving to Google that you own the site (Search Console's "HTML tag"
+# method: the content="..." part), which Google asks for before showing
+# the app's name on its sign-in screen
+SITE_VERIFICATION = os.environ.get("BONK_GOOGLE_SITE_VERIFICATION", "")
+# How people reach whoever runs the server (an email address), for the
+# privacy page
+CONTACT = os.environ.get("BONK_CONTACT", "")
 
 
 def client_version(static=STATIC):
@@ -117,7 +129,22 @@ def render_index(version=VERSION):
     names = names.replace("<", "\\u003c")
     head = (f'<head>\n  <meta name="bonk-version" content="{version}">'
             f'\n  <script id="bonk-names" type="application/json">{names}</script>')
+    if SITE_VERIFICATION:
+        head += f'\n  <meta name="google-site-verification" content="{html.escape(SITE_VERIFICATION)}">'
     return page.replace("<head>", head, 1)
+
+
+def render_privacy(contact=None):
+    """privacy.html, with how to reach whoever runs the server."""
+    contact = CONTACT if contact is None else contact
+    with open(os.path.join(STATIC, "privacy.html"), encoding="utf-8") as f:
+        page = f.read()
+    if contact:
+        safe = html.escape(contact)
+        how = f'email <a href="mailto:{safe}">{safe}</a>' if "@" in contact else safe
+    else:
+        how = "contact whoever runs this server"
+    return page.replace("{{contact}}", how)
 
 
 class AgentStore:
@@ -159,6 +186,7 @@ def _sender(ws):
 
 
 PAGE = web.AppKey("page", str)
+PRIVACY_PAGE = web.AppKey("privacy_page", str)
 
 
 async def index(request):
@@ -323,8 +351,12 @@ async def websocket(request):
         if room is None:
             return await refuse("That room doesn't exist (or has closed).")
         token = str(msg.get("token") or "")[:64] or secrets.token_hex(12)
+        # Signed in? (The cookie comes with the WebSocket; only this site's
+        # own pages count, so another site can't play as you)
+        user = auth.user_for(request) if auth.same_origin(request) else None
         try:
-            await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True)
+            await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True,
+                            account=user["id"] if user else None)
         except RoomFull as e:
             token = None
             return await refuse(str(e))
@@ -364,9 +396,13 @@ async def websocket(request):
 
 
 async def _sweeper(app):
+    n = 0
     while True:
         await asyncio.sleep(SWEEP_EVERY)
         await app[ROOMS].sweep()
+        n += 1
+        if n % 720 == 0 and app.get(auth.ACCOUNTS) is not None:  # hourly
+            app[auth.ACCOUNTS].sweep()
 
 
 async def _start_background(app):
@@ -387,7 +423,14 @@ async def _stop_background(app):
         await room.stop()
 
 
-def make_app(rooms=None):
+async def privacy(request):
+    return web.Response(text=request.app[PRIVACY_PAGE], content_type="text/html",
+                        headers={"Cache-Control": "no-cache"})
+
+
+def make_app(rooms=None, auth_config=None, accounts=None):
+    """auth_config, accounts: for tests (normally from the environment:
+    auth.Config)."""
     app = web.Application(middlewares=[cache_headers], client_max_size=MAX_REPLAY_BYTES)
     app[ROOMS] = rooms or RoomManager(AgentStore())
     app[ROOM_LIMIT] = limits.PerKey(limits.ROOMS_PER_IP / 60, limits.ROOMS_PER_IP)
@@ -396,6 +439,7 @@ def make_app(rooms=None):
     app[CONNECTIONS] = {}  # ip -> open WebSockets
     app[SOCKETS] = set()  # open WebSockets, closed on shutdown
     app[PAGE] = render_index()
+    app[PRIVACY_PAGE] = render_privacy()
     app.router.add_get("/", index)
     app.router.add_get("/r/{code}", index)
     app.router.add_post("/api/rooms", create_room)
@@ -406,6 +450,10 @@ def make_app(rooms=None):
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/metrics", metrics_page)
     app.router.add_get("/api/playtest", playtest_page)
+    app.router.add_get("/privacy", privacy)
+    accounts = auth.setup(app, auth_config, accounts)
+    if accounts is not None and app[ROOMS].recorder is None:
+        app[ROOMS].recorder = accounts.record  # signed-in players' match history
     app.router.add_static("/static/", STATIC)
     app.on_startup.append(_start_background)
     app.on_shutdown.append(_shutdown)

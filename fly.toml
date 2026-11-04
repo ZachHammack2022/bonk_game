@@ -11,6 +11,16 @@ kill_timeout = 130              # seconds: a bit longer than BONK_DRAIN_SECONDS 
 [env]
   PORT = "8000"
   BONK_TRUST_PROXY = "1"        # Fly's proxy says who each visitor is (Fly-Client-IP)
+  BONK_DB = "/data/bonk.db"     # accounts (only used once GOOGLE_CLIENT_ID/SECRET are set)
+  # Proves to Google that we own bonk-game.fly.dev (Search Console's HTML tag;
+  # it's in the page for anyone to see, so not a secret)
+  BONK_GOOGLE_SITE_VERIFICATION = "p9aoem1ei899-eutjEvSrBfigVHgTGshzHtI1edyHUI"
+
+# Accounts live in a SQLite file on this volume, so they outlive deploys.
+# Make it once: fly volumes create bonk_data --size 1 --region iad
+[mounts]
+  source = "bonk_data"
+  destination = "/data"
 
 [http_service]
   internal_port = 8000

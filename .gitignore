@@ -86,3 +86,7 @@ Thumbs.db
 venv
 # Node (browser test)
 node_modules/
+
+# Accounts database (BONK_DB)
+bonk.db
+bonk.db-*

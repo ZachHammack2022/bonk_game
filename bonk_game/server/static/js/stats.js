@@ -111,7 +111,7 @@ $("stats-file").addEventListener("change", async () => {
   $("stats-file").value = "";
   if (!f) return;
   let added = null;
-  try { added = profileStore.add(JSON.parse(await f.text())); } catch (e) { /* not JSON */ }
+  try { added = await profileStore.add(JSON.parse(await f.text())); } catch (e) { /* not JSON, or offline */ }
   if (added === null) toast("That isn't a bonk profile file.", true);
   else toast(added ? `Added ${added} match${added === 1 ? "" : "es"}.` : "Nothing new in that file.");
   renderStats();

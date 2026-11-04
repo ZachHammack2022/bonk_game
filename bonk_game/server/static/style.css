@@ -322,3 +322,16 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 }
 .need p { margin: 0 0 8px; font-size: 14px; }
 .need button { width: 100%; }
+
+/* Signing in (optional): Google's button, or who you're signed in as */
+.account { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(160, 174, 198, 0.2); text-align: center; }
+.account p { margin: 6px 0 0; }
+.google-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; background: #fff; color: #1f1f1f; border-color: #dadce0; font-weight: 600;
+}
+.google-button:hover { background: #f2f2f2; border-color: #c6c8cc; }
+.link-button.danger { color: var(--danger); }
+.privacy-link { display: block; text-align: center; margin-top: 4px; }
+.home-footer { margin-top: 18px; font-size: 13px; }
+.home-footer a { color: var(--dim); }
