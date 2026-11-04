@@ -76,7 +76,7 @@ const looks = {
         if (it.unlocked && was && !was.unlocked) fresh.push(`${it.name} ${kind === "ko" ? "knockout" : kind}`);
       }
     }
-    if (fresh.length) toast(`🎉 Unlocked: ${fresh.join(", ")}! Pick it in Customize.`);
+    if (fresh.length) toast(`Unlocked: ${fresh.join(", ")}. Pick it in Customize.`);
   },
 };
 const W = 680, H = 480;
@@ -100,6 +100,8 @@ const CLIENT_VERSION = (document.querySelector('meta[name="bonk-version"]') || {
 // Small helpers
 // ---------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
+// One of the icons in index.html's sprite, as markup: icon("gear")
+const icon = (name) => `<svg class="i" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },

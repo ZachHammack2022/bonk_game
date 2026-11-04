@@ -33,8 +33,8 @@ function renderStats() {
   const body = $("stats-body");
   body.innerHTML = "";
   $("stats-since").textContent = s.first_at
-    ? `Kept in this browser. ${s.matches} match${s.matches === 1 ? "" : "es"} since ${new Date(s.first_at * 1000).toLocaleDateString()}.`
-    : "Kept in this browser.";
+    ? `${s.matches} match${s.matches === 1 ? "" : "es"} since ${new Date(s.first_at * 1000).toLocaleDateString()}.`
+    : "No matches yet.";
   if (!s.matches) {
     body.append(el("p", "dim", "No matches yet. Play one and it shows up here."));
     return;
@@ -59,7 +59,7 @@ function renderStats() {
     const ul = el("ul", "stat-awards");
     for (const [id, n] of awards) {
       const li = el("li", "");
-      li.append(el("span", "icon", AWARD_ICONS[id] || "🏅"), el("span", "", `${AWARD_TITLES[id] || id} ×${n}`));
+      li.append(el("span", "", AWARD_TITLES[id] || id), el("b", "", `×${n}`));
       ul.append(li);
     }
     body.append(ul);
@@ -80,9 +80,9 @@ function renderStats() {
     const li = el("li", h.won ? "won" : "");
     const place = h.mode === "teams" ? (h.won ? "Won" : h.place === 1 ? "Draw" : "Lost") : `${ordinal(h.place)} of ${h.of}`;
     const top = el("div", "row-between");
-    top.append(el("b", "", (h.won ? "🏆 " : "") + place), el("span", "dim small", whenText(h.at)));
+    top.append(el("b", "", place + (h.won ? " · won" : "")), el("span", "dim small", whenText(h.at)));
     const detail = [`${modeTitle(h.mode)} · ${mapTitle(h.map)}`, `${h.kos} KO${h.kos === 1 ? "" : "s"}`];
-    if (h.awards.length) detail.push(h.awards.map((a) => AWARD_ICONS[a] || "🏅").join(""));
+    if (h.awards.length) detail.push(h.awards.map((a) => AWARD_TITLES[a] || a).join(", "));
     li.append(top, el("div", "dim small", detail.join(" · ")));
     ol.append(li);
   }

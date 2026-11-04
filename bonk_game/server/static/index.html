@@ -8,6 +8,25 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  <!-- Icons (stroke icons, 24x24, drawn in the text colour): <svg class="i"><use href="#i-name"/></svg> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+      <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-rewind" viewBox="0 0 24 24"><path d="M11 18l-7-6 7-6zM20 18l-7-6 7-6z"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.3-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
+    </defs>
+  </svg>
   <!-- Home: pick a name, make a room or join one -->
   <section id="home" class="screen">
     <h1 class="logo">b<span class="logo-ball"></span>nk</h1>
@@ -41,10 +60,10 @@
         </div>
       </div>
       <div class="home-links">
-        <button id="open-stats" class="link-button">📊 Your stats</button>
-        <button id="open-replay" class="link-button">🎞 Watch a replay</button>
+        <button id="open-stats" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg>Your stats</button>
+        <button id="open-replay" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-film"/></svg>Watch a replay</button>
         <input id="replay-file" type="file" accept="application/json,.json" hidden>
-        <button id="open-settings-home" class="link-button">⚙ Settings</button>
+        <button id="open-settings-home" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg>Settings</button>
       </div>
     </div>
     <footer class="home-footer"><a href="/privacy">Privacy policy</a> · <a href="/terms">Terms of service</a></footer>
@@ -55,7 +74,7 @@
   <section id="browse" class="screen hidden">
     <div class="browse">
       <header class="browse-head">
-        <button id="browse-back" class="ghost" title="Back to the start page">← Back</button>
+        <button id="browse-back" class="ghost" title="Back to the start page"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>Back</button>
         <div class="browse-title">
           <h1>Find a game</h1>
           <p id="browse-summary" class="dim small" aria-live="polite"></p>
@@ -127,9 +146,9 @@
         <div id="room-code" class="room-code"></div>
       </div>
       <div class="head-buttons">
-        <button id="leave" title="Leave this room and go back to the start page">← Leave</button>
-        <button id="open-settings-lobby" class="icon-button" aria-label="Settings" title="Settings">⚙</button>
-        <button id="copy-link">Copy invite link</button>
+        <button id="leave" class="ghost" title="Leave this room and go back to the start page"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>Leave</button>
+        <button id="open-settings-lobby" class="icon-button" aria-label="Settings" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg></button>
+        <button id="copy-link"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Copy invite link</button>
       </div>
     </header>
     <!-- Out here while a match is on: the way back in -->
@@ -176,7 +195,7 @@
         <label class="check"><input id="power-ups" type="checkbox"> Power-ups</label>
         <label class="check"><input id="public-room" type="checkbox"> Public room</label>
         <p id="public-help" class="dim small">Listed in Find a game, so anyone can join. Private rooms are by invite link or code only.</p>
-        <p class="dim small power-help">⚡ speed · 🎈 float · 🪨 iron · 👊 punch the next ball you bump</p>
+        <p class="dim small power-help">Pickups: speed, float, iron, and punch (the next ball you bump goes flying).</p>
         <div id="need-players" class="need hidden">
           <p id="need-text"></p>
           <button id="add-needed" class="host-only"></button>
@@ -203,7 +222,7 @@
     </div>
     <div id="killcam" class="killcam hidden"><b>KILLCAM</b><span class="dim small">click to skip</span></div>
     <div id="replay-bar" class="replay-bar hidden">
-      <button id="replay-play" aria-label="Play or pause">❚❚</button>
+      <button id="replay-play" class="icon-button" aria-label="Play or pause"><svg class="i" aria-hidden="true"><use href="#i-pause"/></svg></button>
       <input id="replay-seek" type="range" min="0" max="0" value="0" aria-label="Jump to">
       <span id="replay-time" class="dim small"></span>
       <select id="replay-speed" aria-label="Speed">
@@ -212,8 +231,8 @@
       <button id="replay-back">Done</button>
     </div>
     <div class="game-bar">
-      <button id="go-lobby" class="game-gear lobby-button" title="Go to the lobby: a bot plays for you, and you can come back">← Lobby</button>
-      <button id="open-settings-game" class="icon-button game-gear" aria-label="Settings" title="Settings (Esc)">⚙</button>
+      <button id="go-lobby" class="game-gear lobby-button" title="Go to the lobby: a bot plays for you, and you can come back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>Lobby</button>
+      <button id="open-settings-game" class="icon-button game-gear" aria-label="Settings" title="Settings (Esc)"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg></button>
       <div id="emotes" aria-label="Emotes">
         <button data-e="0" title="Emote (1)">👋</button>
         <button data-e="1" title="Emote (2)">😂</button>
@@ -227,24 +246,26 @@
         <ol id="standings"></ol>
         <ul id="awards" class="awards hidden"></ul>
         <div id="feel" class="feel hidden">
-          <p class="dim small">How did that match feel? (Helps us tune the game.)</p>
+          <p class="dim small">How did that match feel?</p>
           <div class="feel-buttons">
-            <button data-feel="smooth">😀 Smooth</button>
-            <button data-feel="ok">🙂 OK</button>
-            <button data-feel="laggy">😕 Laggy</button>
-            <button data-feel="unplayable">😣 Unplayable</button>
+            <button data-feel="smooth">Smooth</button>
+            <button data-feel="ok">OK</button>
+            <button data-feel="laggy">Laggy</button>
+            <button data-feel="unplayable">Unplayable</button>
           </div>
           <input id="feel-note" maxlength="500" placeholder="Anything else? (optional)" aria-label="Anything else about that match">
           <p id="feel-thanks" class="dim small hidden">Thanks!</p>
         </div>
         <div class="results-watch">
-          <button id="killcam-btn" class="hidden">🎬 Killcam</button>
-          <button id="replay-download" class="hidden" title="Download this match as a replay file">⬇ Replay</button>
+          <button id="killcam-btn" class="ghost hidden"><svg class="i" aria-hidden="true"><use href="#i-rewind"/></svg>Killcam</button>
+          <button id="replay-download" class="ghost hidden" title="Download this match as a replay file"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Replay</button>
         </div>
         <button id="vote" class="primary">Play again</button>
-        <button id="again" class="host-only">Start now</button>
-        <button id="to-lobby" class="host-only">Back to lobby</button>
-        <button id="leave-results">Leave room</button>
+        <div class="results-more">
+          <button id="again" class="host-only">Start now</button>
+          <button id="to-lobby" class="host-only">Lobby</button>
+          <button id="leave-results" class="ghost">Leave room</button>
+        </div>
         <p id="next-help" class="dim small">The next match starts when everyone has voted<span class="guest-only">, or when the host starts it</span>.</p>
         <p id="next-quick" class="dim small hidden">The next match starts by itself in a few seconds.</p>
       </div>

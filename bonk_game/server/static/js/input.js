@@ -217,11 +217,11 @@ requestAnimationFrame(pollGamepads);
 
 window.addEventListener("gamepadconnected", (e) => {
   gamepad.name = e.gamepad.id;
-  toast("🎮 Controller connected");
+  toast("Controller connected");
   if (settingsOpen()) renderSettings();
 });
 window.addEventListener("gamepaddisconnected", () => {
   gamepad.name = null;
-  toast("🎮 Controller disconnected");
+  toast("Controller disconnected");
   if (settingsOpen()) renderSettings();
 });

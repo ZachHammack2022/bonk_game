@@ -104,7 +104,8 @@ function renderLobby() {
     }
     if (seatInfo.kind === "human") {
       const you = seatInfo.id === me.id;
-      const li = seat(seatInfo.color, shownName(seatInfo.id, seatInfo.name) + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you,
+      const tag = [you && "you", seatInfo.id === L.host && "host"].filter(Boolean).join(" · ");
+      const li = seat(seatInfo.color, shownName(seatInfo.id, seatInfo.name), tag, you,
                       seatInfo.pattern, seatInfo.own_color, seatInfo.hat);
       if (you) {
         const ball = li.querySelector(".ball");
@@ -226,7 +227,7 @@ $("back-to-match").addEventListener("click", backToMatch);
 
 function removeButton(title, onClick) {
   const rm = document.createElement("button");
-  rm.className = "remove"; rm.textContent = "✕"; rm.title = title;
+  rm.className = "remove icon-button"; rm.innerHTML = icon("x"); rm.title = title;
   rm.setAttribute("aria-label", title);
   rm.addEventListener("click", onClick);
   return rm;
@@ -291,7 +292,7 @@ function ownColorButton(current, onPick) {
   wrap.className = "swatch own" + (current ? " on" : "") + (profileStore.user ? "" : " locked");
   wrap.title = profileStore.user ? "Any colour" : "Any colour: sign in to unlock";
   if (current) wrap.style.background = current;
-  else wrap.textContent = profileStore.user ? "🎨" : "🔒";
+  else wrap.innerHTML = icon(profileStore.user ? "palette" : "lock");
   if (!profileStore.user) {
     wrap.setAttribute("role", "button");
     wrap.addEventListener("click", () => toast("Sign in (on the home page) to pick any colour you like."));
@@ -360,7 +361,7 @@ function renderProfileEditor() {
     extras.append(label, lookRow(kind, me.look(kind), me.ballHex, me.pattern, pick(kind)));
   }
   $("profile-unlock").textContent = !looks.catalog ? ""
-    : profileStore.user ? "More unlock as you play: tap a 🔒 to see how."
+    : profileStore.user ? "More unlock as you play: tap a locked one to see how."
     : "Sign in (on the home page) to unlock more as you play.";
   $("profile-preview").innerHTML = "";
   $("profile-preview").appendChild(ballCanvas(72, me.ballHex, me.pattern, me.look("hat")));
