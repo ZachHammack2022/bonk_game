@@ -81,7 +81,10 @@ function check(cond, what) {
     await host.click("#profile-extras .looks-hat [data-look=halo]");
     check(await host.isVisible("#profile-extras .looks-hat [data-look=halo].on"), "a guest can wear the halo");
     await host.click("#profile-extras .looks-hat [data-look=none]");
-    await host.click("#profile-close");
+    check(await host.isVisible('#me-tabs [data-tab="ball"].on'), "your ball opens your profile, on its Ball tab");
+    await host.click("#me-tabs [data-tab=settings]");
+    check(await host.isVisible("#set-keys") && await host.isHidden("#profile-colors"), "settings are a tab of your profile");
+    await host.click("#me-done");
     check((await host.textContent("#home-ball-label")).includes("Purple"), "you can pick a favourite colour and pattern");
     await host.keyboard.press("Escape");
     await host.waitForSelector("#settings:not(.hidden)");
@@ -387,17 +390,19 @@ function check(cond, what) {
     check(prof.stats.matches === 2 && prof.history.length === 2 && prof.history[0].map === "classic" && prof.history[0].of === prof.history[0].players,
       `matches go into your history (${prof.stats.matches}: ${prof.history.map((h) => h.mode + " " + h.place + "/" + h.of).join(", ")})`);
     await host.goto(base + "/");
-    await host.click("#open-stats");
+    await host.click("#open-profile");
+    await host.click("#me-tabs [data-tab=stats]");
     check((await host.$$eval("#stats .stat-history li", (els) => els.length)) === 2 && (await host.isVisible(".stat-tiles")),
       "the stats screen shows your totals and recent matches");
     await shot(host, "stats");
     check(await host.isHidden("#download-data"), "guests have no data download (their profile is in the browser)");
     const fresh = await open("fresh");
     await fresh.goto(base + "/");
-    await fresh.click("#open-stats");
+    await fresh.click("#open-profile");
+    await fresh.click("#me-tabs [data-tab=stats]");
     check((await fresh.textContent("#stats-body")).includes("No matches yet"), "a new browser has no matches");
 
-    await fresh.click("#stats-close");
+    await fresh.click("#me-done");
     check(!(await fresh.$("#replay-file")) && !(await fresh.$("#replay-download")), "there are no replay files to watch or download");
     check((await fetch(base + "/api/replay", { method: "POST", body: "{}" })).status === 404, "and no server routes for them");
 
@@ -463,7 +468,7 @@ function check(cond, what) {
     await q1.click("#report-send");
     await q1.waitForFunction(() => /Thanks/.test(document.querySelector("#toast").textContent));
     await q1.click("#person-close");
-    await q1.click("#settings-close");
+    await q1.click("#me-done");
     check(await q1.evaluate(() => app.match.slots.some((s) => s.name === "Muted player")), "a muted player's name is hidden");
     await q2.keyboard.press("Digit1");
     await q2.waitForTimeout(500);

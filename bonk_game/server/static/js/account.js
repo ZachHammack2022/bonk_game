@@ -142,6 +142,7 @@ const account = {
     $("stats-where").textContent = user
       ? "Saved to your account: the same on every device you sign in on."
       : "Kept in this browser. Sign in to keep them on every device.";
+    renderMeHead();  // (settings.js)
   },
 };
 

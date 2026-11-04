@@ -343,7 +343,7 @@ function ownColorButton(current, onPick) {
   else wrap.innerHTML = icon(profileStore.user ? "palette" : "lock");
   if (!profileStore.user) {
     wrap.setAttribute("role", "button");
-    wrap.addEventListener("click", () => toast("Sign in (on the home page) to pick any colour you like."));
+    wrap.addEventListener("click", () => toast("Sign in (at the bottom of your profile) to pick any colour you like."));
     return wrap;
   }
   const input = document.createElement("input");
@@ -377,6 +377,7 @@ function renderHomeBall() {
   const name = me.ownColor ? "Your own colour" : me.color === null ? "Any colour" : PALETTE[me.color][0];
   const extras = ["trail", "hat"].filter((k) => me.look(k) !== "none").map((k) => looks.name(k, me.look(k)).toLowerCase());
   $("home-ball-label").textContent = [name, looks.name("pattern", me.pattern).toLowerCase(), ...extras].join(", ");
+  if (typeof renderMeHead === "function") renderMeHead();  // (settings.js, loaded after this)
 }
 function renderProfileEditor() {
   const box = $("profile-colors");
@@ -409,13 +410,11 @@ function renderProfileEditor() {
     extras.append(label, lookRow(kind, me.look(kind), me.ballHex, me.pattern, pick(kind)));
   }
   $("profile-unlock").textContent = profileStore.user || !looks.catalog ? ""
-    : "The locked ones are for signed-in players: sign in on the home page to use them.";
+    : "The locked ones are for signed-in players: sign in below to use them.";
   $("profile-preview").innerHTML = "";
   $("profile-preview").appendChild(ballCanvas(72, me.ballHex, me.pattern, me.look("hat")));
 }
-$("edit-ball").addEventListener("click", () => { renderProfileEditor(); $("profile").classList.remove("hidden"); });
-$("profile-close").addEventListener("click", () => $("profile").classList.add("hidden"));
-$("profile").addEventListener("click", (e) => { if (e.target === $("profile")) $("profile").classList.add("hidden"); });
+$("edit-ball").addEventListener("click", () => openMe("ball"));  // (settings.js)
 
 // A seat card: the ball, the name with what they are under it (you, host,
 // bot), and room on the right for buttons

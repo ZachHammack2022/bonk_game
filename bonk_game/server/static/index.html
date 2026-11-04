@@ -26,6 +26,7 @@
   </svg>
   <!-- Home: pick a name, make a room or join one -->
   <section id="home" class="screen">
+    <div class="home-top"><button id="open-profile" class="me-button" data-me="ball" title="Your profile: ball, stats, settings"><span class="me-button-ball"></span><span class="me-button-name">Profile</span></button></div>
     <h1 class="logo">b<span class="logo-ball"></span>nk</h1>
     <p class="tagline">a tiny physics brawler, with friends</p>
     <div class="card home-card">
@@ -51,20 +52,6 @@
         <button type="submit" id="join-code" class="primary big">Join game</button>
         <p class="dim small quick-help">You were invited. <button type="button" id="join-other" class="link-button">See all games instead</button></p>
       </form>
-      <div class="home-links">
-        <button id="open-stats" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg>Stats</button>
-        <button id="open-settings-home" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg>Settings</button>
-      </div>
-      <div id="account" class="account hidden">
-        <div id="account-out">
-          <button id="sign-in" class="google-button">
-            <svg viewBox="0 0 48 48" width="16" height="16" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
-            Sign in with Google
-          </button>
-          <p class="dim small">Optional: keeps your stats and ball on every device, and unlocks more looks.</p>
-        </div>
-        <p id="account-in" class="small dim hidden">Signed in as <b id="account-who"></b> · <button id="sign-out" class="link-button">Sign out</button></p>
-      </div>
     </div>
     <footer class="home-footer"><a href="/privacy">Privacy policy</a> · <a href="/terms">Terms of service</a></footer>
   </section>
@@ -81,6 +68,7 @@
         </div>
         <div class="browse-actions">
           <button id="new-game" class="primary">New game</button>
+          <button class="me-button" data-me="ball" title="Your profile: ball, stats, settings"><span class="me-button-ball"></span><span class="me-button-name">Profile</span></button>
         </div>
       </header>
       <div class="browse-bar">
@@ -322,28 +310,6 @@
     </div>
   </section>
 
-  <!-- Your ball: favourite colour, pattern, trail, hat and knockout effect -->
-  <div id="profile" class="overlay hidden" role="dialog" aria-labelledby="profile-title">
-    <div class="card settings-card profile-card">
-      <h2 id="profile-title">Your ball</h2>
-      <!-- Two columns on a wide screen, so it fits a laptop's height -->
-      <div class="profile-cols">
-        <div class="profile-col">
-          <div id="profile-preview" class="profile-preview"></div>
-          <label>Favourite colour</label>
-          <div id="profile-colors" class="picker"></div>
-          <p class="dim small">You get it whenever it's free (in Teams, when it's one of your side's colours).</p>
-        </div>
-        <div class="profile-col">
-          <label>Pattern</label>
-          <div id="profile-patterns"></div>
-          <div id="profile-extras" class="profile-col"></div>
-          <p id="profile-unlock" class="dim small"></p>
-        </div>
-      </div>
-      <button id="profile-close" class="primary">Done</button>
-    </div>
-  </div>
 
   <!-- Someone else: mute them on your screen, or report them -->
   <div id="person" class="overlay hidden" role="dialog" aria-labelledby="person-name">
@@ -365,44 +331,84 @@
     </div>
   </div>
 
-  <!-- Your stats: from your profile, kept in this browser -->
-  <div id="stats" class="overlay hidden" role="dialog" aria-labelledby="stats-title">
-    <div class="card settings-card stats-card">
-      <h2 id="stats-title">Your stats</h2>
-      <p id="stats-since" class="dim small"></p>
-      <div id="stats-body"></div>
-      <p id="stats-where" class="dim small">Kept in this browser. Move them to another one with a file.</p>
-      <button id="stats-close" class="primary">Done</button>
-      <button id="download-data" class="link-button hidden">Download my data</button>
-      <button id="delete-account" class="link-button danger hidden">Delete my account</button>
-      <a class="dim small privacy-link" href="/privacy" target="_blank" rel="noopener">Privacy</a>
-    </div>
-  </div>
-
-  <!-- Settings: kept in this browser -->
-  <div id="settings" class="overlay hidden" role="dialog" aria-labelledby="settings-title">
-    <div class="card settings-card">
-      <h2 id="settings-title">Settings</h2>
-      <div class="set-row">
-        <label for="set-volume">Volume</label>
-        <input id="set-volume" type="range" min="0" max="100" step="5">
-        <span id="set-volume-out" class="dim small"></span>
+  <!-- Your profile, the same page from everywhere: your ball, your stats,
+       your settings, and signing in (settings.js) -->
+  <div id="me" class="overlay hidden" role="dialog" aria-labelledby="me-title">
+    <div class="card me-card">
+      <header class="me-head">
+        <span id="me-ball" class="me-ball"></span>
+        <div class="me-who">
+          <h2 id="me-title">Your profile</h2>
+          <p id="me-name" class="dim small"></p>
+        </div>
+        <button id="me-close" class="icon-button ghost" aria-label="Close" title="Close (Esc)"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+      </header>
+      <div id="me-tabs" class="seg wide-seg" role="tablist" aria-label="Profile">
+        <button data-tab="ball" role="tab">Ball</button>
+        <button data-tab="stats" role="tab">Stats</button>
+        <button data-tab="settings" role="tab">Settings</button>
       </div>
-      <label class="check"><input id="set-mute" type="checkbox"> Mute (M)</label>
-      <label class="check"><input id="set-shake" type="checkbox"> Screen shake</label>
-      <label class="check"><input id="set-ping" type="checkbox"> Show ping</label>
-      <label class="check"><input id="set-chat" type="checkbox"> Chat during matches</label>
-      <label class="check"><input id="set-colorblind" type="checkbox"> Colourblind mode: a different pattern on every ball</label>
-      <label class="check"><input id="set-contrast" type="checkbox"> High-contrast ball colours</label>
-      <h3>Controls</h3>
-      <ul id="set-keys" class="set-keys"></ul>
-      <p id="set-pad" class="dim small"></p>
-      <button id="set-reset-keys" class="link-button">Reset controls</button>
-      <div id="settings-people" class="hidden">
-        <h3>People here</h3>
-        <ul id="people-list" class="public-list"></ul>
+      <!-- Your ball: favourite colour, pattern, trail, hat and knockout effect -->
+      <div id="profile" class="me-pane" role="tabpanel">
+        <div class="profile-cols">
+          <div class="profile-col">
+            <div id="profile-preview" class="profile-preview"></div>
+            <label>Favourite colour</label>
+            <div id="profile-colors" class="picker"></div>
+            <p class="dim small">You get it whenever it's free (in Teams, when it's one of your side's colours).</p>
+          </div>
+          <div class="profile-col">
+            <label>Pattern</label>
+            <div id="profile-patterns"></div>
+            <div id="profile-extras" class="profile-col"></div>
+            <p id="profile-unlock" class="dim small"></p>
+          </div>
+        </div>
       </div>
-      <button id="settings-close" class="primary">Done</button>
+      <!-- Your stats: from your profile, kept in this browser or your account -->
+      <div id="stats" class="me-pane stats-pane hidden" role="tabpanel">
+        <p id="stats-since" class="dim small"></p>
+        <div id="stats-body"></div>
+        <p id="stats-where" class="dim small">Kept in this browser. Move them to another one with a file.</p>
+        <button id="download-data" class="link-button hidden">Download my data</button>
+        <button id="delete-account" class="link-button danger hidden">Delete my account</button>
+        <a class="dim small privacy-link" href="/privacy" target="_blank" rel="noopener">Privacy</a>
+      </div>
+      <!-- Settings: kept in this browser -->
+      <div id="settings" class="me-pane hidden" role="tabpanel">
+        <div class="set-row">
+          <label for="set-volume">Volume</label>
+          <input id="set-volume" type="range" min="0" max="100" step="5">
+          <span id="set-volume-out" class="dim small"></span>
+        </div>
+        <label class="check"><input id="set-mute" type="checkbox"> Mute (M)</label>
+        <label class="check"><input id="set-shake" type="checkbox"> Screen shake</label>
+        <label class="check"><input id="set-ping" type="checkbox"> Show ping</label>
+        <label class="check"><input id="set-chat" type="checkbox"> Chat during matches</label>
+        <label class="check"><input id="set-colorblind" type="checkbox"> Colourblind mode: a different pattern on every ball</label>
+        <label class="check"><input id="set-contrast" type="checkbox"> High-contrast ball colours</label>
+        <h3>Controls</h3>
+        <ul id="set-keys" class="set-keys"></ul>
+        <p id="set-pad" class="dim small"></p>
+        <button id="set-reset-keys" class="link-button">Reset controls</button>
+        <div id="settings-people" class="hidden">
+          <h3>People here</h3>
+          <ul id="people-list" class="public-list"></ul>
+        </div>
+      </div>
+      <div class="me-foot">
+        <div id="account" class="me-account hidden">
+          <div id="account-out">
+            <button id="sign-in" class="google-button" title="Optional: keeps your stats and ball on every device, and unlocks more looks">
+              <svg viewBox="0 0 48 48" width="16" height="16" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
+              Sign in with Google
+            </button>
+            <span class="dim small me-why">Keeps your stats and ball on every device.</span>
+          </div>
+          <p id="account-in" class="small dim hidden">Signed in as <b id="account-who"></b> · <button id="sign-out" class="link-button">Sign out</button></p>
+        </div>
+        <button id="me-done" class="primary">Done</button>
+      </div>
     </div>
   </div>
 
