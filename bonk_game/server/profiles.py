@@ -13,6 +13,8 @@ id, time, mode and map (history_entry).
 import math
 import re
 
+from bonk_game.server import moderation
+
 FORMAT = "bonk-profile"
 VERSION = 1
 HISTORY = 50
@@ -88,6 +90,8 @@ def validate(p):
     out["merged"] = [x for x in merged if isinstance(x, str) and x and len(x) <= 40][:100] \
         if isinstance(merged, list) else []
     out["name"] = _text(p.get("name"), 16)
+    if moderation.offensive(out["name"]):
+        out["name"] = ""  # (an account's name goes through the same filter as everyone's)
     c = p.get("color")
     out["color"] = c if isinstance(c, int) and not isinstance(c, bool) and 0 <= c < 10 else None
     oc = p.get("own_color")

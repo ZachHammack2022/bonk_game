@@ -18,7 +18,8 @@
 //   replay.js    the killcam
 //   draw.js      drawing the match
 //   looks.js     trails, hats, knockout effects, and how balls look on your screen
-//   people.js    the game browser (public games, Quick match, New game); muting and reporting people
+//   people.js    the game browser (public and private games, New game); muting and reporting people
+//   chat.js      chat in the lobby and over the match
 //   account.js   signing in with Google (optional) and your account
 //   main.js      start up
 // Code that runs as a file loads may only use what earlier files define.
@@ -348,6 +349,7 @@ function leaveRoom(push) {
     ws.close();
   }
   replayer.stop();
+  chat.reset([]);
   app.ws = null; app.room = null; app.password = null; app.lobby = null; app.match = null; app.results = null; app.away = false;
   app.states = []; app.last = null; app.retry = 0;
   $("results").classList.add("hidden");
@@ -421,6 +423,7 @@ function onMessage(msg) {
       status("");
       fillMapOptions();
       playtest.on = !!msg.playtest;
+      chat.reset(msg.chat);
       playtest.sendErrors();
       // Bring your profile along
       send({ type: "look", ...Object.fromEntries(looks.KINDS.map((k) => [k, me.look(k)])), auto: true });
@@ -503,6 +506,9 @@ function onMessage(msg) {
       playtest.finish();
       recordMatch(msg);
       showReplayButtons(msg);
+      break;
+    case "chat":
+      chat.add(msg);
       break;
     case "notice":
       toast(msg.message);

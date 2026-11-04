@@ -134,6 +134,11 @@ function check(cond, what) {
     await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length === 4);
     await guest.waitForFunction(() => document.querySelector("#map").value === "classic");
     check(true, "settings reach the guest");
+    // Chat in the lobby: everyone sees it, with swear words starred out
+    await guest.fill("#chat-input", "hi there you shit");
+    await guest.press("#chat-input", "Enter");
+    await host.waitForFunction(() => document.querySelector("#chat-log").textContent.includes("hi there you ****"));
+    check((await host.textContent("#chat-log")).includes("Bob joined"), "lobby chat reaches everyone, filtered, with who joined");
     await shot(host, "lobby");
 
     await host.click("#start");
@@ -145,6 +150,16 @@ function check(cond, what) {
     await guest.keyboard.press("Digit2");
     await host.waitForFunction(() => bonkDebug.fx.emotes.some((e) => e.slot === 1 && e.id === 1), null, { timeout: 3000 });
     check(true, "an emote reaches the other player");
+    // Chat over the match: Enter opens the box; typing doesn't move your ball
+    await guest.keyboard.up("ArrowRight");
+    await guest.keyboard.press("Enter");
+    await guest.waitForSelector("#chat-game-input:focus");
+    await guest.keyboard.type("wasd nice");
+    check(await guest.evaluate(() => held.keys.size === 0), "typing in the match chat doesn't move your ball");
+    await guest.keyboard.press("Enter");
+    await host.waitForFunction(() => document.querySelector("#chat-feed").textContent.includes("wasd nice"));
+    check(await guest.isHidden("#chat-game-form"), "match chat shows over the game, and the box closes after sending");
+    await guest.keyboard.down("ArrowRight");
     await host.waitForTimeout(150);
     await shot(guest, "match");
     await guest.keyboard.up("ArrowRight");

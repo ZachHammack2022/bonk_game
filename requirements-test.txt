@@ -7,3 +7,4 @@ Box2D
 aiohttp
 authlib
 httpx2
+better-profanity

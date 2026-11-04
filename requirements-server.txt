@@ -10,3 +10,5 @@ aiohttp>=3.9
 # HTTP client its OAuth client uses)
 authlib>=1.9
 httpx2>=2.13
+# the swear-word list for chat and names (moderation.py)
+better-profanity>=0.7

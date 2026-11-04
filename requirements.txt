@@ -5,6 +5,8 @@ pygame>=2.1
 gymnasium>=0.29
 # the physics
 Box2D>=2.3.10
+# the swear-word list for names and chat (bonk_game/server/moderation.py)
+better-profanity>=0.7
 stable-baselines3>=2.3
 sb3-contrib>=2.3
 # progress bars during training

@@ -11,5 +11,5 @@ setup(
     # stable-baselines3 and sb3-contrib (see requirements.txt).
     install_requires=["numpy>=1.24", "pygame>=2.1", "gymnasium>=0.29", "Box2D>=2.3.10"],
     # The web server: pip install -e ".[server]"
-    extras_require={"server": ["aiohttp>=3.9", "authlib>=1.9", "httpx2>=2.13"]},
+    extras_require={"server": ["aiohttp>=3.9", "authlib>=1.9", "httpx2>=2.13", "better-profanity>=0.7"]},
 )
