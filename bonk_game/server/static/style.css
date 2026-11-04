@@ -560,14 +560,7 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 .row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 @media (max-width: 420px) { .stat-tiles { grid-template-columns: repeat(2, 1fr); } }
 
-/* Killcam and replays */
+/* Killcam */
 /* Covers the match while it plays: click anywhere to skip */
 .killcam { position: fixed; inset: 0; padding-top: 112px; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
 .killcam b { color: var(--danger); letter-spacing: 0.4em; font-size: 20px; font-weight: 700; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); }
-.replay-bar { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center;
-  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-l); padding: 6px 8px;
-  width: min(620px, calc(100% - 32px)); box-sizing: border-box; box-shadow: var(--shadow); }
-.replay-bar input[type=range] { flex: 1; min-width: 60px; padding: 0; min-height: 0; background: transparent; border: 0; accent-color: var(--accent); }
-.replay-bar button, .replay-bar select { min-height: 34px; }
-.replay-bar #replay-play { width: 34px; }
-.replay-bar #replay-time { white-space: nowrap; font-variant-numeric: tabular-nums; }

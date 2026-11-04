@@ -267,7 +267,7 @@ function drawPattern(g, x, y, r, pattern, fill) {
       g.lineWidth = r * 0.14; g.lineCap = "round";
       g.beginPath(); g.arc(x, y + r * 0.02, r * 0.45, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
       break;
-    // Signed in (some unlocked by playing: cosmetics.py)
+    // (More patterns: cosmetics.py)
     case "heart": {
       const s = r * 0.62, cy = y + r * 0.08;
       g.beginPath();

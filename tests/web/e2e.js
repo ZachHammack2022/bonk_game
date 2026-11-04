@@ -75,8 +75,12 @@ function check(cond, what) {
     await host.click("#edit-ball");
     await host.click("#profile-colors [title=Purple]");
     await host.click("#profile-patterns [data-pattern=stripes]");
-    await host.waitForSelector("#profile-extras .looks-trail [data-look=sparkle].locked");
-    check(await host.isVisible("#profile-extras .looks-hat [data-look=none].on"), "trails, hats and knockout effects are in Customize, locked for guests");
+    await host.waitForSelector("#profile-extras .looks-trail [data-look=rainbow]");
+    check(await host.isVisible("#profile-extras .looks-hat [data-look=none].on") && !(await host.$("#profile-extras .locked")),
+      "trails, hats and knockout effects are in Customize, all of them free for guests too");
+    await host.click("#profile-extras .looks-hat [data-look=halo]");
+    check(await host.isVisible("#profile-extras .looks-hat [data-look=halo].on"), "a guest can wear the halo");
+    await host.click("#profile-extras .looks-hat [data-look=none]");
     await host.click("#profile-close");
     check((await host.textContent("#home-ball-label")).includes("Purple"), "you can pick a favourite colour and pattern");
     await host.keyboard.press("Escape");
@@ -113,7 +117,6 @@ function check(cond, what) {
     await host.waitForFunction(() => bonkDebug.app.lobby.seats[1].color === 5);
     check(true, "picking a colour shows up for everyone");
 
-    const hostToken0 = await host.evaluate(() => me.token);
     // Host sets up a quick match
     await host.selectOption("#map", "classic");
     await host.selectOption("#first-to", "1");
@@ -193,11 +196,6 @@ function check(cond, what) {
     await host.click("#killcam");
     await host.waitForSelector("#results:not(.hidden)");
     check(!(await host.evaluate(() => replayer.active)), "and can be skipped back to the results");
-    const [repDownload] = await Promise.all([host.waitForEvent("download"), host.click("#replay-download")]);
-    const replayFile = await repDownload.path();
-    const repJson = JSON.parse(fs.readFileSync(replayFile, "utf8"));
-    check(repJson.format === "bonk-replay" && repJson.inputs.length > 0 && repJson.ticks > 30 && !JSON.stringify(repJson).includes(hostToken0),
-      `the match downloads as a replay file (${fs.statSync(replayFile).size} bytes, no tokens)`);
 
     // Everyone votes for a rematch
     await host.click("#vote");
@@ -341,30 +339,9 @@ function check(cond, what) {
     await fresh.click("#open-stats");
     check((await fresh.textContent("#stats-body")).includes("No matches yet"), "a new browser has no matches");
 
-    // Watching a replay file: from the home screen, with pause, speed and jumping about
     await fresh.click("#stats-close");
-    await fresh.setInputFiles("#replay-file", replayFile);
-    await fresh.waitForSelector("#game:not(.hidden)");
-    await fresh.waitForSelector("#replay-bar:not(.hidden)");
-    await fresh.waitForTimeout(800);
-    const w = await fresh.evaluate(() => ({ i: replayer.i, n: replayer.states.length, slots: app.match.slots.length }));
-    // (How long the match was depends on the bots: just not trivially short)
-    check(w.i > 10 && w.n > 30 && w.slots === repJson.slots.length, `a replay file plays back (${w.i}/${w.n} ticks)`);
-    await shot(fresh, "replay");
-    await fresh.click("#replay-play");
-    const paused = await fresh.evaluate(() => replayer.i);
-    await fresh.waitForTimeout(400);
-    check((await fresh.evaluate(() => replayer.i)) === paused, "it pauses");
-    await fresh.$eval("#replay-seek", (el, v) => { el.value = String(v); el.dispatchEvent(new Event("input")); }, Math.floor(w.n / 2));
-    check(Math.abs((await fresh.evaluate(() => replayer.i)) - Math.floor(w.n / 2)) <= 1, "and jumps to any moment");
-    await fresh.selectOption("#replay-speed", "2");
-    await fresh.click("#replay-play");
-    await fresh.waitForTimeout(500);
-    check((await fresh.evaluate(() => replayer.i)) - Math.floor(w.n / 2) > 20, "and plays faster");
-    await fresh.click("#replay-back");
-    await fresh.waitForSelector("#home:not(.hidden)");
-    const notReplay = (await fetch(base + "/api/replay", { method: "POST", body: "{}" })).status;
-    check(notReplay === 400, "a file that isn't a replay is refused");
+    check(!(await fresh.$("#replay-file")) && !(await fresh.$("#replay-download")), "there are no replay files to watch or download");
+    check((await fetch(base + "/api/replay", { method: "POST", body: "{}" })).status === 404, "and no server routes for them");
 
     // Quick play (#35): straight into a public match against bots. Someone
     // else sees it listed, joins while it's on and takes over a bot's seat
