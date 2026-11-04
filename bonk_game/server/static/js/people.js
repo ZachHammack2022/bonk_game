@@ -183,11 +183,7 @@ function gameRow(r) {
   b.textContent = r.open ? "Join" : "Watch";
   b.setAttribute("aria-label", `${b.textContent} ${name.textContent}: ${r.mode} on ${r.map}`);
   // A game with a password: ask for it here (no need to ask the server first)
-  b.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (r.locked) askPassword(r.room, false);  // (core.js)
-    else openRoom(r.room, true, null);
-  });
+  b.addEventListener("click", (e) => { e.stopPropagation(); joinListed(r); });
   row.addEventListener("click", () => b.click());
 
   const lock = cell("g-lock");
@@ -231,11 +227,21 @@ $("clear-filters").addEventListener("click", () => {
   $("hide-locked").checked = false;
   document.querySelector('.browse-bar .seg [data-show="all"]').click();
 });
-$("code-form").addEventListener("submit", (e) => {
+function joinListed(r) {
+  if (r.locked) askPassword(r.room, false);  // (core.js)
+  else openRoom(r.room, true, null);
+}
+
+// Enter in the search: the one game it finds, or (for a game that isn't
+// listed yet) the 4-letter code you typed
+$("browse-search").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
   e.preventDefault();
-  const code = $("browse-code").value.trim().toUpperCase();
-  if (/^[A-Z]{4}$/.test(code)) openRoom(code, true);
-  else toast("Game codes are 4 letters.", true);
+  const q = $("browse-search").value.trim();
+  const found = browse.data ? filteredGames() : [];
+  const exact = found.length === 1 ? found[0] : found.find((r) => r.room === q.toUpperCase());
+  if (exact) joinListed(exact);
+  else if (/^[A-Za-z]{4}$/.test(q)) openRoom(q.toUpperCase(), true);  // (core.js)
 });
 $("find").addEventListener("click", () => openBrowse(true));
 $("browse-back").addEventListener("click", () => leaveRoom(true));

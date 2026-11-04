@@ -304,13 +304,16 @@ function check(cond, what) {
     await host.click("#game-settings-done");
     await shot(host, "lobby-crown");
 
-    // A phone joins by typing the code
+    // A phone joins by searching for the code
     const phone = await open("phone", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     await phone.goto(base + "/");
     await phone.fill("#name", "Cat");
     await phone.click("#find");
-    await phone.fill("#browse-code", code.toLowerCase());
-    await phone.click("#code-form button");
+    check(!(await phone.$("#browse-code")), "the game list has one search box, no separate code box");
+    await phone.fill("#browse-search", code.toLowerCase());
+    await phone.waitForFunction(() => document.querySelectorAll("#games-list .game-row").length === 1);
+    check(true, "searching a code finds its game");
+    await phone.press("#browse-search", "Enter");
     await phone.waitForSelector("#pw-dialog:not(.hidden)");
     check(true, "joining by code asks for the password");
     await phone.fill("#pw-input", "wrong1");
@@ -341,8 +344,8 @@ function check(cond, what) {
     await lost.goto(base + "/");
     await lost.fill("#name", "Dan");
     await lost.click("#find");
-    await lost.fill("#browse-code", "ZZZZ");
-    await lost.click("#code-form button");
+    await lost.fill("#browse-search", "ZZZZ");
+    await lost.press("#browse-search", "Enter");
     await lost.waitForSelector("#toast:not(.hidden)");
     check((await lost.textContent("#toast")).includes("doesn't exist"), "a bad code says so");
 

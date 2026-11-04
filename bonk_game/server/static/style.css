@@ -278,8 +278,6 @@ button.big { width: 100%; min-height: 56px; font-size: 19px; }
 .seg button { border: 0; background: transparent; color: var(--dim); min-height: 32px; padding: 0 12px; border-radius: var(--r-s); font-weight: 500; }
 .seg button:hover { color: var(--text); background: transparent; }
 .seg button.on { background: var(--surface-3); color: var(--text); }
-.code-join { display: flex; gap: 6px; }
-.code-join input { width: 96px; text-transform: uppercase; letter-spacing: 0.25em; }
 
 .games { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; box-shadow: var(--shadow); }
 .games-head, .game-row {
