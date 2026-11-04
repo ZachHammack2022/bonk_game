@@ -8,10 +8,8 @@ The flow mirrors the desktop game (bonk_game/ui/app.py, MatchScene):
 countdown (3, 2, 1) -> play -> after a round ends, a short pause and a
 2-beat countdown -> ... -> "over" for a moment once someone wins.
 
-Every match can be replayed exactly (replay.py): it has its own random
-seed, and `recording` keeps every player's input whenever it changes
-(bots' and agents' too). Match(..., seed=s, replay=recording) plays those
-inputs back through the same physics instead of asking anyone.
+Every match has its own random seed, so the same seed and the same inputs
+give the same match.
 """
 import math
 import random
@@ -37,24 +35,6 @@ STAND_IN = "bot:medium"  # plays for a human who drops out mid-match
 MASS_DECAY = 0.1   # player.update_mass
 
 
-def input_code(a):
-    """One player's input as a small int, for recordings: -1 none,
-    0-31 buttons (up 1, left 2, down 4, right 8, heavy 16), 32+ an action."""
-    if a is None:
-        return -1
-    if isinstance(a, Buttons):
-        return sum(1 << k for k, on in enumerate(a) if on)
-    return 32 + int(a)
-
-
-def input_from_code(c):
-    if c < 0:
-        return None
-    if c < 32:
-        return Buttons(*(bool(c >> k & 1) for k in range(5)))
-    return c - 32
-
-
 def bot_level(kind):
     return kind.split(":", 1)[1] if ":" in kind else "medium"
 
@@ -65,7 +45,7 @@ def is_bot(kind):
 
 class Match:
     def __init__(self, map_name, slots, first_to, agents=None, mode=modes.DEFAULT_MODE,
-                 round_time=None, gravity=1.0, power_ups=False, seed=None, replay=None,
+                 round_time=None, gravity=1.0, power_ups=False, seed=None,
                  speed=stepping.TIME_SCALE):
         """slots: one dict per player, {"kind": "human" | "bot:<level>" | agent
         name, "name": display name, "color": optional colour index, "team":
@@ -75,7 +55,7 @@ class Match:
         (None: the map's own, 0: off). gravity: a multiplier. speed: how
         fast the world runs (stepping.TIME_SCALE; 1 is the original speed). power_ups:
         turn on pickups (see powerups.py). seed: for everything random in
-        the match (None: pick one). replay: a recording to play back."""
+        the match (None: pick one)."""
         agents = agents or {}
         # (from numpy's random numbers, so np.random.seed() still makes a
         # repeatable match, as it did before matches had their own)
@@ -95,17 +75,9 @@ class Match:
                            time_scale=speed, **options)
         self.mode.start(self.env)
         self.powerups = powerups.PowerUps(self.env, random.Random(self.seed + 2)) if power_ups else None
-        self.replay = None
-        if replay is not None:  # [physics step, slot, input code], in order
-            self.replay = {}
-            for step, slot, code in replay:
-                self.replay.setdefault(int(step), []).append((int(slot), int(code)))
-            self.replay_inputs = [None] * len(kinds)
-        self.recording = []
-        self._codes = [None] * len(kinds)
         self.controllers = []
         for i, kind in enumerate(kinds):
-            if kind == "human" or replay is not None:
+            if kind == "human":
                 self.controllers.append(None)
             elif is_bot(kind):
                 self.controllers.append(Bot(self.env, i, bot_level(kind), rng=random.Random(self.seed + 10 + i)))
@@ -164,10 +136,6 @@ class Match:
         self.inputs[slot] = NO_BUTTONS
 
     def _actions(self):
-        if self.replay is not None:
-            for slot, code in self.replay.get(self.env.steps, ()):
-                self.replay_inputs[slot] = input_from_code(code)
-            return list(self.replay_inputs)
         out = []
         for i, c in enumerate(self.controllers):
             c = self.stand_ins.get(i, c)
@@ -218,11 +186,6 @@ class Match:
         if self.powerups:
             self.powerups.apply()
         actions = self._actions()
-        for i, a in enumerate(actions):
-            code = input_code(a)
-            if code != self._codes[i]:
-                self._codes[i] = code
-                self.recording.append([env.steps, i, code])
         self.obs, _, info = env.step(actions)
         events = self.mode.step(info)
         if self.powerups:

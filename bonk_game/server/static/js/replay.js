@@ -1,15 +1,9 @@
-// bonk web client: Replays and the killcam (see bonk_game/server/replay.py).
+// bonk web client: the killcam.
 //
-// - Killcam: the browser keeps the last few seconds of the match it was
-//   sent; on the results screen 🎬 plays the final knockout in slow motion.
-// - ⬇ Replay downloads the whole match as a small file (everyone's inputs).
-// - Watching a replay file (#replay-file; there's no button for it on the
-//   home screen any more): the server plays a file back through the same
-//   physics and sends the states; you can pause, change speed and jump
-//   around.
-//
-// Both feed states into app.states as if they were arriving from a match,
-// so the match is drawn exactly as usual (draw.js).
+// The browser keeps the last few seconds of the match it was sent; on the
+// results screen Killcam plays the final knockout again in slow motion. It
+// feeds those states into app.states as if they were arriving from the
+// match, so it's drawn exactly as usual (draw.js).
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";
 
@@ -82,7 +76,6 @@ const replayer = {
       this.playing = false;
       if (this.onEnd) this.onEnd();
     }
-    if (!$("replay-bar").classList.contains("hidden")) updateReplayBar();
   },
 };
 
@@ -125,87 +118,7 @@ function endKillcam() {
 $("killcam-btn").addEventListener("click", playKillcam);
 $("killcam").addEventListener("click", endKillcam);
 
-// On the results screen: what can be watched
-function showReplayButtons(msg) {
+// On the results screen: the killcam, if there's a knockout to show
+function showReplayButtons() {
   $("killcam-btn").classList.toggle("hidden", !killcamClip());
-  $("replay-download").classList.toggle("hidden", !msg.replay);
 }
-$("replay-download").addEventListener("click", () => {
-  const a = document.createElement("a");
-  a.href = `/api/rooms/${app.room}/replay`;
-  a.download = "";
-  a.click();
-});
-
-// ---------------------------------------------------------------------------
-// Watching a replay file
-// ---------------------------------------------------------------------------
-$("replay-file").addEventListener("change", async () => {
-  const f = $("replay-file").files[0];
-  $("replay-file").value = "";
-  if (!f) return;
-  status("Loading the replay…");
-  let body;
-  try {
-    const r = await fetch("/api/replay", { method: "POST", body: await f.text(), headers: { "Content-Type": "application/json" } });
-    body = await r.json();
-    if (!r.ok) throw new Error(body.error || "Couldn't play that replay.");
-  } catch (e) {
-    status("");
-    toast(e.message || "Couldn't play that replay.", true);
-    return;
-  }
-  status("");
-  watchReplay(body);
-});
-
-function watchReplay(body) {
-  // Rebuild every tick's full state from the changes (delta.js)
-  const states = [];
-  let last = null;
-  for (const m of body.states) {
-    last = m.type === "state" ? m : BonkDelta.apply(last, m);
-    if (last) states.push(last);
-  }
-  app.match = body.match;
-  applyLooks(app.match);
-  app.results = null;
-  app.room = null;
-  $("results").classList.add("hidden");
-  $("emotes").classList.add("hidden");
-  $("replay-bar").classList.remove("hidden");
-  $("go-lobby").classList.add("hidden");  // (no room: Done goes home)
-  $("replay-seek").max = String(states.length - 1);
-  show("game");
-  resize();
-  if (!body.engine) toast("This replay was made by another version of the game, so it may not play out the same.");
-  replayer.start(states, { onEnd: () => updateReplayBar() });
-}
-
-function leaveReplay() {
-  replayer.stop();
-  $("replay-bar").classList.add("hidden");
-  app.match = null;
-  show("home");
-}
-
-const fmtTime = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-function updateReplayBar() {
-  const n = replayer.states.length;
-  const want = replayer.playing ? "pause" : "play";
-  if ($("replay-play").dataset.icon !== want) {
-    $("replay-play").innerHTML = icon(want);
-    $("replay-play").dataset.icon = want;
-  }
-  if (document.activeElement !== $("replay-seek")) $("replay-seek").value = String(Math.min(replayer.i, n - 1));
-  $("replay-time").textContent = `${fmtTime(Math.min(replayer.clock, n * TICK_MS))} / ${fmtTime(n * TICK_MS)}`;
-}
-$("replay-play").addEventListener("click", () => {
-  if (!replayer.playing && replayer.i >= replayer.states.length) replayer.seek(0);
-  replayer.playing = !replayer.playing;
-  replayer.last = performance.now();
-  updateReplayBar();
-});
-$("replay-speed").addEventListener("change", () => { replayer.speed = +$("replay-speed").value; });
-$("replay-seek").addEventListener("input", () => { fx.reset(); replayer.seek(+$("replay-seek").value); updateReplayBar(); });
-$("replay-back").addEventListener("click", leaveReplay);

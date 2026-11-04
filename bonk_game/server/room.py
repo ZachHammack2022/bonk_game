@@ -40,7 +40,7 @@ import traceback
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
 from bonk_game.server import (cosmetics, delta, limits, lobby, metrics, moderation, modes, playtest,
-                              profiles, replay)
+                              profiles)
 from bonk_game.server.lobby import GRAVITY, HEX_COLOR, PATTERNS, ROUND_TIMES, SPEEDS, bot_label, map_order
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
@@ -82,7 +82,7 @@ class Member:
         self.last_report = None  # when they last sent a playtest report
         self.errors_sent = 0     # client errors logged for them
         self.account = None      # their account id, when signed in (accounts.py)
-        self.own_color = None    # a colour of their own ("#rrggbb"): signed in only
+        self.own_color = None    # a colour of their own ("#rrggbb")
         self.pid = secrets.token_hex(4)  # how the others see them (the token is a secret)
         self.names = collections.deque([name], maxlen=5)  # names they've used here, for reports
         self.report_times = collections.deque(maxlen=moderation.REPORTS_PER_MINUTE)
@@ -117,7 +117,6 @@ class Room:
         self.results = None
         self.task = None
         self.encoder = None        # the match's state messages (delta.py)
-        self.last_replay = None    # the last finished match, as a replay file (replay.py)
         self.banned = set()        # tokens (and accounts) the host removed
         self.votes = set()         # tokens that want a rematch (on the results screen)
         self.closing = False       # the server is restarting: no new matches
@@ -471,12 +470,10 @@ class Room:
         return None
 
     def pick_own_color(self, token, color):
-        """A signed-in player picks any colour ("#rrggbb"), or None to go
-        back to the palette. Whether they get it depends on who else is
-        playing (lobby.own_colors)."""
+        """Someone picks any colour ("#rrggbb"), or None to go back to the
+        palette. Whether they get it depends on who else is playing
+        (lobby.own_colors)."""
         m = self.members[token]
-        if m.account is None:
-            return "Sign in to pick any colour."
         if color is not None and not (isinstance(color, str) and HEX_COLOR.match(color.lower())):
             return "Unknown colour."
         m.own_color = color.lower() if color else None
@@ -484,14 +481,11 @@ class Room:
 
     def pick_look(self, token, kind, item):
         """Someone picks a pattern, trail, hat or knockout effect
-        (cosmetics.py). Returns what's wrong, or None."""
-        m = self.members[token]
-        profile = None
-        if m.account is not None:
-            profile = (self.profile_of(m.account) if self.profile_of else None) or profiles.empty("")
-        problem = cosmetics.problem(kind, item, profile)
+        (cosmetics.py: anyone can wear any of them). Returns what's wrong
+        (an unknown item), or None."""
+        problem = cosmetics.problem(kind, item)
         if problem is None:
-            setattr(m, kind, item)
+            setattr(self.members[token], kind, item)
         return problem
 
     def pick_team(self, token, team):
@@ -672,8 +666,6 @@ class Room:
             # For players' match history (profiles.py): which match, and when
             self.results["match_id"] = f"{self.code}-{int(began_at * 1000)}"
             self.results["at"] = int(began_at)
-            self.last_replay = replay.record(match, match.tick_count, self.results["match_id"], int(began_at))
-            self.results["replay"] = True  # GET /api/rooms/<code>/replay
             self.results["slots"] = match.describe()["slots"]
             self._record(match_accounts)
         except asyncio.CancelledError:

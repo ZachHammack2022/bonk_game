@@ -8,7 +8,6 @@ from bonk_game.envs.testing_env import TestEnv
 from bonk_game.envs.utils import stepping
 from bonk_game.envs.utils.controls import Buttons
 from bonk_game.server.lobby import SPEEDS
-from bonk_game.server.match import Match
 
 UP = Buttons(True, False, False, False, False)
 RIGHT = Buttons(False, False, False, True, False)
@@ -101,18 +100,3 @@ def test_speed_setting_in_a_room():
         assert room.match.options["speed"] == 1.0
         await room.stop()
     asyncio.run(go())
-
-
-def test_matches_and_replays_keep_their_speed():
-    from bonk_game.server import replay
-    m = Match("platform", [{"kind": "bot:medium", "name": "a"}, {"kind": "bot:medium", "name": "b"}], 1,
-              speed=0.6, seed=3)
-    m.set_phase("play")
-    for _ in range(200):
-        m.tick()
-    rep = replay.check(replay.record(m, 200))
-    assert rep["speed"] == 0.6
-    assert replay.rebuild(rep).env.time_scale == 0.6
-    old = dict(rep)
-    del old["speed"]
-    assert replay.check(old)["speed"] == 1.0  # (from before the setting: the original speed)

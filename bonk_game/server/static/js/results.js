@@ -54,7 +54,7 @@ function showResults(msg, quiet) {
     score.className = "score";
     score.textContent = unit(msg.scores[i]);
     li.append(ball, name, score);
-    if (s.kind === "human" && s.id && s.id !== me.id && !msg.replay) li.append(personButton(s.id, s.base ? s.base.name : s.name));
+    if (s.kind === "human" && s.id && s.id !== me.id ) li.append(personButton(s.id, s.base ? s.base.name : s.name));
     ol.appendChild(li);
   }
   renderAwards(msg, slots);

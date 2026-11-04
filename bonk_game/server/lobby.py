@@ -21,8 +21,7 @@ from bonk_game.ui import theme
 
 NAME_LEN = moderation.NAME_LEN
 FIRST_TO_RANGE = (1, 100)
-# Ball patterns people can pick (the client draws them). Some are for
-# signed-in players, unlocked by playing (cosmetics.py)
+# Ball patterns people can pick (the client draws them; cosmetics.py)
 PATTERNS = cosmetics.IDS["pattern"]
 # A colour of your own has to be at least this far (in RGB) from everyone
 # else's, so balls stay easy to tell apart
@@ -205,7 +204,7 @@ def _rgb(hex_color):
 
 
 def own_colors(colors, wanted, teams=None):
-    """Signed-in players' own colours, where they can have them: a hex
+    """People's own colours, where they can have them: a hex
     colour per seat, or None to use the palette colour (colors[k], an index
     into theme.PLAYER_COLORS). `wanted`: each seat's own colour (or None).
     Not in the teams mode (colours show your side), and not if it's close to

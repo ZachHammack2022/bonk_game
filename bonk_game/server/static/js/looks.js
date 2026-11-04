@@ -1,5 +1,5 @@
 // bonk web client: How balls look. Hats, trails and knockout effects
-// (cosmetics, unlocked by playing: bonk_game/server/cosmetics.py), and how
+// (cosmetics: bonk_game/server/cosmetics.py), and how
 // the balls are coloured on your screen (your own colour, colourblind mode).
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";

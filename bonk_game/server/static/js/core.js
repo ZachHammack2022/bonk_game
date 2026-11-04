@@ -15,7 +15,7 @@
 //   input.js     keyboard, touch and emotes
 //   effects.js   sound, particles, the knockout feed, game events
 //   net.js       network timing and predicting your own ball (predict.js)
-//   replay.js    the killcam, and watching replay files
+//   replay.js    the killcam
 //   draw.js      drawing the match
 //   looks.js     trails, hats, knockout effects, and how balls look on your screen
 //   people.js    the game browser (public games, Quick match, New game); muting and reporting people
@@ -39,8 +39,8 @@ const PALETTE = [
   ["Red", "#ff6b6b"], ["Blue", "#4dabf7"], ["Yellow", "#ffd43b"], ["Purple", "#b197fc"], ["Orange", "#ff922b"],
   ["Green", "#40c057"], ["Pink", "#faa2c1"], ["Cyan", "#3bc9db"], ["White", "#f1f3f5"], ["Brown", "#9c6644"],
 ];
-// Patterns, as on the server (bonk_game/server/cosmetics.py; some are
-// unlocked by playing, signed in: see `looks`)
+// Patterns, as on the server (bonk_game/server/cosmetics.py; everyone can
+// wear every one)
 const PATTERNS = ["plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes", "swirl", "smile",
                   "heart", "checker", "galaxy", "flame", "bolt", "target"];
 const PATTERN_NAMES = { plain: "Plain", stripes: "Stripes", dots: "Dots", ring: "Ring", split: "Split", star: "Star", zigzag: "Zigzag", eyes: "Eyes",
@@ -217,8 +217,8 @@ const me = {
   setLook(kind, v) { profileStore.update((p) => ({ ...p, [kind]: v })); },
   get pattern() { return this.look("pattern"); },
   set pattern(v) { this.setLook("pattern", v); },
-  // A colour of your own ("#rrggbb"): an account's perk
-  get ownColor() { return profileStore.user ? profileStore.get().own_color || null : null; },
+  // A colour of your own ("#rrggbb"), or null for one from the palette
+  get ownColor() { return profileStore.get().own_color || null; },
   set ownColor(v) { profileStore.update((p) => ({ ...p, own_color: v })); },
   // Your ball's colour as it looks: your own, your favourite, or the first
   get ballHex() { return this.ownColor || (this.color === null ? PALETTE[0][1] : PALETTE[this.color][1]); },
@@ -406,7 +406,6 @@ function onMessage(msg) {
       replayer.stop();
       replayer.recent = [];
       $("killcam").classList.add("hidden");
-      $("replay-bar").classList.add("hidden");
       playtest.start(!msg.slots.some((x) => x.id === me.id));
       fx.reset();
       $("results").classList.add("hidden");
