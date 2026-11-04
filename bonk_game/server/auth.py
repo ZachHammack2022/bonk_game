@@ -15,7 +15,7 @@ Routes:
                                   "cosmetics": {...}} (what you can wear:
                                   cosmetics.catalog)
     PUT  /api/me/profile         change your name, ball or settings
-    POST /api/me/merge           add a browser profile (or profile file) to
+    POST /api/me/merge           add a browser's profile (first sign-in) to
                                  your account: done once when you sign in
     DELETE /api/me               delete your account
 
@@ -51,7 +51,7 @@ GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
 SESSION_COOKIE = "bonk_session"
 FLOW_COOKIE = "bonk_signin"
 FLOW_SECONDS = 600
-MAX_BODY = 256 * 1024   # a profile file is a few KB
+MAX_BODY = 256 * 1024   # a profile is a few KB
 
 ACCOUNTS = web.AppKey("accounts", object)
 CONFIG = web.AppKey("auth_config", object)

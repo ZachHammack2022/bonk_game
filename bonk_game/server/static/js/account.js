@@ -103,17 +103,6 @@ const account = {
     }, 1500);
   },
 
-  // A profile file, added to the account. Returns the matches it added.
-  async merge(other) {
-    const res = await this.api("POST", "/api/me/merge", other);
-    const p = BonkProfile.validate(res.profile);
-    if (p) {
-      profileStore.current = p;
-      store.set(profileStore.ACCOUNT_KEY, JSON.stringify({ user: res.user, profile: p }));
-    }
-    return res.added || 0;
-  },
-
   signIn() {
     location.href = "/auth/google?next=" + encodeURIComponent(location.pathname);
   },
@@ -124,7 +113,7 @@ const account = {
     location.reload();
   },
   async remove() {
-    if (!confirm("Delete your account? Your stats and match history on the server go for good. (You can save them to a file first.)")) return;
+    if (!confirm("Delete your account? Your stats and match history on the server go for good. (Download my data first if you want a copy.)")) return;
     try { await this.api("DELETE", "/api/me"); } catch (e) { toast("Couldn't delete it just now. Try again in a moment.", true); return; }
     store.remove(profileStore.ACCOUNT_KEY);
     location.reload();
@@ -149,9 +138,10 @@ const account = {
     $("account-in").classList.toggle("hidden", !user);
     if (user) $("account-who").textContent = user.email || user.name || "your account";
     $("delete-account").classList.toggle("hidden", !user);
+    $("download-data").classList.toggle("hidden", !user);
     $("stats-where").textContent = user
       ? "Saved to your account: the same on every device you sign in on."
-      : "Kept in this browser. Sign in to keep them on every device, or move them with a file.";
+      : "Kept in this browser. Sign in to keep them on every device.";
   },
 };
 

@@ -178,16 +178,23 @@
 
   <!-- Your ball: favourite colour, pattern, trail, hat and knockout effect -->
   <div id="profile" class="overlay hidden" role="dialog" aria-labelledby="profile-title">
-    <div class="card settings-card">
+    <div class="card settings-card profile-card">
       <h2 id="profile-title">Your ball</h2>
-      <div id="profile-preview" class="profile-preview"></div>
-      <label>Favourite colour</label>
-      <div id="profile-colors" class="picker"></div>
-      <p class="dim small">You get it whenever it's free (in Teams, when it's one of your side's colours).</p>
-      <label>Pattern</label>
-      <div id="profile-patterns"></div>
-      <div id="profile-extras"></div>
-      <p id="profile-unlock" class="dim small"></p>
+      <!-- Two columns on a wide screen, so it fits a laptop's height -->
+      <div class="profile-cols">
+        <div class="profile-col">
+          <div id="profile-preview" class="profile-preview"></div>
+          <label>Favourite colour</label>
+          <div id="profile-colors" class="picker"></div>
+          <p class="dim small">You get it whenever it's free (in Teams, when it's one of your side's colours).</p>
+        </div>
+        <div class="profile-col">
+          <label>Pattern</label>
+          <div id="profile-patterns"></div>
+          <div id="profile-extras" class="profile-col"></div>
+          <p id="profile-unlock" class="dim small"></p>
+        </div>
+      </div>
       <button id="profile-close" class="primary">Done</button>
     </div>
   </div>
@@ -218,13 +225,9 @@
       <h2 id="stats-title">Your stats</h2>
       <p id="stats-since" class="dim small"></p>
       <div id="stats-body"></div>
-      <div class="stats-file">
-        <button id="stats-export">Save to a file</button>
-        <button id="stats-import">Add from a file</button>
-        <input id="stats-file" type="file" accept="application/json,.json" hidden>
-      </div>
       <p id="stats-where" class="dim small">Kept in this browser. Move them to another one with a file.</p>
       <button id="stats-close" class="primary">Done</button>
+      <button id="download-data" class="link-button hidden">Download my data</button>
       <button id="delete-account" class="link-button danger hidden">Delete my account</button>
       <a class="dim small privacy-link" href="/privacy" target="_blank" rel="noopener">Privacy</a>
     </div>

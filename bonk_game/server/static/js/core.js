@@ -199,16 +199,6 @@ const profileStore = {
     this.update((p) => BonkProfile.record(p, entry));
     if (this.user) account.refreshSoon();
   },
-  // A profile file from another browser (or an export of this one).
-  // Returns how many matches it added, or null if it isn't one.
-  async add(file) {
-    const other = BonkProfile.validate(file);
-    if (!other) return null;
-    if (this.user) return account.merge(other);
-    const before = this.get().stats.matches;
-    this.update((p) => BonkProfile.merge(p, other));
-    return this.get().stats.matches - before;
-  },
 };
 
 // You, in rooms: your token (a random id the server knows you by; not part

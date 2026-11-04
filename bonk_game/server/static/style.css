@@ -209,9 +209,11 @@ body.is-host .guest-only { display: none !important; }
 .overlay {
   position: fixed; inset: 0;
   background: rgba(10, 14, 24, 0.66);
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
   padding: 16px;
+  overflow-y: auto;  /* a pop-up taller than the screen scrolls, rather than being cut off */
 }
+.overlay > .card { margin: auto; }  /* centred, or from the top when it's too tall */
 .results-card { align-items: stretch; text-align: center; max-width: 440px; }
 #winner { font-size: 32px; margin: 4px 0; }
 #standings { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; text-align: left; }
@@ -286,6 +288,12 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 .home-ball #home-ball-label { flex: 1; }
 .home-ball button { padding: 6px 12px; min-height: 36px; }
 .profile-preview { display: flex; justify-content: center; padding: 4px 0; }
+.profile-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.profile-cols { display: flex; flex-direction: column; gap: 10px; }
+@media (min-width: 760px) {
+  .profile-card { max-width: 760px; }
+  .profile-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+}
 .patterns { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
 .pattern { width: 42px; height: 42px; min-height: 42px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 10px; }
 .pattern.on { outline: 3px solid var(--accent); outline-offset: 1px; }
@@ -310,7 +318,6 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 .stat-history li { background: var(--panel-light); border-radius: 10px; padding: 8px 10px; border-left: 3px solid transparent; }
 .stat-history li.won { border-left-color: var(--accent); }
 .row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.stats-file { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
 @media (max-width: 420px) { .stat-tiles { grid-template-columns: repeat(2, 1fr); } }
 
 /* Killcam and replays */

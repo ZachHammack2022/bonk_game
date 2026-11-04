@@ -330,17 +330,11 @@ function check(cond, what) {
     check((await host.$$eval("#stats .stat-history li", (els) => els.length)) === 2 && (await host.isVisible(".stat-tiles")),
       "the stats screen shows your totals and recent matches");
     await shot(host, "stats");
-    const [download] = await Promise.all([host.waitForEvent("download"), host.click("#stats-export")]);
-    const file = await download.path();
+    check(await host.isHidden("#download-data"), "guests have no data download (their profile is in the browser)");
     const fresh = await open("fresh");
     await fresh.goto(base + "/");
     await fresh.click("#open-stats");
     check((await fresh.textContent("#stats-body")).includes("No matches yet"), "a new browser has no matches");
-    await fresh.setInputFiles("#stats-file", file);
-    await fresh.waitForFunction(() => /Added 2 matches/.test(document.querySelector("#toast").textContent));
-    await fresh.setInputFiles("#stats-file", file);
-    await fresh.waitForFunction(() => /Nothing new/.test(document.querySelector("#toast").textContent));
-    check((await fresh.evaluate(() => profileStore.get().stats.matches)) === 2, "a saved profile can be added to another browser (once)");
 
     // Watching a replay file: from the home screen, with pause, speed and jumping about
     await fresh.click("#stats-close");
