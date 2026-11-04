@@ -246,6 +246,7 @@ const defaultRoomName = () => `${(me.name || "Player").trim() || "Player"}'s roo
 function openNewGame() {
   $("name").dispatchEvent(new Event("change"));
   $("new-name").value = defaultRoomName();
+  setNewPrivacy(store.get("bonk.newPrivate", "1") === "1");
   $("new-dialog").classList.remove("hidden");
   $("new-name").focus();
   $("new-name").select();
@@ -266,8 +267,26 @@ async function newGame(name, locked, button) {
   }
 }
 $("new-game").addEventListener("click", openNewGame);
-$("new-public").addEventListener("click", () => newGame($("new-name").value.trim(), false, $("new-public")));
-$("new-private").addEventListener("click", () => newGame($("new-name").value.trim(), true, $("new-private")));
+// Public or private: a tab (the last one you picked), then Create
+let newPrivate = true;
+function setNewPrivacy(priv) {
+  newPrivate = priv;
+  for (const b of $("new-privacy").querySelectorAll("button")) {
+    const on = (b.dataset.private === "1") === priv;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", String(on));
+  }
+  $("new-privacy-help").textContent = priv
+    ? "Listed in Find a game, but joining needs a password. Your invite link has it in, so friends get straight in."
+    : "Listed in Find a game, and anyone can join.";
+}
+for (const b of $("new-privacy").querySelectorAll("button")) {
+  b.addEventListener("click", () => { setNewPrivacy(b.dataset.private === "1"); store.set("bonk.newPrivate", b.dataset.private); });
+}
+$("new-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  newGame($("new-name").value.trim(), newPrivate, $("new-create"));
+});
 $("empty-public").addEventListener("click", openNewGame);
 $("new-cancel").addEventListener("click", () => $("new-dialog").classList.add("hidden"));
 $("new-dialog").addEventListener("click", (e) => { if (e.target === $("new-dialog")) $("new-dialog").classList.add("hidden"); });

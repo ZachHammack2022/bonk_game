@@ -121,21 +121,20 @@
   <!-- New game: its name, then public or private. Every game is listed;
        a private one needs its password, which the invite link carries -->
   <div id="new-dialog" class="overlay hidden" role="dialog" aria-labelledby="new-title">
-    <div class="card settings-card">
+    <form id="new-form" class="card settings-card">
       <h2 id="new-title">New game</h2>
       <label for="new-name">Room name</label>
       <input id="new-name" maxlength="30" autocomplete="off">
-      <button id="new-public" class="choice">
-        <b>Public</b>
-        <span class="dim small">Anyone can join from Find a game.</span>
-      </button>
-      <button id="new-private" class="choice">
-        <b><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg> Private</b>
-        <span class="dim small">Listed, but joining needs a password. Your invite link has it in, so friends get straight in.</span>
-      </button>
-      <p class="dim small">You can change this later in the lobby.</p>
-      <button id="new-cancel" class="ghost">Cancel</button>
-    </div>
+      <div id="new-privacy" class="seg wide-seg" role="radiogroup" aria-label="Who can join">
+        <button type="button" data-private="0" role="radio">Public</button>
+        <button type="button" data-private="1" role="radio"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>Private</button>
+      </div>
+      <p id="new-privacy-help" class="dim small"></p>
+      <div class="row-buttons">
+        <button id="new-create" type="submit" class="primary">Create</button>
+        <button id="new-cancel" type="button" class="ghost">Cancel</button>
+      </div>
+    </form>
   </div>
 
   <!-- Joining a game with a password -->
@@ -157,20 +156,18 @@
   <section id="lobby" class="screen hidden">
     <header class="lobby-head">
       <button id="leave" class="ghost" title="Leave this room and go back to the start page"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>Leave</button>
-      <div class="room-id">
-        <input id="room-name-input" class="room-title" maxlength="30" autocomplete="off" aria-label="Room name" title="Room name">
-        <div class="room-meta">
-          <span class="dim small">Code <b id="room-code" class="room-code-small"></b></span>
-          <div id="privacy" class="seg small-seg" role="radiogroup" aria-label="Who can join">
-            <button data-private="0" role="radio" title="Anyone can join from Find a game">Public</button>
-            <button data-private="1" role="radio" title="Listed, but joining needs the password"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>Private</button>
-          </div>
-          <span id="password-row" class="password-row hidden">
-            <label for="room-password" class="dim small">Password</label>
-            <input id="room-password" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false">
-            <button id="new-password" class="host-only link-button" title="Make up a new password">New</button>
-          </span>
+      <input id="room-name-input" class="room-title" maxlength="30" autocomplete="off" aria-label="Room name" title="Room name">
+      <div class="room-meta">
+        <span class="room-code-chip" title="Friends can join with this code">Code <b id="room-code"></b></span>
+        <div id="privacy" class="seg small-seg" role="radiogroup" aria-label="Who can join">
+          <button data-private="0" role="radio" title="Anyone can join from Find a game">Public</button>
+          <button data-private="1" role="radio" title="Listed, but joining needs the password"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>Private</button>
         </div>
+        <span id="password-row" class="password-row hidden">
+          <label for="room-password" class="dim small">Password</label>
+          <input id="room-password" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" title="Password: people need it to join (your invite link has it)">
+          <button id="new-password" class="host-only link-button" title="Make up a new password">New</button>
+        </span>
       </div>
       <div class="head-buttons">
         <button id="open-settings-lobby" class="icon-button" aria-label="Settings" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg></button>

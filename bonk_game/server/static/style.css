@@ -325,39 +325,46 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
 #standings .person-btn { margin-left: 4px; }
 
 /* --- lobby ---------------------------------------------------------------
-   Wide screens: the room across the top; players (seat cards, open seats
-   included) on the left, the game (map picture, settings, Start) on the
-   right. Narrow screens: one column, with Start kept in reach at the bottom. */
+   Wide screens: one header row for the room (name, code, public or private,
+   settings, invite link); players and chat on the left, the game on the
+   right, sized to the window so Start is always on screen. Narrow screens:
+   one column, with the host's Start kept at the bottom of the screen. */
+#lobby { padding-top: 20px; }
 .lobby-head {
   width: 100%;
   max-width: 1180px;
   display: flex;
   align-items: center;
-  margin-bottom: 18px;
-  gap: 14px;
+  margin-bottom: 14px;
+  gap: 10px 14px;
+  min-height: 44px;
 }
-.room-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .room-title {
-  font-size: 28px; font-weight: 700; line-height: 1.15; color: var(--text);
+  font-size: 24px; font-weight: 700; line-height: 1.2; color: var(--text);
   background: transparent; border: 1px solid transparent; border-radius: var(--r-s);
-  padding: 2px 8px; margin-left: -9px; min-height: 0; width: 100%; max-width: 560px; text-overflow: ellipsis;
+  padding: 2px 8px; min-height: 0; width: auto; min-width: 6ch; max-width: 340px; flex: 0 1 auto; text-overflow: ellipsis;
+  field-sizing: content;
 }
 .room-title:not([readonly]):hover { border-color: var(--line-strong); }
 .room-title:not([readonly]):focus { border-color: var(--accent); background: var(--surface); outline: none; }
 .room-title[readonly] { cursor: default; }
-.room-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.room-code-small { letter-spacing: 0.14em; color: var(--text); font-variant-numeric: tabular-nums; }
-.small-seg button { min-height: 28px; padding: 0 10px; font-size: 13px; gap: 4px; }
+.room-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.room-code-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--line);
+                  border-radius: var(--r); color: var(--dim); font-size: 13px; white-space: nowrap; }
+.room-code-chip b { color: var(--text); letter-spacing: 0.14em; font-variant-numeric: tabular-nums; }
+.small-seg button { min-height: 26px; padding: 0 10px; font-size: 13px; gap: 4px; }
 .small-seg button .i { width: 13px; height: 13px; }
 .small-seg button:disabled { opacity: 1; cursor: default; }
+.wide-seg { display: flex; }
+.wide-seg button { flex: 1; justify-content: center; gap: 6px; min-height: 36px; }
+.wide-seg button .i { width: 14px; height: 14px; }
 .password-row { display: inline-flex; align-items: center; gap: 6px; }
-.password-row input { width: auto; min-height: 28px; padding: 2px 8px; font-variant-numeric: tabular-nums; letter-spacing: 0.08em; font-size: 14px; }
+.password-row input { width: auto; min-height: 32px; padding: 2px 8px; font-variant-numeric: tabular-nums; letter-spacing: 0.08em; font-size: 14px; }
 .password-row input[readonly] { background: transparent; border-color: transparent; padding-left: 0; }
 #pw-input { width: 100%; letter-spacing: 0.06em; }
 .small.danger { color: var(--danger); margin: 6px 0 0; }
-.head-buttons { display: flex; gap: 6px; align-items: center; }
+.head-buttons { display: flex; gap: 6px; align-items: center; margin-left: auto; }
 .head-buttons button { white-space: nowrap; }
-#leave { align-self: flex-start; margin-top: 2px; }
 
 .lobby-grid {
   width: 100%;
@@ -428,7 +435,13 @@ body.touch .chat-overlay { bottom: auto; top: 60px; flex-direction: column-rever
 
 /* The game: map picture, settings, Start */
 .game-card { gap: 10px; }
-.map-preview { width: 100%; aspect-ratio: 680 / 480; border-radius: var(--r); display: block; border: 1px solid var(--line); }
+.map-preview { width: auto; height: auto; max-width: 100%; max-height: 150px; aspect-ratio: 680 / 480; border-radius: var(--r); display: block;
+               border: 1px solid var(--line); margin: 0 auto; }
+@media (min-width: 901px) {
+  /* Never taller than the window: the settings scroll, Start stays put */
+  .game-card { position: sticky; top: 16px; max-height: calc(100dvh - 94px); overflow-y: auto; }
+  body.is-host .start-box { position: sticky; bottom: -24px; background: var(--surface); margin: 6px -24px -24px; padding: 14px 24px 20px; }
+}
 .field-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .field-pair > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field-pair select { width: 100%; }
@@ -439,14 +452,25 @@ body.touch .chat-overlay { bottom: auto; top: 60px; flex-direction: column-rever
 
 @media (max-width: 900px) {
   .lobby-grid { grid-template-columns: 1fr; }
-  /* The host's Start stays in reach at the bottom of the screen */
-  body.is-host .start-box { position: sticky; bottom: 0; background: var(--surface); margin: 6px -24px -24px; padding: 14px 24px 18px; border-radius: 0 0 var(--r-l) var(--r-l); }
+  /* The host's Start stays at the bottom of the screen */
+  body.is-host .start-box { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; margin: 0; padding: 12px 16px 16px;
+                            background: rgba(20, 26, 41, 0.96); backdrop-filter: blur(6px); border-top: 1px solid var(--line-strong); }
+  body.is-host .start-box > * { width: 100%; max-width: 640px; margin-left: auto; margin-right: auto; }
+  body.is-host .start-box #controls-help { display: none; }
+  body.is-host #lobby { padding-bottom: 120px; }
+}
+@media (max-width: 1020px) {
+  .password-row label { display: none; }  /* (the box says "Password" when you hover it) */
+  .room-title { font-size: 21px; max-width: 220px; }
+  .lobby-head #leave { padding: 0 8px 0 4px; }
+}
+@media (max-width: 900px) {
+  .lobby-head { flex-wrap: wrap; }
+  .room-meta { order: 1; flex-basis: 100%; }
 }
 @media (max-width: 560px) {
-  .lobby-head { flex-wrap: wrap; }
-  .room-id { order: -1; flex-basis: 100%; }
-  .room-title { font-size: 24px; }
-  .head-buttons { flex: 1; justify-content: flex-end; }
+  .room-title { font-size: 21px; max-width: none; flex: 1; }
+  .head-buttons { margin-left: 0; }
   .seats { grid-template-columns: 1fr; }
 }
 

@@ -53,6 +53,7 @@ function renderLobby() {
   // a private room's password (everyone in the room sees it, to invite people)
   const nameBox = $("room-name-input");
   if (document.activeElement !== nameBox) nameBox.value = L.title || "";
+  nameBox.size = Math.max(6, nameBox.value.length + 1);  // (as wide as the name, where CSS can't say)
   nameBox.readOnly = !host;
   nameBox.title = host ? "Rename the room" : "";
   for (const b of $("privacy").querySelectorAll("button")) {
@@ -467,6 +468,7 @@ $("gravity").addEventListener("change", () => send({ type: "settings", gravity: 
 $("speed").addEventListener("change", () => send({ type: "settings", speed: $("speed").value }));
 $("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
 $("room-name-input").addEventListener("change", () => send({ type: "settings", name: $("room-name-input").value.trim() || null }));
+$("room-name-input").addEventListener("input", (e) => { e.target.size = Math.max(6, e.target.value.length + 1); });
 $("room-name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
 for (const b of $("privacy").querySelectorAll("button")) {
   b.addEventListener("click", () => {

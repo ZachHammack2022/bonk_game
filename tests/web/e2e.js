@@ -94,7 +94,8 @@ function check(cond, what) {
     const hostName = await host.inputValue("#name");
     check((await host.inputValue("#new-name")) === `${hostName}'s room`, "a new room is named after you, to start with");
     await shot(host, "new-game");
-    await host.click("#new-private");
+    check(await host.isVisible('#new-privacy [data-private="1"].on'), "new games are private unless you pick public");
+    await host.click("#new-create");
     await host.waitForSelector("#lobby:not(.hidden)");
     const url = host.url();
     const password = new URL(url).searchParams.get("pw");
@@ -134,6 +135,10 @@ function check(cond, what) {
     await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length === 4);
     await guest.waitForFunction(() => document.querySelector("#map").value === "classic");
     check(true, "settings reach the guest");
+    await host.setViewportSize({ width: 1000, height: 585 });
+    check(await host.evaluate(() => { const r = $("start").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }),
+      "Start is on screen in a smallish window, without scrolling");
+    await host.setViewportSize({ width: 1000, height: 720 });
     // Chat in the lobby: everyone sees it, with swear words starred out
     await guest.fill("#chat-input", "hi there you shit");
     await guest.press("#chat-input", "Enter");
@@ -388,7 +393,8 @@ function check(cond, what) {
     await shot(q1, "browse-empty");
     check(!(await q1.$("#quick")) && !(await q1.$("#empty-quick")), "there are no play-with-bots buttons: you make a public or private game");
     await q1.click("#new-game");
-    await q1.click("#new-public");
+    await q1.click('#new-privacy [data-private="0"]');
+    await q1.click("#new-create");
     await q1.waitForSelector("#lobby:not(.hidden)");
     check(/\/r\/[A-Z]{4}$/.test(q1.url()) && await q1.isVisible('#privacy [data-private="0"].on'), "a public game has no password");
     await q1.selectOption("#mode", "knockouts");
