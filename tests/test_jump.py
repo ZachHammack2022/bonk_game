@@ -33,7 +33,7 @@ def test_grounded_jump_is_immediate():
     assert p.y_v < -p.jump_speed / 2
 
 
-def test_tap_and_hold_jump_the_same_height():
+def test_holding_up_hovers_higher_than_a_tap():
     def peak(hold):
         m, p = setup()
         settle(m, p)
@@ -43,12 +43,42 @@ def test_tap_and_hold_jump_the_same_height():
             best = min(best, p.y)
         return y0 - best
 
-    assert peak(False) == pytest.approx(peak(True))
+    # Measured from bonk.io: a tap hops ~30 px; holding "up" hovers, for a
+    # jump about four times as high (map.hover cancels most of gravity)
+    tap, hold = peak(False), peak(True)
+    assert 25 < tap < 45
+    assert 90 < hold < 180
+
+
+def test_hovering_slows_a_fall_but_never_lifts_you():
+    m, p = setup()
+    p.y, p.y_v, p.grounded = 100, 0, False
+    for _ in range(10):
+        step(m, p, up=True)
+    assert p.y_v > 0  # still falling
+    m, q = setup()
+    q.y, q.y_v, q.grounded = 100, 0, False
+    for _ in range(10):
+        step(m, q)
+    assert p.y_v < q.y_v / 3
+
+
+def test_sideways_pushes_are_gentle():
+    m, p = setup()
+    assert p.push == pytest.approx(0.5)
+    settle(m, p)
+    x0 = p.x
+    for _ in range(30):
+        p.move_right(p.push)
+        step(m, p)
+    # A second of running from a stand covers ~200 px, at ~13 px a step
+    assert 150 < p.x - x0 < 260
 
 
 @pytest.mark.parametrize("early", range(1, JUMP_BUFFER + 1))
 def test_up_just_before_landing_jumps_on_landing(early):
     m, p = setup()
+    p.hover = 0
     settle(m, p)
     step(m, p, up=True)  # jump, then wait to come back down
     landed = None
@@ -58,8 +88,10 @@ def test_up_just_before_landing_jumps_on_landing(early):
             landed = t
             break
     assert landed is not None
-    # Replay the same jump, pressing up `early` steps before landing
+    # Replay the same jump, pressing up `early` steps before landing (no
+    # hovering, so the press doesn't change when we land)
     m, p = setup()
+    p.hover = 0
     settle(m, p)
     step(m, p, up=True)
     for t in range(landed + 1):
@@ -134,3 +166,16 @@ def test_agent_actions_use_the_same_jump():
     step(m, p)
     arena.apply_action(p, up)
     assert p.y_v < -p.jump_speed / 2
+
+
+def test_players_bounce_off_each_other_a_little_softer_than_elastic():
+    from bonk_game.envs.utils.mechanics import PLAYER_BOUNCE, player_collision
+    m, a = setup()
+    b = m.make_players()[1]
+    a.x, a.y, a.x_v, a.y_v = 300, 200, 4, 0
+    b.x, b.y, b.x_v, b.y_v = 338, 200, 0, 0
+    player_collision(a, b)
+    # Separating speed is PLAYER_BOUNCE of the closing speed; momentum kept
+    assert b.x_v - a.x_v == pytest.approx(PLAYER_BOUNCE * 4)
+    assert a.x_v + b.x_v == pytest.approx(4)
+    assert 0.7 <= PLAYER_BOUNCE < 1

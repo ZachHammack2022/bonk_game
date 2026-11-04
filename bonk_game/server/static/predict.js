@@ -9,7 +9,7 @@
 // drawn as your ball, so it reacts straight away.
 //
 // The copy covers what matters most for feel: input forces (divided by
-// mass), gravity, the speed cap, jumping (with the same jump buffer and
+// mass), hovering, gravity, the speed cap, jumping (with the same jump buffer and
 // coyote time as bonk_game/envs/utils/player.py), and landing on, bouncing
 // off and sliding on flat platform tops. It skips other players, slopes,
 // bumpers and moving parts; when those matter the server's next position
@@ -110,8 +110,13 @@
     if (b[1]) s.vx -= F / s.m;
     if (b[2]) s.vy += F / s.m;
     if (b[0]) {
-      if (phys.can_fly) s.vy -= F / s.m;
-      else { s.jumpBuffer = JUMP_BUFFER; tryJump(s, phys); }
+      // Flying up is full thrust; on jump maps "up" jumps, and hovers in the
+      // air (cancels phys.hover of gravity)
+      if (phys.can_fly) s.vy -= (phys.fly_force ?? phys.force) * ts / s.m;
+      else {
+        if (!s.grounded && phys.hover) s.vy -= phys.hover * phys.gravity * ts / s.m;
+        s.jumpBuffer = JUMP_BUFFER; tryJump(s, phys);
+      }
     }
     if (b[4] && s.m === phys.min_m) s.m = phys.max_m;
 

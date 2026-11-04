@@ -65,6 +65,8 @@ CASES = {
     "run, then reverse": ("platform", [R] * 6 + [L] * 8, put(340, 270)),
     "jump and land": ("platform", [U] + [NONE] * 24, put(340, 270)),
     "jump while running": ("platform", [R, U] + [R] * 10, put(280, 270)),
+    "jump and hover": ("platform", [U] * 30, put(340, 270)),
+    "hover on the way down": ("platform", [NONE] * 3 + [U] * 12, put(340, 150)),
     "heavy then move": ("platform", [H] + [L] * 10, put(380, 270)),
     "fall onto the slider": ("slider", [NONE] * 10, put(380, 220)),
     "fly on Classic": ("classic", [U] * 10 + [R] * 10, put(340, 300)),

@@ -22,11 +22,11 @@ def apply_input(p, inp):
         if inp.up:
             p.move_up(arena.FORCE)
         if inp.left:
-            p.move_left(arena.FORCE)
+            p.move_left(p.push)
         if inp.down:
-            p.move_down(arena.FORCE)
+            p.move_down(p.push)
         if inp.right:
-            p.move_right(arena.FORCE)
+            p.move_right(p.push)
         if inp.heavy:
             p.make_heavy()
     else:

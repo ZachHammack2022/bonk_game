@@ -2,6 +2,9 @@
 import math
 
 BOUNCE = -0.8  # fraction of vertical speed kept (and flipped) on a floor/ceiling hit
+# Share of their closing speed two players bounce apart with (1 would be
+# perfectly elastic; bonk.io's balls keep roughly 70-100%)
+PLAYER_BOUNCE = 0.85
 
 
 def env_collision_game(agent, platform) -> bool:
@@ -70,7 +73,8 @@ def player_collision(a1, a2) -> None:
 
 
 def handle_player_collision(a1, a2, d) -> None:
-    """Elastic collision between two circles of different masses.
+    """Bouncy collision between two circles of different masses
+    (PLAYER_BOUNCE of the closing speed comes back).
 
     Also separates the circles so they don't stay overlapping and "stick"
     together over several frames. Heavier players get pushed less.
@@ -86,7 +90,7 @@ def handle_player_collision(a1, a2, d) -> None:
     # two overlapping players that are already separating get pulled back in.
     rel_v = (a1.x_v - a2.x_v) * nx + (a1.y_v - a2.y_v) * ny
     if rel_v > 0:
-        p = 2 * rel_v / (a1.m + a2.m)
+        p = (1 + PLAYER_BOUNCE) * rel_v / (a1.m + a2.m)
         a1.x_v -= p * a2.m * nx
         a1.y_v -= p * a2.m * ny
         a2.x_v += p * a1.m * nx

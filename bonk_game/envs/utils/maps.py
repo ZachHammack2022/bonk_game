@@ -30,6 +30,10 @@ class Map:
     # and only when standing on something.
     can_fly = True
     jump_speed = 0
+    # Sideways and down push from an input ("up" on fly maps is arena.FORCE)
+    push_force = arena.FORCE
+    # Jump maps: the share of gravity holding "up" in the air cancels
+    hover = 0.0
     # Number of map-specific values appended to every agent's observation
     n_extra_obs = 0
     # Points needed to win a match in the playable game
@@ -74,6 +78,8 @@ class Map:
             p.v_range = self.max_speed
             p.can_fly = self.can_fly
             p.jump_speed = self.jump_speed
+            p.push = self.push_force
+            p.hover = self.hover
         return players
 
     def place_players(self, players):
@@ -164,9 +170,12 @@ class OpenMap(Map):
     clamp_bottom = False
     max_speed = 28
     can_fly = False
-    # A single jump peaks ~174 px up. (Before jump buffering, holding "up"
-    # re-fired a 22 jump on the next step, which came out the same height.)
-    jump_speed = 23.5
+    # Movement measured from bonk.io (see arena.OPEN_PUSH): a jump leaves the
+    # ground at ~7 px a tick (at the default speed) and peaks ~32 px up if you
+    # let go of "up", ~120 px if you hold it and hover.
+    jump_speed = 10.0
+    push_force = arena.OPEN_PUSH
+    hover = arena.OPEN_HOVER
     winning_score = 5
     reset_round_on_kill = True
 
@@ -314,6 +323,10 @@ class SwingMap(OpenMap):
     SINK_DELAY = 150  # steps before the floor starts to sink (5s at 30 fps)
     SINK_SPEED = 0.35  # pixels per step
     LAUNCH_SPEED = 25  # enough to fly from the pit up to the swing
+    # The map is built around jumping up into the swing, so it keeps the
+    # original big jump (~174 px) instead of the bonk.io hop and hover
+    jump_speed = 23.5
+    hover = 0.0
 
     spawn_box = (FLOOR_LEFT + 20, FLOOR_RIGHT - 20, 290, FLOOR_Y - 2)
     respawn_ok = False  # the floor is gone by the end of a round
