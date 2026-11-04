@@ -90,9 +90,18 @@ function check(cond, what) {
     await host.keyboard.press("Escape");
     check(await host.evaluate(() => JSON.parse(localStorage.getItem("bonk.profile")).prefs.keys.heavy === "KeyH"), "keys can be rebound in settings");
     await host.click("#create");
+    await host.waitForSelector("#new-dialog:not(.hidden)");
+    const hostName = await host.inputValue("#name");
+    check((await host.inputValue("#new-name")) === `${hostName}'s room` && await host.isChecked("#new-locked"),
+      "a new room is named after you and has a password, to start with");
+    await host.click("#new-create");
     await host.waitForSelector("#lobby:not(.hidden)");
     const url = host.url();
-    check(/\/r\/[A-Z]{4}$/.test(url), "creating a room opens its link");
+    const password = new URL(url).searchParams.get("pw");
+    check(/\/r\/[A-Z]{4}\?pw=[a-z0-9]{6}$/.test(url), "creating a room opens its link, with the password in it");
+    check((await host.textContent("#room-name")) === `${hostName}'s room` && (await host.inputValue("#room-password")) === password,
+      "the lobby shows the room's name and password");
+    const code = new URL(url).pathname.split("/r/")[1];
     await host.waitForFunction(() => bonkDebug.app.lobby && bonkDebug.app.lobby.seats[0].color === 3 && bonkDebug.app.lobby.seats[0].pattern === "stripes");
     check(true, "your ball's colour and pattern come with you into the room");
 
@@ -107,6 +116,7 @@ function check(cond, what) {
     await guest.fill("#name", "Bob");
     await guest.click("#join-form button");
     await guest.waitForSelector("#lobby:not(.hidden)");
+    check(true, "the invite link fills in the password");
     await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length === 3);
     check(true, "the guest shows up in the host's lobby");
     check(await guest.isHidden("#start"), "only the host sees Start");
@@ -257,8 +267,16 @@ function check(cond, what) {
     const phone = await open("phone", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     await phone.goto(base + "/");
     await phone.fill("#name", "Cat");
-    await phone.fill("#code", url.split("/r/")[1].toLowerCase());
+    await phone.fill("#code", code.toLowerCase());
     await phone.click("#join-form button");
+    await phone.waitForSelector("#pw-dialog:not(.hidden)");
+    check(true, "joining by code asks for the password");
+    await phone.fill("#pw-input", "wrong1");
+    await phone.click("#pw-form button[type=submit]");
+    await phone.waitForSelector("#pw-wrong:not(.hidden)");
+    check(await phone.isVisible("#pw-dialog"), "a wrong password says so");
+    await phone.fill("#pw-input", password);
+    await phone.click("#pw-form button[type=submit]");
     await phone.waitForSelector("#lobby:not(.hidden)");
     const wide = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     check(!wide, "the lobby fits a phone screen");
@@ -300,7 +318,7 @@ function check(cond, what) {
     await guest.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 2, null, { timeout: 30000 });
     await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 3);
     const after = await host.evaluate(() => bonkDebug.app.lobby);
-    check(after.room === url.split("/r/")[1] && after.host === (await host.evaluate(() => bonkDebug.app.welcome.you)), "after a restart the room comes back, with the same host");
+    check(after.room === code && after.host === (await host.evaluate(() => bonkDebug.app.welcome.you)), "after a restart the room comes back, with the same host");
     check(JSON.stringify(after.settings) === JSON.stringify(settings), "and the same settings");
     restarting = false;
 

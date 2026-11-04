@@ -261,7 +261,7 @@ def test_sign_in_play_and_delete(monkeypatch):
             assert res["profile"]["pattern"] == "star"
 
             # Play a match while signed in: it lands in the account's history
-            code = (await (await client.post("/api/rooms")).json())["room"]
+            code = (await (await client.post("/api/rooms", json={"password": False})).json())["room"]
             # (Another site's page can't play as you: no Origin match, no account)
             other = await client.ws_connect(f"/ws/{code}", headers={"Origin": "https://evil.example"})
             await other.send_json({"type": "hello", "version": VERSION, "name": "X", "token": "tok-x"})

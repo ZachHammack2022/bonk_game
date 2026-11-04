@@ -16,10 +16,13 @@ leaves straight away.
 Nothing here touches sockets directly: each member has an async `send`
 function that takes a message dict.
 
-Public rooms (#35): the host can list the room on the home page
-(settings "public"). Quick play (RoomManager.quick_play) sends you to the
-public room with the most people and space for you, or makes one with
-bots that starts by itself ("quick"). Someone who joins during a match
+Every room is listed in the game browser, by its name (settings "name";
+"<host>'s room" if none). A room with a password (settings "password",
+made up when the room is) needs it to get in: the invite link carries it,
+and people already in the room don't need it again to reconnect. Quick play
+(RoomManager.quick_play) sends you to the open room (no password) with the
+most people and space for you, or makes one with bots that starts by
+itself ("quick"). Someone who joins during a match
 takes over a bot's seat: straight away in modes where balls respawn, at
 the next round in the others. With no bot to take over, they watch and
 play in the next match.
@@ -30,6 +33,7 @@ player reports in moderation.py.
 """
 import asyncio
 import collections
+import hmac
 import json
 import logging
 import random
@@ -54,11 +58,19 @@ EMOTES = 4               # emote ids 0-3 (the client picks the pictures)
 EMOTE_GAP = 0.8          # seconds between one person's emotes
 AUTO_START = 2.0         # quick-play rooms: seconds from someone joining to the match starting
 AUTO_NEXT = 10.0         # and from the results to the next match
-PUBLIC_LISTED = 200      # public rooms the game browser lists (it filters and pages them)
+LISTED = 200             # rooms the game browser lists (it filters and pages them)
 
 
 class RoomFull(Exception):
     """Can't join: the room is full, or the host removed you."""
+
+
+class PasswordNeeded(RoomFull):
+    """The room has a password, and it wasn't given (wrong: a wrong one was)."""
+
+    def __init__(self, wrong):
+        super().__init__("Wrong password." if wrong else "This room has a password.")
+        self.wrong = wrong
 
 
 class ServerFull(Exception):
@@ -156,13 +168,24 @@ class Room:
         self.note("name_filtered", name=str(name)[:40], now=clean)
         return clean, f"That name isn't allowed here, so you're {clean}."
 
-    async def join(self, token, name, send, was_host=False, account=None):
+    def password_ok(self, token, password):
+        """May this browser come in? Yes without a password if the room has
+        none, or they're already a member (back after a refresh)."""
+        want = self.settings.get("password")
+        if not want or token in self.members:
+            return True
+        return isinstance(password, str) and hmac.compare_digest(password.strip().encode(), want.encode())
+
+    async def join(self, token, name, send, was_host=False, account=None, password=None):
         """Add (or reconnect) a member. Returns the Member. was_host: they
         were the host before a server restart, and get it back if they come
         back soon after (whoever reconnects first doesn't keep it).
-        account: their account id, if they're signed in."""
+        account: their account id, if they're signed in. password: the
+        room's password (PasswordNeeded if it has one and this isn't it)."""
         if token in self.banned or (account is not None and account in self.banned):
             raise RoomFull("The host removed you from this room.")
+        if not self.password_ok(token, password):
+            raise PasswordNeeded(wrong=bool(password))
         m = self.members.get(token)
         notice = None
         if m is None:
@@ -285,6 +308,7 @@ class Room:
         return {
             "type": "lobby",
             "room": self.code,
+            "title": lobby.room_title(self.settings, self.members[self.host].name if self.host in self.members else None),
             "host": self.pid(self.host),
             "members": [{"id": m.pid, "name": m.name, "connected": m.connected}
                         for m in self.members.values()],
@@ -770,16 +794,17 @@ class Room:
             self.task.cancel()
 
     def listing(self):
-        """How the room shows in the game browser (the list of public rooms).
-        Names are the ones shown in the room (already moderated); never
-        anyone's token."""
+        """How the room shows in the game browser. Names are the ones shown
+        in the room (already moderated); never anyone's token, nor the
+        room's password (only whether it has one)."""
         s = self.settings
         humans, bots = self.seats()
         info = MAPS[s["map"]]
         mode = modes.MODES[s["mode"]]
         host = self.members.get(self.host)
         match = self.match
-        return {"room": self.code, "map": info.title, "map_id": s["map"],
+        return {"room": self.code, "name": lobby.room_title(s, host.name if host else None),
+                "locked": bool(s.get("password")), "map": info.title, "map_id": s["map"],
                 "mode": mode.title, "mode_id": s["mode"],
                 "goal": mode.goal_short(s["first_to"]),
                 "people": len(self.connected), "bots": len(bots), "most": info.players[1],
@@ -857,33 +882,30 @@ class RoomManager:
     def get(self, code):
         return self.rooms.get((code or "").upper())
 
-    def public(self):
-        """Public rooms with people in them, the fullest first."""
-        rooms = [r for r in self.rooms.values()
-                 if r.settings.get("public") and r.connected and not r.closing]
+    def listed(self):
+        """Rooms with people in them, the fullest first, for the game browser."""
+        rooms = [r for r in self.rooms.values() if r.connected and not r.closing]
         rooms.sort(key=lambda r: (-len(r.connected), r.created))
-        return [r.listing() for r in rooms[:PUBLIC_LISTED]]
+        return [r.listing() for r in rooms[:LISTED]]
 
     def browse(self):
-        """What the game browser shows: the public rooms, plus how many
-        people are playing and how many private rooms are going (counts
-        only: private rooms are reached by their code or link)."""
+        """What the game browser shows: the rooms, how many people are
+        playing, and how many rooms there are past the ones listed."""
         live = [r for r in self.rooms.values() if r.connected and not r.closing]
-        public = self.public()
-        return {"rooms": public,
+        listed = self.listed()
+        return {"rooms": listed,
                 "online": sum(len(r.connected) for r in live),
-                "private": sum(1 for r in live if not r.settings.get("public")),
-                "more": max(0, sum(1 for r in live if r.settings.get("public")) - len(public))}
+                "more": max(0, len(live) - len(listed))}
 
     def quick_play(self, allow_new=lambda: True):
-        """Quick play: the public room with the most people that still has
+        """Quick play: the open room (no password) with the most people that still has
         space, or a new one with bots that starts by itself. Returns
         (room, whether it's new), or (None, False) if a room is needed and
         allow_new() says no (the per-IP limit). ServerFull if the server
         can't make one."""
         best = None
         for r in self.rooms.values():
-            if r.settings.get("public") and not r.closing and r.has_space() and (r.connected or r.quick):
+            if not r.settings.get("password") and not r.closing and r.has_space() and (r.connected or r.quick):
                 key = (len(r.connected), r.quick)
                 if best is None or key > best[0]:
                     best = (key, r)

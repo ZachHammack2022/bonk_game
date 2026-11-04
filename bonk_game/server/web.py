@@ -7,8 +7,11 @@ Routes:
     GET  /r/<code>       the client, opening room <code>
     GET  /static/...     client files
     GET  /play           the game browser (the page itself; the client draws it)
-    POST /api/rooms      create a room -> {"room": "ABCD"}; {"public": true} lists it
-    GET  /api/public     the game browser's list: public rooms, people online, private rooms
+    POST /api/rooms      create a room -> {"room": "ABCD", "name": ..., "password": "k7mq2x"};
+                         send {"name": "Sam's room", "password": false} for one
+                         without a password (a password is made up otherwise)
+    GET  /api/public     the game browser's list: every room (name, whether it
+                         has a password, never the password), people online
     POST /api/quickplay  a public room to join -> {"room": "ABCD"} (room.py)
     GET  /api/rooms/<code>   {"room": "ABCD", "players": 3} or 404
     GET  /ws/<code>      WebSocket for one browser in a room
@@ -31,8 +34,11 @@ a new client after a deploy.
 
 WebSocket protocol (JSON text messages):
   browser -> server
-    {"type": "hello", "name": "Sam", "token": "<random id>", "version": "<VERSION>"}
-        first message. A different version (a tab opened before a deploy)
+    {"type": "hello", "name": "Sam", "token": "<random id>", "version": "<VERSION>",
+     "password": "k7mq2x"}
+        first message. password: the room's, if it has one (people already
+        in the room don't need it to reconnect); without it (or a wrong one)
+        the reply is {"type": "error", "fatal": true, "password": true}. A different version (a tab opened before a deploy)
         gets {"type": "error", "fatal": true, "refresh": true} back. With
         "reopen": true, a room that doesn't exist (the server restarted) is
         made again with the same code; "host": true says you were its host,
@@ -45,7 +51,8 @@ WebSocket protocol (JSON text messages):
     {"type": "report", "ping": {...}, ...}     after a match: what it saw (playtest.py)
     {"type": "client_error", "message": "...", "where": "draw.js:12"}
     host only:
-    {"type": "settings", "map": "platform", "first_to": 5, "bots": ["bot:medium"], "public": true}
+    {"type": "settings", "map": "platform", "first_to": 5, "bots": ["bot:medium"],
+     "name": "Sam's room", "password": true}   (true: a new random one; null: none)
     {"type": "start"}
     {"type": "lobby"}                                          back from results
   server -> browser
@@ -78,8 +85,8 @@ import traceback
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server import auth, limits, metrics, moderation, modes, playtest
-from bonk_game.server.room import RoomFull, RoomManager, ServerFull, valid_code
+from bonk_game.server import auth, limits, lobby, metrics, moderation, modes, playtest
+from bonk_game.server.room import PasswordNeeded, RoomFull, RoomManager, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 AGENT_KINDS = ("ppo", "a2c", "dqn", "ars", "bad")
@@ -87,6 +94,9 @@ SWEEP_EVERY = 5.0
 
 ROOMS = web.AppKey("rooms", object)
 ROOM_LIMIT = web.AppKey("room_limit", object)
+GUESS_LIMIT = web.AppKey("guess_limit", object)
+# Wrong room passwords one IP may try (a burst, then this many a minute)
+WRONG_PASSWORDS = 10
 CONNECTIONS = web.AppKey("connections", dict)
 SWEEPER = web.AppKey("sweeper", object)
 SOCKETS = web.AppKey("sockets", object)
@@ -224,15 +234,18 @@ async def create_room(request):
     except ServerFull:
         return web.json_response({"error": "The server is full right now. Try again later."},
                                  status=503)
-    # {"public": true} lists it in the game browser from the start (the host
-    # can still change it in the lobby). Anything else: private.
+    # Every room is listed; it gets a password unless {"password": false}
+    # (the host can change both in the lobby)
     try:
         body = await request.json() if request.can_read_body else {}
     except ValueError:
         body = {}
-    if isinstance(body, dict) and body.get("public") is True:
-        room.settings["public"] = True
-    return web.json_response({"room": room.code, "public": room.settings["public"]})
+    if not isinstance(body, dict):
+        body = {}
+    room.settings["name"] = lobby.clean_room_name(body.get("name")) if isinstance(body.get("name"), str) else None
+    room.settings["password"] = None if body.get("password") is False else lobby.new_password()
+    return web.json_response({"room": room.code, "name": room.settings["name"],
+                              "password": room.settings["password"]})
 
 
 async def public_rooms(request):
@@ -262,7 +275,8 @@ async def room_info(request):
     room = request.app[ROOMS].get(request.match_info["code"])
     if room is None:
         raise web.HTTPNotFound(text="No such room")
-    return web.json_response({"room": room.code, "players": len(room.connected)})
+    return web.json_response({"room": room.code, "players": len(room.connected),
+                              "locked": bool(room.settings.get("password"))})
 
 
 async def healthz(request):
@@ -350,6 +364,8 @@ async def websocket(request):
                 try:
                     room = rooms.create(code)
                     room.reopened_at = time.monotonic()
+                    # It keeps the password whoever's first back had
+                    room.settings["password"] = lobby.clean_password(msg.get("password"))
                 except ServerFull:
                     pass
         if room is None:
@@ -358,9 +374,15 @@ async def websocket(request):
         # Signed in? (The cookie comes with the WebSocket; only this site's
         # own pages count, so another site can't play as you)
         user = auth.user_for(request) if auth.same_origin(request) else None
+        password = msg.get("password") if isinstance(msg.get("password"), str) else None
+        if password and not room.password_ok(token, password) and not request.app[GUESS_LIMIT].allow(ip):
+            return await refuse("Too many wrong passwords. Try again in a minute.")
         try:
             await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True,
-                            account=user["id"] if user else None)
+                            account=user["id"] if user else None, password=password)
+        except PasswordNeeded as e:
+            token = None
+            return await refuse(str(e), password=True, wrong=e.wrong)
         except RoomFull as e:
             token = None
             return await refuse(str(e))
@@ -443,6 +465,7 @@ def make_app(rooms=None, auth_config=None, accounts=None):
     app = web.Application(middlewares=[cache_headers])
     app[ROOMS] = rooms or RoomManager(AgentStore())
     app[ROOM_LIMIT] = limits.PerKey(limits.ROOMS_PER_IP / 60, limits.ROOMS_PER_IP)
+    app[GUESS_LIMIT] = limits.PerKey(WRONG_PASSWORDS / 60, WRONG_PASSWORDS)
     app[CONNECTIONS] = {}  # ip -> open WebSockets
     app[SOCKETS] = set()  # open WebSockets, closed on shutdown
     app[PAGE] = render_index()

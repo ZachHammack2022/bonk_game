@@ -12,6 +12,7 @@ tested (and read) without a Room. room.py calls them.
 """
 import math
 import re
+import secrets
 
 from bonk_game.envs.utils import arena, stepping
 from bonk_game.envs.utils.maps import MAPS
@@ -35,21 +36,55 @@ GRAVITY = {"low": 0.6, "normal": 1.0, "high": 1.4}
 # slower than the original, which is "fast"
 SPEEDS = {"slow": 0.6, "normal": stepping.TIME_SCALE, "fast": 1.0}
 QUICK_BOTS = 3   # bots in a room Quick play makes
+# Room names (shown in the game browser) and passwords. Every room is listed;
+# one with a password needs it to get in (the invite link carries it)
+ROOM_NAME_LEN = 30
+PASSWORD_LEN = (1, 20)
+PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no i, l, o, 0 or 1
+NEW_PASSWORD_LEN = 6
+
+
+def new_password():
+    """A random room password, easy to read out ("k7mq2x")."""
+    return "".join(secrets.choice(PASSWORD_ALPHABET) for _ in range(NEW_PASSWORD_LEN))
 
 
 def default_settings():
-    """public: listed on the home page for anyone to join (#35); private
-    rooms are reached by their link or code only."""
+    """name: the room's name in the game browser (None: "<host>'s room").
+    password: needed to join (None: anyone can). Every room is listed."""
     return {"map": DEFAULT_MAP, "first_to": 5, "bots": ["bot:medium"],
             "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal", "speed": "normal",
-            "power_ups": False, "public": False}
+            "power_ups": False, "name": None, "password": None}
 
 
 def quick_settings():
-    """A room Quick play makes when no public room has space: Knockouts
+    """A room Quick play makes when no open room has space: Knockouts
     (people can drop in at any time) on Platform, with bots to play against."""
     return {**default_settings(), "mode": "knockouts", "first_to": modes.MODES["knockouts"].goal_default,
-            "bots": ["bot:medium"] * QUICK_BOTS, "public": True}
+            "bots": ["bot:medium"] * QUICK_BOTS}
+
+
+def clean_room_name(name):
+    """A room name to use (tidied, cut to ROOM_NAME_LEN), or None for the
+    default, if it's empty or offensive."""
+    name = " ".join(str(name or "").split())[:ROOM_NAME_LEN]
+    if not name or moderation.offensive(name):
+        return None
+    return name
+
+
+def clean_password(password):
+    """A password to use, or None if it isn't one (not a string, or too
+    short or long once trimmed)."""
+    if not isinstance(password, str):
+        return None
+    password = password.strip()
+    return password if PASSWORD_LEN[0] <= len(password) <= PASSWORD_LEN[1] else None
+
+
+def room_title(settings, host_name):
+    """What the game browser calls the room."""
+    return settings.get("name") or (f"{host_name}'s room" if host_name else "Open room")
 
 
 def clean_name(name):
@@ -118,10 +153,19 @@ def check_settings(settings, msg, people, bot_options):
         if not isinstance(msg["power_ups"], bool):
             return settings, "Power-ups should be on or off."
         s["power_ups"] = msg["power_ups"]
-    if "public" in msg:
-        if not isinstance(msg["public"], bool):
-            return settings, "Public should be on or off."
-        s["public"] = msg["public"]
+    if "name" in msg:
+        if msg["name"] is not None and not isinstance(msg["name"], str):
+            return settings, "The room's name should be text."
+        s["name"] = clean_room_name(msg["name"])
+    if "password" in msg:
+        pw = msg["password"]
+        if pw is True:
+            pw = new_password()
+        elif pw is not None and pw is not False:
+            pw = clean_password(pw)
+            if pw is None:
+                return settings, f"Passwords are {PASSWORD_LEN[0]} to {PASSWORD_LEN[1]} characters."
+        s["password"] = pw or None
     if "gravity" in msg:
         if msg["gravity"] not in GRAVITY:
             return settings, "Unknown gravity."

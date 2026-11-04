@@ -107,7 +107,7 @@ def test_the_server_hands_out_reports_and_counts_them(monkeypatch):
         client = TestClient(TestServer(web.make_app(RoomManager())))
         await client.start_server()
         try:
-            code = (await (await client.post("/api/rooms")).json())["room"]
+            code = (await (await client.post("/api/rooms", json={"password": False})).json())["room"]
             ws = await client.ws_connect(f"/ws/{code}")
             await ws.send_json({"type": "hello", "name": "Ann", "token": "t", "version": web.VERSION})
             assert (await ws.receive_json())["playtest"] is True

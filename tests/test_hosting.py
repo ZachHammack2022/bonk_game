@@ -87,7 +87,7 @@ def test_versioned_files_are_cached_for_good_and_the_page_never():
 @pytest.mark.parametrize("version", ["old", None])
 def test_an_old_tab_is_told_to_refresh(version):
     async def go(client):
-        code = (await (await client.post("/api/rooms")).json())["room"]
+        code = (await (await client.post("/api/rooms", json={"password": False})).json())["room"]
         ws = await client.ws_connect(f"/ws/{code}")
         msg = hello(version=version)
         if version is None:
@@ -142,7 +142,7 @@ def test_metrics_report_live_numbers(monkeypatch):
     monkeypatch.setattr(room_mod, "TICK_HZ", 600)
 
     async def go(client):
-        code = (await (await client.post("/api/rooms")).json())["room"]
+        code = (await (await client.post("/api/rooms", json={"password": False})).json())["room"]
         ws = await client.ws_connect(f"/ws/{code}")
         await ws.send_json(hello())
         await ws.send_json({"type": "settings", "map": "classic", "first_to": 50,
@@ -271,7 +271,7 @@ def test_draining_gives_up_on_a_match_that_runs_too_long():
 def test_new_rooms_are_refused_while_draining():
     async def go(client):
         client.app[web.ROOMS].draining = True
-        r = await client.post("/api/rooms")
+        r = await client.post("/api/rooms", json={"password": False})
         assert r.status == 503 and "restarting" in (await r.json())["error"]
     run(with_client(go))
 
@@ -300,7 +300,7 @@ def test_sigterm_tells_everyone_and_exits_cleanly():
                             break
                 except aiohttp.ClientError:
                     await asyncio.sleep(0.1)
-            async with http.post(base + "/api/rooms") as r:
+            async with http.post(base + "/api/rooms", json={"password": False}) as r:
                 code = (await r.json())["room"]
             ws = await http.ws_connect(f"{base}/ws/{code}")
             await ws.send_json(hello())

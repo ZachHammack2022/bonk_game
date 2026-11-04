@@ -230,6 +230,8 @@ store.set("bonk.token", me.token);
 const app = {
   ws: null,
   room: null,
+  password: null,    // the room's password, if it has one (sent in "hello")
+  linkPassword: null,  // [code, password] from a link opened before you had a name
   welcome: null,
   lobby: null,
   match: null,       // the "match" message: slots, map, first_to
@@ -257,34 +259,74 @@ $("name").addEventListener("change", () => {
   me.name = $("name").value.trim().slice(0, 16);
   send({ type: "name", name: me.name });
 });
-$("create").addEventListener("click", () => newGame(false, $("create")));  // (people.js)
+$("create").addEventListener("click", () => openNewGame());  // (people.js)
 $("join-form").addEventListener("submit", (e) => {
   e.preventDefault();
   $("name").dispatchEvent(new Event("change"));
   const code = $("code").value.trim().toUpperCase();
-  if (code.length === 4) openRoom(code, true);
+  const link = app.linkPassword;  // (came with a link, before you had a name)
+  if (code.length === 4) openRoom(code, true, link && link[0] === code ? link[1] : undefined);
   else toast("Room codes are 4 letters.", true);
 });
 
-function openRoom(code, push) {
-  app.room = code.toUpperCase();
+// A room's link: with its password, if it has one, so it's filled in for you
+const roomLink = (code, password) => `/r/${code}` + (password ? `?pw=${encodeURIComponent(password)}` : "");
+
+// password: the room's (from its invite link, or typed in); undefined keeps
+// the one we have for this room
+function openRoom(code, push, password) {
+  code = code.toUpperCase();
+  if (password !== undefined || code !== app.room) app.password = password || null;
+  app.room = code;
   app.fatal = false;
-  if (push) history.pushState({}, "", `/r/${app.room}`);
+  if (push) history.pushState({}, "", roomLink(app.room, app.password));
   connect();
 }
+
+// The room has a password and we don't have it (or it's wrong): ask
+function askPassword(code, wrong) {
+  $("pw-text").textContent = `Room ${code} has a password. Ask whoever invited you for it, or for their invite link.`;
+  $("pw-wrong").classList.toggle("hidden", !wrong);
+  $("pw-input").value = wrong ? $("pw-input").value : "";
+  $("pw-dialog").dataset.room = code;
+  $("pw-dialog").classList.remove("hidden");
+  $("pw-input").focus();
+  $("pw-input").select();
+}
+$("pw-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const pw = $("pw-input").value.trim();
+  if (!pw) return;
+  $("pw-dialog").classList.add("hidden");
+  openRoom($("pw-dialog").dataset.room, false, pw);
+  history.replaceState({}, "", roomLink(app.room, pw));
+});
+// Not joining after all: back to wherever we were
+function closePassword() {
+  $("pw-dialog").classList.add("hidden");
+  if (app.ws) return;
+  app.room = null; app.password = null;
+  const browsing = !$("browse").classList.contains("hidden");
+  history.replaceState({}, "", browsing ? "/play" : "/");
+  if (!browsing) show("home");
+}
+$("pw-cancel").addEventListener("click", closePassword);
+$("pw-dialog").addEventListener("click", (e) => { if (e.target === $("pw-dialog")) closePassword(); });
 
 window.addEventListener("popstate", () => route());
 function route() {
   const m = location.pathname.match(/^\/r\/([A-Za-z]{4})\/?$/);
   if (m) {
+    const pw = new URLSearchParams(location.search).get("pw");
     if (!me.name) {
       // Ask for a name first; joining comes from the form
       show("home");
       $("code").value = m[1].toUpperCase();
+      app.linkPassword = pw ? [m[1].toUpperCase(), pw] : null;
       $("name").focus();
       return;
     }
-    openRoom(m[1], false);
+    openRoom(m[1], false, pw || undefined);
   } else if (/^\/play\/?$/.test(location.pathname)) {
     leaveRoom();
     openBrowse(false);  // (people.js)
@@ -306,7 +348,7 @@ function leaveRoom(push) {
     ws.close();
   }
   replayer.stop();
-  app.ws = null; app.room = null; app.lobby = null; app.match = null; app.results = null; app.away = false;
+  app.ws = null; app.room = null; app.password = null; app.lobby = null; app.match = null; app.results = null; app.away = false;
   app.states = []; app.last = null; app.retry = 0;
   $("results").classList.add("hidden");
   $("killcam").classList.add("hidden");
@@ -330,7 +372,8 @@ function connect() {
     // reopen: after a dropped connection the server may have restarted and
     // forgotten the room; ask it to make the room again with the same code
     ws.send(JSON.stringify({ type: "hello", name: me.name, token: me.token, version: CLIENT_VERSION,
-                             reopen: app.retry > 0, host: app.restoring !== null }));
+                             reopen: app.retry > 0, host: app.restoring !== null,
+                             ...(app.password ? { password: app.password } : {}) }));
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
@@ -386,6 +429,12 @@ function onMessage(msg) {
       break;
     case "lobby":
       app.lobby = msg;
+      // Keep the password (for reconnecting after a restart, and the address
+      // bar's link) in step with the host's
+      if ((msg.settings.password || null) !== app.password) {
+        app.password = msg.settings.password || null;
+        history.replaceState({}, "", roomLink(app.room, app.password));
+      }
       document.body.classList.toggle("is-host", isHost());
       renderLobby();
       if (app.restoring && msg.phase === "lobby") {
@@ -465,6 +514,15 @@ function onMessage(msg) {
       break;
     case "error":
       if (msg.refresh) { refreshForNewVersion(msg.message); break; }
+      if (msg.password) {
+        // The room has a password: ask for it, rather than going home
+        app.fatal = true;
+        if (app.ws) app.ws.close();
+        app.ws = null;
+        status("");
+        askPassword(app.room, msg.wrong);
+        break;
+      }
       toast(msg.message, true);
       if (msg.fatal) {
         app.fatal = true;

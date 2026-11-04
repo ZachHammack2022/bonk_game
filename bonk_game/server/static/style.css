@@ -257,7 +257,7 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
 .games { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; box-shadow: var(--shadow); }
 .games-head, .game-row {
   display: grid;
-  grid-template-columns: minmax(150px, 2fr) minmax(110px, 1.3fr) minmax(110px, 1.3fr) minmax(120px, 1.2fr) 112px 84px;
+  grid-template-columns: minmax(160px, 2.4fr) minmax(110px, 1fr) minmax(110px, 1.2fr) 84px minmax(100px, 1.1fr) 112px 84px;
   align-items: center; gap: 12px; padding: 0 18px;
 }
 .games-head { min-height: 38px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 11px;
@@ -268,7 +268,12 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
 .games-head button.sorted { color: var(--text); }
 .games-head button[data-dir="desc"]::after { content: "↓"; }
 .games-head button[data-dir="asc"]::after { content: "↑"; }
-.game-row { min-height: 60px; cursor: pointer; border-bottom: 1px solid var(--line); transition: background-color 0.12s; }
+.games-top { display: flex; align-items: center; padding: 8px 18px; background: var(--surface-3); border-bottom: 1px solid var(--line); }
+.game-row { min-height: 56px; cursor: pointer; border-bottom: 1px solid var(--line); transition: background-color 0.12s; }
+.game-row:nth-child(even) { background: rgba(148, 163, 190, 0.04); }
+.g-lock { align-items: center; color: var(--dim); }
+.g-lock .i { width: 18px; height: 18px; }
+.games-head button[data-sort="locked"] { justify-content: center; text-align: center; }
 .game-row:last-child { border-bottom: 0; }
 .game-row:hover { background: var(--surface-2); }
 .game-row > span { display: flex; flex-direction: column; min-width: 0; }
@@ -298,6 +303,8 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
   .browse-head { flex-wrap: wrap; }
   .browse-title { order: -1; flex-basis: 100%; }
   .games-head { display: none; }
+  .g-lock { display: none !important; }
+  .game-row.locked .g-game b::after { content: " 🔒"; font-size: 12px; }
   .game-row { grid-template-columns: 1fr auto; grid-template-areas: "game join" "mode status" "map players";
               row-gap: 6px; padding: 12px 14px; }
   .g-game { grid-area: game; } .g-join { grid-area: join; } .g-mode { grid-area: mode; }
@@ -327,7 +334,13 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
   gap: 12px;
 }
 .lobby-head .dim.small { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
-.room-code { font-size: 36px; font-weight: 700; letter-spacing: 0.14em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.room-id { min-width: 0; }
+.room-code-small { letter-spacing: 0.14em; color: var(--dim); }
+.room-name { font-size: 30px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.password-row { display: flex; gap: 6px; }
+.password-row input { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; letter-spacing: 0.06em; }
+#pw-input { width: 100%; letter-spacing: 0.06em; }
+.small.danger { color: var(--danger); margin: 6px 0 0; }
 .head-buttons { display: flex; gap: 6px; align-items: center; }
 .head-buttons button { white-space: nowrap; }
 @media (max-width: 520px) {
