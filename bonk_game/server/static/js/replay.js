@@ -192,7 +192,11 @@ function leaveReplay() {
 const fmtTime = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 function updateReplayBar() {
   const n = replayer.states.length;
-  $("replay-play").textContent = replayer.playing ? "❚❚" : "▶";
+  const want = replayer.playing ? "pause" : "play";
+  if ($("replay-play").dataset.icon !== want) {
+    $("replay-play").innerHTML = icon(want);
+    $("replay-play").dataset.icon = want;
+  }
   if (document.activeElement !== $("replay-seek")) $("replay-seek").value = String(Math.min(replayer.i, n - 1));
   $("replay-time").textContent = `${fmtTime(Math.min(replayer.clock, n * TICK_MS))} / ${fmtTime(n * TICK_MS)}`;
 }

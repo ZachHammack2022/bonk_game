@@ -274,8 +274,8 @@ let person = null;  // { id, name } in the dialog
 // A small button next to someone's name that opens the dialog
 function personButton(id, name) {
   const b = document.createElement("button");
-  b.className = "person-btn";
-  b.textContent = "⋯";
+  b.className = "person-btn icon-button";
+  b.innerHTML = icon("more");
   b.title = `${name}: mute or report`;
   b.setAttribute("aria-label", b.title);
   b.addEventListener("click", () => openPerson(id, name));

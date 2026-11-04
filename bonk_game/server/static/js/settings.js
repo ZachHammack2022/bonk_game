@@ -60,8 +60,8 @@ function renderSettings() {
   $("set-contrast").checked = prefs.contrast;
   const pad = typeof gamepad !== "undefined" && gamepad.name;
   $("set-pad").textContent = pad
-    ? `🎮 ${pad.replace(/\s*\(.*\)\s*$/, "").slice(0, 40)}: stick or d-pad to move, A jump, B/X/bumpers/triggers heavy, Y wave, Start for this menu.`
-    : "🎮 Plug in a controller (or press a button on one) to play with it.";
+    ? `${pad.replace(/\s*\(.*\)\s*$/, "").slice(0, 40)}: stick or d-pad to move, A jump, B/X/bumpers/triggers heavy, Y wave, Start for this menu.`
+    : "Plug in a controller (or press a button on one) to play with it.";
   const ul = $("set-keys");
   ul.innerHTML = "";
   for (const a of ACTIONS) {
