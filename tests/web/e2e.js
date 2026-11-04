@@ -449,6 +449,9 @@ function check(cond, what) {
     await shot(q2, "browse");
     await q2.selectOption("#filter-map", "platform");
     check((await q2.$$("#games-list .game-row")).length === 1, "and filters by map");
+    check(await q2.evaluate(() => document.querySelectorAll("#filter-map option").length === Object.keys(NAMES.maps).length + 1 &&
+      document.querySelectorAll("#filter-mode option").length === Object.keys(NAMES.modes).length + 1),
+    "the map and mode filters offer every map and mode, played right now or not");
     await q2.fill("#browse-search", "nothing like this");
     await q2.waitForSelector("#games-empty:not(.hidden)");
     check((await q2.textContent("#games-empty-text")).includes("match these filters"), "a search with no games says so");

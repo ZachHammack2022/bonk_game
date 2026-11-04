@@ -86,16 +86,13 @@ function filteredGames() {
   return rows;
 }
 
-// The mode and map filters offer what's being played right now (and keep
-// the one picked, even if its last game just ended)
-function fillFilter(select, pairs, picked, all) {
-  const want = [["", all], ...pairs];
-  if (picked && !pairs.some(([v]) => v === picked)) want.push([picked, picked]);
-  const now = Array.from(select.options, (o) => o.value + "|" + o.textContent).join(",");
-  if (now === want.map(([v, t]) => v + "|" + t).join(",")) return;
-  select.innerHTML = "";
-  for (const [v, t] of want) select.add(new Option(t, v, false, v === picked));
+// The mode and map filters offer every mode and map (NAMES, from the server:
+// stats.js), whether or not anyone's playing it right now
+function fillFilter(select, names, all) {
+  select.replaceChildren(new Option(all, ""), ...Object.entries(names).map(([v, t]) => new Option(t, v)));
 }
+fillFilter($("filter-mode"), NAMES.modes, "All modes");
+fillFilter($("filter-map"), NAMES.maps, "All maps");
 
 function renderBrowse() {
   const d = browse.data;
@@ -104,9 +101,6 @@ function renderBrowse() {
   const bits = [plural(rooms.length + (d.more || 0), "game") + (locked ? ` (${locked} private)` : ""),
     plural(d.online, "player") + " online"];
   $("browse-summary").textContent = bits.join(" · ");
-  const uniq = (key, title) => [...new Map(rooms.map((r) => [r[key], r[title]])).entries()].sort((a, b) => (a[1] < b[1] ? -1 : 1));
-  fillFilter($("filter-mode"), uniq("mode_id", "mode"), browse.mode, "All modes");
-  fillFilter($("filter-map"), uniq("map_id", "map"), browse.map, "All maps");
 
   const rows = filteredGames();
   const list = $("games-list");
