@@ -134,6 +134,8 @@ def test_accounts_are_off_without_google_settings():
             assert r.status == 404
             r = await client.get("/privacy")
             assert r.status == 200 and "Google" in await r.text()
+            r = await client.get("/terms")
+            assert r.status == 200 and "Terms of service" in await r.text()
     run(go())
 
 
@@ -266,7 +268,9 @@ def test_google_review_pages(monkeypatch):
     for must in ("Google API Services User Data Policy", "Limited Use", "Delete my account", "openid"):
         assert must in page
     assert "{{contact}}" not in web_mod.render_privacy("")
-    assert 'href="/privacy"' in web_mod.render_index()
+    assert 'href="/privacy"' in web_mod.render_index() and 'href="/terms"' in web_mod.render_index()
+    terms = web_mod.render_privacy("owner@example.com", name="terms.html")
+    assert "{{contact}}" not in terms and "Terms of service" in terms and "Delete my account" in terms
     assert "google-site-verification" not in web_mod.render_index()
     monkeypatch.setattr(web_mod, "SITE_VERIFICATION", 'abc"123')
     assert '<meta name="google-site-verification" content="abc&quot;123">' in web_mod.render_index()

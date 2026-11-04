@@ -18,6 +18,7 @@ Routes:
     GET  /api/playtest   the latest playtest reports and browser errors
                          (playtest.py; same token as /metrics)
     GET  /privacy        what the site keeps about people
+    GET  /terms          the terms of use
     /auth/..., /api/me   signing in with Google and your account, when
                          GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set
                          (auth.py, accounts.py)
@@ -134,10 +135,10 @@ def render_index(version=VERSION):
     return page.replace("<head>", head, 1)
 
 
-def render_privacy(contact=None):
-    """privacy.html, with how to reach whoever runs the server."""
+def render_privacy(contact=None, name="privacy.html"):
+    """privacy.html (or terms.html), with how to reach whoever runs the server."""
     contact = CONTACT if contact is None else contact
-    with open(os.path.join(STATIC, "privacy.html"), encoding="utf-8") as f:
+    with open(os.path.join(STATIC, name), encoding="utf-8") as f:
         page = f.read()
     if contact:
         safe = html.escape(contact)
@@ -187,6 +188,7 @@ def _sender(ws):
 
 PAGE = web.AppKey("page", str)
 PRIVACY_PAGE = web.AppKey("privacy_page", str)
+TERMS_PAGE = web.AppKey("terms_page", str)
 
 
 async def index(request):
@@ -428,6 +430,11 @@ async def privacy(request):
                         headers={"Cache-Control": "no-cache"})
 
 
+async def terms(request):
+    return web.Response(text=request.app[TERMS_PAGE], content_type="text/html",
+                        headers={"Cache-Control": "no-cache"})
+
+
 def make_app(rooms=None, auth_config=None, accounts=None):
     """auth_config, accounts: for tests (normally from the environment:
     auth.Config)."""
@@ -440,6 +447,7 @@ def make_app(rooms=None, auth_config=None, accounts=None):
     app[SOCKETS] = set()  # open WebSockets, closed on shutdown
     app[PAGE] = render_index()
     app[PRIVACY_PAGE] = render_privacy()
+    app[TERMS_PAGE] = render_privacy(name="terms.html")
     app.router.add_get("/", index)
     app.router.add_get("/r/{code}", index)
     app.router.add_post("/api/rooms", create_room)
@@ -451,6 +459,7 @@ def make_app(rooms=None, auth_config=None, accounts=None):
     app.router.add_get("/metrics", metrics_page)
     app.router.add_get("/api/playtest", playtest_page)
     app.router.add_get("/privacy", privacy)
+    app.router.add_get("/terms", terms)
     accounts = auth.setup(app, auth_config, accounts)
     if accounts is not None and app[ROOMS].recorder is None:
         app[ROOMS].recorder = accounts.record  # signed-in players' match history
