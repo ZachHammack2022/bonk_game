@@ -1,10 +1,10 @@
 """Accounts (accounts.py) and signing in with Google (auth.py), issue #38.
 
 Google's side is faked: auth.exchange_code is the only part that talks to
-Google, and the tests replace it with claims like Google's.
+Google. Most tests replace it with claims like Google's; one runs it against
+a pretend Google (an httpx2 transport) with ID tokens signed by a test key.
 """
 import asyncio
-import base64
 import json
 import time
 from urllib.parse import parse_qs, urlparse
@@ -12,6 +12,10 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 aiohttp = pytest.importorskip("aiohttp")  # (the web server's packages; the training CI job has none)
+httpx = pytest.importorskip("httpx2")
+from joserfc import jwt  # noqa: E402
+from joserfc.jwk import KeySet, RSAKey  # noqa: E402
+
 from bonk_game.server import auth, profiles  # noqa: E402
 from bonk_game.server.accounts import SESSION_DAYS, Accounts  # noqa: E402
 from bonk_game.server.web import ROOMS as ROOMS_KEY  # noqa: E402
@@ -102,17 +106,69 @@ def test_matches_are_recorded_and_deleting_removes_everything():
     assert a.user(u["id"]) is None and a.profile(u["id"]) is None and a.session_user(t) is None
 
 
-def test_google_claims_are_checked():
-    assert auth.check_claims(claims(), CLIENT) == ("g-1", "sam@example.com", "Sam")
-    assert auth.check_claims(claims(aud="someone-else"), CLIENT) is None
-    assert auth.check_claims(claims(iss="https://evil.example"), CLIENT) is None
-    assert auth.check_claims(claims(exp=time.time() - 1), CLIENT) is None
-    assert auth.check_claims(claims(sub=""), CLIENT) is None
-    assert auth.check_claims(claims(email_verified=False), CLIENT)[1] == ""
-    assert auth.check_claims(None, CLIENT) is None
-    token = "x." + base64.urlsafe_b64encode(json.dumps(claims()).encode()).decode().rstrip("=") + ".sig"
-    assert auth._decode_jwt_claims(token)["sub"] == "g-1"
-    assert auth._decode_jwt_claims("garbage") is None
+GOOGLE_KEY = RSAKey.generate_key(2048, parameters={"kid": "google-1"})
+PUBLIC_KEYS = KeySet([GOOGLE_KEY]).as_dict(private=False)
+
+
+def id_token(key=GOOGLE_KEY, kid="google-1", **extra):
+    """An ID token like Google's, signed with `key`."""
+    body = {"iat": int(time.time()), "nonce": "n-1", **claims(**extra)}
+    body["exp"] = int(body["exp"])
+    return jwt.encode({"alg": "RS256", "kid": kid}, body, key)
+
+
+def test_google_id_tokens_are_checked():
+    keys = KeySet.import_key_set(PUBLIC_KEYS)
+    check = lambda token, nonce="n-1": auth.verify_id_token(token, keys, CLIENT, nonce)  # noqa: E731
+    assert auth.signed_in_as(check(id_token())) == ("g-1", "sam@example.com", "Sam")
+    assert check(id_token(aud="someone-else")) is None
+    assert check(id_token(iss="https://evil.example")) is None
+    assert check(id_token(exp=int(time.time()) - 3600)) is None
+    assert check(id_token(), nonce="another sign-in") is None
+    # Signed by someone other than Google, or not a token at all
+    assert check(id_token(key=RSAKey.generate_key(2048, parameters={"kid": "google-1"}))) is None
+    assert check("garbage") is None
+    assert auth.signed_in_as(check(id_token(sub=""))) is None
+    assert auth.signed_in_as(check(id_token(email_verified=False)))[1] == ""
+    assert auth.signed_in_as(None) is None
+
+
+def pretend_google(seen, kid="google-1", key=GOOGLE_KEY):
+    """An httpx2 transport that answers like Google's token endpoint and key list."""
+    def handler(request):
+        if request.url == auth.GOOGLE_TOKEN_URL:
+            seen["form"] = parse_qs(request.content.decode())
+            if seen["form"].get("code") != ["good"]:
+                return httpx.Response(400, json={"error": "invalid_grant"})
+            return httpx.Response(200, json={"access_token": "a", "token_type": "Bearer", "expires_in": 3600,
+                                             "id_token": id_token(key=key, kid=kid)})
+        if request.url == auth.GOOGLE_KEYS_URL:
+            seen["keys"] = seen.get("keys", 0) + 1
+            return httpx.Response(200, json=PUBLIC_KEYS, headers={"Cache-Control": "public, max-age=600"})
+        return httpx.Response(404)
+    return httpx.MockTransport(handler)
+
+
+def test_the_code_is_swapped_for_a_checked_id_token(monkeypatch):
+    monkeypatch.setattr(auth, "GOOGLE_KEYS", auth.GoogleKeys())
+    cfg = auth.Config(client_id=CLIENT, client_secret="secret", db=":memory:")
+    seen = {}
+    claims_ = run(auth.exchange_code(cfg, "good", "https://bonk.example/auth/google/callback", "v" * 48, "n-1",
+                                     transport=pretend_google(seen)))
+    assert auth.signed_in_as(claims_) == ("g-1", "sam@example.com", "Sam")
+    # PKCE: the verifier goes with the code, and so do our client's details
+    assert seen["form"]["code_verifier"] == ["v" * 48]
+    assert seen["form"]["redirect_uri"] == ["https://bonk.example/auth/google/callback"]
+    assert seen["keys"] == 1
+    # A code Google won't swap, or a token for another sign-in, signs nobody in
+    assert run(auth.exchange_code(cfg, "bad", "https://x/cb", "v" * 48, "n-1", transport=pretend_google(seen))) is None
+    assert run(auth.exchange_code(cfg, "good", "https://x/cb", "v" * 48, "n-2", transport=pretend_google(seen))) is None
+    # Google's keys are kept, and fetched again for a key we haven't seen
+    assert seen["keys"] == 1
+    other = RSAKey.generate_key(2048, parameters={"kid": "google-2"})
+    assert run(auth.exchange_code(cfg, "good", "https://x/cb", "v" * 48, "n-1",
+                                  transport=pretend_google(seen, "google-2", other))) is None
+    assert seen["keys"] == 2
 
 
 def test_only_pages_on_this_site_are_come_back_to():
@@ -150,8 +206,8 @@ def test_sign_in_play_and_delete(monkeypatch):
     accounts = Accounts(":memory:")
     seen = {}
 
-    async def fake_exchange(cfg, code, redirect_uri, verifier):
-        seen.update(code=code, redirect_uri=redirect_uri, verifier=verifier)
+    async def fake_exchange(cfg, code, redirect_uri, verifier, nonce):
+        seen.update(code=code, redirect_uri=redirect_uri, verifier=verifier, nonce=nonce)
         return claims() if code == "good" else None
 
     monkeypatch.setattr(auth, "exchange_code", fake_exchange)
@@ -170,6 +226,7 @@ def test_sign_in_play_and_delete(monkeypatch):
             assert r.status == 302
             q = parse_qs(urlparse(r.headers["Location"]).query)
             assert q["client_id"] == [CLIENT] and q["code_challenge_method"] == ["S256"]
+            assert q["code_challenge"][0] and q["nonce"][0] and q["scope"] == ["openid email profile"]
             assert q["redirect_uri"] == [site + "/auth/google/callback"]
             state = q["state"][0]
 
@@ -187,7 +244,7 @@ def test_sign_in_play_and_delete(monkeypatch):
             state = parse_qs(urlparse(r.headers["Location"]).query)["state"][0]
             r = await client.get(f"/auth/google/callback?state={state}&code=good", allow_redirects=False)
             assert r.status == 302 and r.headers["Location"] == "/r/ABCD"
-            assert seen["verifier"] and seen["redirect_uri"] == site + "/auth/google/callback"
+            assert seen["verifier"] and seen["nonce"] and seen["redirect_uri"] == site + "/auth/google/callback"
             cookie = r.cookies[auth.SESSION_COOKIE]
             assert cookie["httponly"] and cookie["samesite"] == "Lax"
             me = await (await client.get("/api/me")).json()

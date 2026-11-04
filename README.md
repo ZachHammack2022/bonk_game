@@ -1,6 +1,6 @@
 [![tests](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml/badge.svg)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml)
 
-bonk is a tiny physics brawler, inspired by bonk.io, that you play in the browser with friends: 2 to 10 balls on a map, everyone trying to knock everyone else off. A Python server runs every match. The same physics is a Gymnasium env for training AI agents with Stable Baselines 3, and trained agents can join online matches alongside the built-in bots.
+bonk is a tiny physics brawler, inspired by bonk.io, that you play in the browser with friends: 2 to 10 balls on a map, everyone trying to knock everyone else off. A Python server runs every match, with [Box2D](https://box2d.org) doing the physics; the browser runs the same engine ([planck.js](https://piqnt.com/planck.js/), its JavaScript port) to predict your ball. The same physics is a Gymnasium env for training AI agents with Stable Baselines 3, and trained agents can join online matches alongside the built-in bots.
 
 ## Play online with friends
 The server runs every match; your browser just sends your keys and draws what it gets back, so friends only need a link.
@@ -44,7 +44,7 @@ Going **heavy** makes you 5x heavier for a moment, so you hit harder and get kno
 On a gamepad, Y waves, Start opens settings, and A votes to play again on the results screen. Any controller the browser knows (Xbox, PlayStation, Switch Pro and most others) works; press a button on it once the page is open.
 
 - On phones and tablets, touch anywhere on the left half of the screen and drag to move: the joystick starts where your thumb lands, and pushing up jumps. Touch anywhere on the right half to go heavy. Both are see-through, over the game. M mutes.
-- Your own ball reacts as soon as you press a key: the browser predicts where the server will put it and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it on a worse connection, add `?net=mobile` to the page address (see [Simulating bad networks](#simulating-bad-networks)); `?predict=0` turns prediction off for comparison.
+- Your own ball reacts as soon as you press a key: the browser predicts where the server will put it, running the same physics as the server (Box2D, as planck.js: `static/physics.js`) on the whole level, moving parts and the other balls included, and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it on a worse connection, add `?net=mobile` to the page address (see [Simulating bad networks](#simulating-bad-networks)); `?predict=0` turns prediction off for comparison.
 - If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
 - People who join during a match watch it and play in the next one.
 - **Your ball:** pick a favourite colour and a pattern (stripes, dots, eyes and more) with **Customize** on the home page, or by clicking your ball in the lobby. They're saved in your browser (no sign-up needed) and come with you into every room; you get your colour whenever it's free. On your own screen your ball is always your colour: anyone else close to it is shown in a different one (bots get the matching name). Customize also has **trails, hats and knockout effects**. Nearly everything is for everyone, guests included. A few things are for signed-in players: **any colour** for your ball (a colour picker next to the palette; you get it unless it looks too much like someone else's, and not in Teams, where colours show your side), the heart, checker and galaxy patterns, the sparkle trail, the cap and the confetti knockout. Signing in is all it takes: nothing is earned by playing or by winning awards. Guests see those with a lock. The list is in `bonk_game/server/cosmetics.py`, and the server checks every pick.
@@ -91,7 +91,7 @@ The server limits how much any one visitor can use. Each limit can be changed wi
 Behind a proxy (Fly, Render, nginx), set `BONK_TRUST_PROXY=1` so the limits see each visitor's real IP rather than the proxy's.
 
 ### Accounts (sign in with Google)
-Optional: without these settings the server runs with guests only. With them, people can sign in with Google (`auth.py`), and accounts, sign-ins and profiles are kept in a SQLite file (`accounts.py`). Nothing else is needed: no passwords, no new Python packages.
+Optional: without these settings the server runs with guests only. With them, people can sign in with Google (`auth.py`), and accounts, sign-ins and profiles are kept in a SQLite file (`accounts.py`). Nothing else is needed: no passwords. The sign-in itself (OpenID Connect with PKCE and a nonce) is [Authlib](https://authlib.org)'s OAuth client, and Google's ID token is checked against Google's published signing keys with joserfc (Authlib's JOSE library).
 
 | Variable | | |
 |---|---|---|
@@ -150,7 +150,7 @@ Or set each part yourself: `?lag=150&jitter=40&stall=400&stall_every=10` (`?seed
 
 - **Drawn behind**: the browser draws the match a little in the past, blending between states, so motion is smooth although states come only 30 times a second. It used to be a fixed 50 ms; now it's measured for each connection (`static/clock.js`): the moment by which 95 % of the last 10 s of states had arrived, plus a tick. A steady connection draws closer behind than before; a jittery one waits as long as it needs (up to 250 ms more), and the clock speeds up or slows down by at most 6 % to get there, so nothing jumps.
 - **Frames frozen** is how often everything stood still because the next state hadn't arrived. **Frames guessed** is how often a state was late and the browser carried on along the way things were moving instead (for up to 0.1 s), which is hard to notice. Before, a fixed 50 ms wasn't enough for jitter and stalls, and on jittery connections the match sometimes ran backwards for a frame.
-- **Corrections** are how far your own ball had to be moved when the server's answer came back (small ones fade in over 0.1 s). With no lag at all, they're bots bumping you, which your browser can't predict; more lag means each bump is found out later and is bigger. (They vary a lot from run to run: the bots don't play the same way twice.)
+- **Corrections** are how far your own ball had to be moved when the server's answer came back (small ones fade in over 0.1 s). With no lag at all, they're bots bumping you in ways your browser didn't see coming; more lag means each bump is found out later and is bigger. (They vary a lot from run to run: the bots don't play the same way twice.) The table is from before the browser ran Box2D too (planck.js); it now predicts the other balls as well, moving on as they were. Replaying recorded bot matches through the prediction (Floating Platform and Grand Stage, 3 bots), its error after 10 steps of lag went from about 7.5 px to under 5 on average, and it was more than 20 px off a third as often (`tests/test_predict.py` checks it against the server).
 
 ### How big a server?
 `python -m bonk_game.server.load_test --sockets` runs more and more rooms of 10 at once over real WebSockets until the server can't keep up, and prints what it used. The "browsers" ask for compression, as real ones do. Below: a 4-core cloud VM (the server is one process, so it uses one core), bots playing all 10 balls on Grand Stage.
@@ -166,6 +166,7 @@ Or set each part yourself: `?lag=150&jitter=40&stall=400&stall_every=10` (`?seed
 Sending the whole state every tick instead (`--full`, how it worked before) takes about 214 KB/s of JSON per room, which compresses to 25 KB/s on the wire. With people instead of bots (`--players people`), 30 rooms use 70% of the core.
 
 What that means:
+- **The physics moved to Box2D after this table was made.** Side by side on one (slower) machine, the old physics and Box2D kept up with the same number of rooms (20 of 10, not 30), with Box2D using about 10% more CPU per room (48% against 43% of a core for 10 rooms).
 - **CPU is what runs out first.** A room of 10 uses about 3% of a core. About a quarter of that is compressing messages, once for each connection. A small shared-CPU machine (1 vCPU, slower than this one: plan on half) runs about 10 full rooms, 100 people. Private rooms with friends are mostly 2-6 people, which costs less.
 - **Bandwidth is cheap.** A player gets about 2 KB/s (17 kbit/s), so a full room sends 0.17 Mbit/s, and a 6-person hour is about 45 MB.
 - `BONK_WS_COMPRESS=0` turns compression off: about 25% less CPU, but nearly 3 times the bandwidth (0.47 Mbit/s per full room).
@@ -187,7 +188,7 @@ Each map says how many players it's for (below), and the lobby holds to it. Bots
 
 **Classic**: a box with a bouncy floor and ceiling and deadly side walls. "Up" is a thrust, so you can fly. Push someone into a wall to score: the point goes to whoever last hit them (with two players, always the other player), and only the player who died respawns. First to 100 wins.
 
-The other maps float in open space, bonk-style. There are no walls: you die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top. You can't fly on them either: "up" is a small hop off whatever you're standing on, and held in the air it hovers, cancelling most of gravity but never all of it, so you float and fall slowly but can't climb (a tap hops ~30 px, a held jump ~120 px). Steering is gentle: it takes about a second to get up to speed, so you commit to a direction. Balls bounce off each other with 85% of the speed they hit at. These numbers were measured from a recording of bonk.io (`arena.OPEN_PUSH`, `arena.OPEN_HOVER`, `OpenMap.jump_speed`, `mechanics.PLAYER_BOUNCE`). Sinking Swing keeps the original big jump, since it's built around jumping into the swing. If you die you're out until the next round. The last ball standing scores and a new round starts; the first to 5 wins.
+The other maps float in open space, bonk-style. There are no walls: you die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top. You can't fly on them either: "up" is a small hop off whatever you're standing on, and held in the air it hovers, cancelling most of gravity but never all of it, so you float and fall slowly but can't climb (a tap hops ~30 px, a held jump ~120 px). Steering is gentle: it takes about a second to get up to speed, so you commit to a direction. Balls bounce off each other with 85% of the speed they hit at. These numbers were measured from a recording of bonk.io (`arena.OPEN_PUSH`, `arena.OPEN_HOVER`, `OpenMap.jump_speed`, `world.PLAYER_BOUNCE`). Sinking Swing keeps the original big jump, since it's built around jumping into the swing. If you die you're out until the next round. The last ball standing scores and a new round starts; the first to 5 wins.
 
 **Floating Platform**: one platform, nothing else. Knock your opponent off.
 
@@ -239,7 +240,7 @@ Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `ma
 | `slider` | `"travel": 140, "mass": 6, "rail": true, "pieces": [blocks, slopes, posts, bumpers that move together]` |
 
 `block`, `slope`, `post` and `bumper` also take these options:
-- `"bounce"` (0-1.5, default 0.3) and `"friction"` (0-1, default 0.04);
+- `"bounce"` (0-1.5, default 0.3) and `"friction"` (0-1, default 0.04: how much grip it has; a ball standing on it slows down over it, and a moving piece carries what's on it);
 - `"launch"`: a speed. Pads fire you out of their top face; bumpers fire you away from their centre, like pinball;
 - `"kill": true`;
 - `"color"`: one of `platform`, `post`, `pad`, `pit`, `wood`, `hazard`, `rail`, or `[r, g, b]`.
@@ -262,7 +263,7 @@ For things a file can't describe (like Sinking Swing's sinking floor), subclass 
 
 The old text menus are still available with "python3 main.py --terminal".
 
-To retrain from scratch, delete the map's agent folder (`agents` for Classic, `agents/<map>` for the others) and run `python3 main.py` again.
+To retrain from scratch, delete the map's agent folder (`agents` for Classic, `agents/<map>` for the others) and run `python3 main.py` again. Agents trained before the physics moved to Box2D still load and play, but they learned slightly different physics: retrain them for their best.
 
 ## How training works
 Every map is a [Gymnasium](https://gymnasium.farama.org/) env: `gymnasium.make("bonk_game/bonk-v0")` for Classic and `bonk_game/bonk-<map>-v0` for the others. `python -m bonk_game.envs.check_env` runs Stable Baselines 3's env checker on all of them.
@@ -296,11 +297,11 @@ node tests/web/e2e.js
 - `bonk_game/ui/`: the game window: screens and HUD (`app.py`), the visual style (`painter.py`, `theme.py`), sound effects (`sound.py`) and the built-in Bot (`bot.py`)
 - `bonk_game/envs/utils/arena.py`: arena size, action table and spawning shared by every env
 - `bonk_game/envs/utils/maps.py`: the maps
-- `bonk_game/envs/utils/bodies.py`: moving/bouncy blocks, the sliding platform and the swing
-- `bonk_game/envs/utils/mechanics.py`: classic collision physics and player-vs-player collisions
-- `bonk_game/envs/utils/stepping.py`: how a step moves: players and moving parts move in 4 substeps per 1/30 s step, collided in between (so fast balls don't pass through each other)
+- `bonk_game/envs/utils/world.py`: the physics: each map's Box2D world, and bonk's rules on top of it (grip, jumping off what you stand on, launch pads, the speed cap, what kills)
+- `bonk_game/envs/utils/bodies.py`: the pieces maps are made of (blocks, slopes, posts, bumpers) and the moving parts (the sliding platform on its rail, the swing on its rope, a sinking floor)
+- `bonk_game/envs/utils/stepping.py`: how a step moves: the world moves everything in 4 Box2D steps per 1/30 s step
 - `bonk_game/envs/training_env.py`: the gym env agents train on
 - `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
 - `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
 - `Dockerfile`, `fly.toml`, `deploy/fly.sh`: hosting the web server (on Fly.io, or anywhere that runs Docker)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), the lobby's rules: settings, seats, teams and colours (`lobby.py`), the name filter and player reports (`moderation.py`, and `static/js/people.js` for the game browser (public games, Quick match, New game), mute and report), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), playtest reports and their write-up (`playtest.py`, `playtest_report.py`, and `static/js/report.js`), checking a deployed server (`smoke.py`), the killcam (`static/js/replay.js`), profiles and match history (`profiles.py`, the same rules as `static/profile.js` in the browser), optional accounts and signing in with Google (`accounts.py`, `auth.py`, `static/js/account.js`, and `static/privacy.html`), pretending the network is worse (`static/netsim.js`, measured by `tests/web/network.js`), what moment of the match to draw (`static/clock.js`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `predict.js`, and the scripts in `js/`, listed at the top of `js/core.js`)
+- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), the lobby's rules: settings, seats, teams and colours (`lobby.py`), the name filter and player reports (`moderation.py`, and `static/js/people.js` for the game browser (public games, Quick match, New game), mute and report), logs and `/metrics` (`metrics.py`), the load test (`load_test.py`), playtest reports and their write-up (`playtest.py`, `playtest_report.py`, and `static/js/report.js`), checking a deployed server (`smoke.py`), the killcam (`static/js/replay.js`), profiles and match history (`profiles.py`, the same rules as `static/profile.js` in the browser), optional accounts and signing in with Google (`accounts.py`, `auth.py`, `static/js/account.js`, and `static/privacy.html`), pretending the network is worse (`static/netsim.js`, measured by `tests/web/network.js`), what moment of the match to draw (`static/clock.js`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `physics.js` (the browser's copy of the physics, on planck.js in `static/vendor/`: `npm run vendor` copies it there from `node_modules` after a version bump), and the scripts in `js/`, listed at the top of `js/core.js`)

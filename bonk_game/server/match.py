@@ -17,8 +17,7 @@ import random
 import numpy as np
 
 from bonk_game.envs.testing_env import TestEnv
-from bonk_game.envs.utils import arena, stepping
-from bonk_game.envs.utils.mechanics import BOUNCE
+from bonk_game.envs.utils import arena, stepping, world
 from bonk_game.envs.utils.controls import NO_BUTTONS, Buttons
 from bonk_game.server import modes, powerups
 from bonk_game.server.scene import level_shapes, player_motion, player_state
@@ -243,6 +242,7 @@ class Match:
             "players": [player_state(p) for p in env.players],
             "scores": self.mode.scores(),
             "level": level_shapes(env.map),
+            **self._parts(),
             "timer": None if not timer.enabled else round(timer.remaining, 1),
             "walls": None if timer.walls() is None else [round(w, 1) for w in timer.walls()],
             "t": round(timer.steps / TICK_HZ, 2),
@@ -251,6 +251,12 @@ class Match:
             **self.mode.extra_state(),
             **(self.powerups.state() if self.powerups else {}),
         }
+
+    def _parts(self):
+        """{"parts": [x, y, x speed, y speed] of each moving part} (the
+        sliding platform, the swing...), for the browser's physics."""
+        parts = self.env.map.world.part_states()
+        return {"parts": parts} if parts else {}
 
     def _held(self):
         """{"held": seconds each player has left of their respawn hold (0:
@@ -294,7 +300,8 @@ class Match:
                 "color_name": "Custom" if s.get("own_color") else theme.PLAYER_NAMES[self.colors[i]]}
 
     def physics(self):
-        """Constants the client needs to predict its own ball (predict.js)."""
+        """What the browser's copy of the physics needs (static/physics.js):
+        the ball's settings, the level as Box2D bodies, and Box2D's own."""
         p = self.env.players[0]
         return {
             "force": p.push,  # sideways and down
@@ -307,14 +314,20 @@ class Match:
             "min_m": p.min_m,
             "max_m": p.max_m,
             "mass_decay": MASS_DECAY,
-            "substeps": stepping.SUBSTEPS,  # moves per step, collided in between
+            "substeps": stepping.SUBSTEPS,  # Box2D steps per physics step
             # How fast the world runs: scales moves, gravity, pushes and heavy
             "time_scale": self.env.time_scale,
-            # Bounce off surfaces that don't say (Classic's floor and ceiling)
-            "bounce": abs(BOUNCE) if p.can_fly else 0.3,
             "tick_ms": 1000 / TICK_HZ,
             # Classic never lets you sink below its floor (player.clamp_bottom)
             "clamp_bottom": p.bottom if p.clamp_bottom else None,
+            "box2d": {
+                "ppm": world.PPM, "step_seconds": world.STEP_SECONDS, "base_gravity": world.GRAVITY,
+                "friction_scale": world.FRICTION_SCALE, "grip": world.GRIP, "lift_off": world.LIFT_OFF,
+                "player_bounce": world.PLAYER_BOUNCE,
+                "velocity_iterations": world.VELOCITY_ITERATIONS,
+                "position_iterations": world.POSITION_ITERATIONS,
+            },
+            "world": self.env.map.world.describe(),
         }
 
     def results(self):

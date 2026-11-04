@@ -109,6 +109,16 @@ jobs:
       - name: Install test dependencies
         run: pip install -r requirements-test.txt -c constraints.txt
 
+      # planck.js, so the tests can check the browser's copy of the physics
+      # against the server's (tests/test_predict.py)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install planck.js
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Run tests
         run: python -m pytest -q
 

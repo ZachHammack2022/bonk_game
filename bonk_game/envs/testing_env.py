@@ -5,7 +5,6 @@ import numpy as np
 from bonk_game.envs.utils import arena, stepping
 from bonk_game.envs.utils.controls import apply_input
 from bonk_game.envs.utils.maps import DEFAULT_MAP, make_map
-from bonk_game.envs.utils.mechanics import player_collision
 from bonk_game.envs.utils.player import new_rng
 from bonk_game.envs.utils.timer import RoundTimer
 
@@ -156,7 +155,8 @@ class TestEnv():
         return None
 
     def check_collisions(self):
-        """Collide players with the level and each other, and handle deaths.
+        """Handle deaths: anyone the level knocked out during the last step
+        (map.killed) or the sudden-death walls caught.
 
         Returns (deaths, points, round_over): deaths is [(index, x, y)] of
         players who died this step, where they died; points is the indexes
@@ -169,8 +169,7 @@ class TestEnv():
         # Held players (just respawned) can't die yet
         living = [i for i in living if not self.players[i].held]
         walled = [i for i in living if self.timer.kills(self.players[i])]
-        dead = [i for i in living if self.map.collide(self.players[i]) or i in walled
-                or self.players[i].doomed]
+        dead = [i for i in living if self.map.killed(self.players[i]) or i in walled]
         for i in living:
             self.players[i].doomed = False
         deaths = [(i, self.players[i].x, self.players[i].y) for i in dead]
@@ -205,7 +204,6 @@ class TestEnv():
                 self._inside_walls(self.players[i])
                 self.players[i].held = self.respawn_hold
                 self.last_hit[i] = None
-        self._collide_players()
         return deaths, points, False
 
     def _inside_walls(self, p):
@@ -214,16 +212,6 @@ class TestEnv():
         w = self.timer.walls()
         if w is not None and w[1] - w[0] > 2 * p.r + 2:
             p.x = min(max(p.x, w[0] + p.r + 1), w[1] - p.r - 1)
-
-    def _collide_players(self):
-        living = [i for i, p in enumerate(self.players) if p.alive and not p.held]
-        for k, i in enumerate(living):
-            for j in living[k + 1:]:
-                a, b = self.players[i], self.players[j]
-                if math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r:
-                    self.last_hit[i] = (j, self.steps)
-                    self.last_hit[j] = (i, self.steps)
-                    player_collision(a, b)
 
     def new_round(self):
         self.map.reset()
@@ -262,7 +250,7 @@ class TestEnv():
         for p, a, h in zip(self.players, actions, held):
             if p.alive and not h:
                 apply_input(p, a)
-        self.map.step(move=False)  # (stepping.advance moves its parts)
+        self.map.step(move=False)  # (stepping.advance moves everything)
         self.timer.step()
         self.steps += 1
         deaths, points, round_over = self.check_collisions()

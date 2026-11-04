@@ -52,10 +52,10 @@ class player():
         self.jump_speed = 0
         self.push = 2  # sideways and down push from an input (map.push_force)
         self.hover = 0.0  # jump maps: share of gravity "up" cancels in the air
-        self.gravity = 1.5  # added to the vertical speed every step
+        self.gravity = 1.5  # added to the vertical speed every step (world.GRAVITY)
         # How much of a physics step passes each tick (stepping.TIME_SCALE):
-        # scales pushes from inputs and heavy wearing off, as the env scales
-        # movement and gravity (stepping.advance)
+        # scales pushes from inputs and heavy wearing off, as the world scales
+        # movement and gravity (world.World.step)
         self.time_scale = 1.0
         # Power-up multipliers on top of the values above (1 = no effect)
         self.force_mult = 1.0    # push from inputs
@@ -67,21 +67,6 @@ class player():
         self.jump_used = False   # jumped since last standing on something
         self.reset()
         self.normalize_obs()
-
-    def update_velocities(self, dt=1.0):
-        """Gravity for `dt` of a step, then the speed cap."""
-        self.y_v += self.gravity * self.gravity_mult * dt
-        cap = self.v_range * self.speed_mult
-        self.x_v = max(-cap, min(cap, self.x_v))
-        self.y_v = max(-cap, min(cap, self.y_v))
-
-
-    def update_position(self, dt=1.0):
-
-        self.x += self.x_v * dt
-        self.y += self.y_v * dt
-        if self.clamp_bottom:
-            self.y = min(self.bottom-self.r,self.y)
 
     def update_mass(self):
         if self.m > self.min_m:
@@ -104,29 +89,19 @@ class player():
         # Clip so a player knocked briefly past a wall still fits the obs space
         self._obs = np.clip(np.array([x,y,x_v,y_v,self.alive,m]),-1,1)
 
-    def update(self)-> None:
-        """One whole step in one go (no substeps): begin_step, integrate,
-        end_step. The envs use stepping.advance() instead, which splits the
-        movement into substeps with collisions in between."""
-        self.begin_step()
-        self.integrate(1.0)
-        self.end_step()
-
     def begin_step(self):
-        """Once a step, after the step's first collisions: jumping (which
-        needs to know whether we're standing on something)."""
+        """Once a step, before moving: jumping (which needs to know whether
+        we're standing on something: `grounded`, set by the physics)."""
         if not self.can_fly:
             self.update_jump()
 
-    def integrate(self, dt):
-        """Move for `dt` of a step (a substep): gravity, the speed cap, and
-        the position."""
-        self.update_velocities(dt)
-        self.update_position(dt)
-
     def end_step(self):
-        """Once a step, at the end: heavy wears off."""
+        """Once a step, at the end: heavy wears off, and a remembered "up"
+        press counts down (it lasts the whole step: landing partway through
+        one fires it, world.World.step)."""
         self.update_mass()
+        if self.jump_buffer:
+            self.jump_buffer -= 1
 
 
     def reset(self)->None:
@@ -147,8 +122,8 @@ class player():
         self.jump_buffer = 0
         self.air_steps = COYOTE_TIME + 1
         self.jump_used = False
-        # Touched something deadly between collision checks (a substep):
-        # dies at the start of the next step (see stepping.advance)
+        # Touched something deadly during a step: dies at the start of the
+        # next one (see world.World.step)
         self.doomed = False
 
     def get_obs(self):
@@ -197,7 +172,6 @@ class player():
             self.air_steps += 1
         if self.jump_buffer:
             self.try_jump()
-            self.jump_buffer = max(0, self.jump_buffer - 1)
 
     def move_down(self,force):
         self.y_v += force*self.force_mult*self.time_scale/self.m

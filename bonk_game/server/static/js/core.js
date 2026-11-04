@@ -14,7 +14,7 @@
 //   stats.js     your stats: totals, awards and recent matches
 //   input.js     keyboard, touch and emotes
 //   effects.js   sound, particles, the knockout feed, game events
-//   net.js       network timing and predicting your own ball (predict.js)
+//   net.js       network timing and predicting your own ball (physics.js, with planck.js)
 //   replay.js    the killcam
 //   draw.js      drawing the match
 //   looks.js     trails, hats, knockout effects, and how balls look on your screen

@@ -3,6 +3,8 @@
 numpy>=1.24
 pygame>=2.1
 gymnasium>=0.29
+# the physics
+Box2D>=2.3.10
 stable-baselines3>=2.3
 sb3-contrib>=2.3
 # progress bars during training

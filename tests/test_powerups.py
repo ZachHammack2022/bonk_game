@@ -49,6 +49,12 @@ def test_never_more_than_a_few_at_once():
     assert len(ups.pickups) == pu.MAX_ON_MAP
 
 
+def in_the_air(env):
+    """Both balls well apart, high above the level."""
+    for k, p in enumerate(env.players):
+        p.x, p.y, p.x_v, p.y_v = 200 + 200 * k, 60, 0, 0
+
+
 def test_speed_pushes_harder():
     env, ups = setup()
     give(env, ups, 0, "speed")
@@ -57,9 +63,9 @@ def test_speed_pushes_harder():
     a.move_right(2)
     b.move_right(2)
     assert a.x_v == pytest.approx(b.x_v * pu.KINDS["speed"]["force"])
+    in_the_air(env)
     a.x_v = b.x_v = 100
-    a.update_velocities()
-    b.update_velocities()
+    env.map.world.step([a, b])
     assert a.x_v > b.x_v  # higher top speed
 
 
@@ -67,9 +73,9 @@ def test_float_and_iron():
     env, ups = setup()
     give(env, ups, 0, "float")
     a, b = env.players
+    in_the_air(env)
     a.y_v = b.y_v = 0
-    a.update_velocities()
-    b.update_velocities()
+    env.map.world.step([a, b])
     assert 0 < a.y_v < b.y_v
     give(env, ups, 1, "iron")
     p = env.players[1]

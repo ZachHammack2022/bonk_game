@@ -3,6 +3,7 @@ import pytest
 
 from bonk_game.envs.utils.maps import make_map
 from bonk_game.envs.utils.player import COYOTE_TIME, JUMP_BUFFER
+from physics_helpers import tick
 
 
 def setup(map_name="platform"):
@@ -15,9 +16,7 @@ def setup(map_name="platform"):
 def step(m, p, up=False):
     if up:
         p.move_up(2)
-    m.step()
-    m.collide(p)
-    p.update()
+    tick(m, [p])
 
 
 def settle(m, p):
@@ -71,8 +70,11 @@ def test_sideways_pushes_are_gentle():
     for _ in range(30):
         p.move_right(p.push)
         step(m, p)
-    # A second of running from a stand covers ~200 px, at ~13 px a step
-    assert 150 < p.x - x0 < 260
+    # Grip on the ground holds a run to ~2-3 px a step: a second of running
+    # from a stand covers ~60 px here (at full speed; ~40 px at the game's
+    # default speed), where Classic's full-strength push would go far further
+    assert 40 < p.x - x0 < 90
+    assert 1.5 < p.x_v < 3.5
 
 
 @pytest.mark.parametrize("early", range(1, JUMP_BUFFER + 1))
@@ -169,13 +171,15 @@ def test_agent_actions_use_the_same_jump():
 
 
 def test_players_bounce_off_each_other_a_little_softer_than_elastic():
-    from bonk_game.envs.utils.mechanics import PLAYER_BOUNCE, player_collision
+    from bonk_game.envs.utils.world import PLAYER_BOUNCE, World
     m, a = setup()
     b = m.make_players()[1]
     a.x, a.y, a.x_v, a.y_v = 300, 200, 4, 0
-    b.x, b.y, b.x_v, b.y_v = 338, 200, 0, 0
-    player_collision(a, b)
+    b.x, b.y, b.x_v, b.y_v = 341, 200, 0, 0
+    for p in (a, b):
+        p.gravity = 0
+    World().step([a, b])
     # Separating speed is PLAYER_BOUNCE of the closing speed; momentum kept
-    assert b.x_v - a.x_v == pytest.approx(PLAYER_BOUNCE * 4)
-    assert a.x_v + b.x_v == pytest.approx(4)
+    assert b.x_v - a.x_v == pytest.approx(PLAYER_BOUNCE * 4, abs=0.01)
+    assert a.x_v + b.x_v == pytest.approx(4, abs=0.01)
     assert 0.7 <= PLAYER_BOUNCE < 1

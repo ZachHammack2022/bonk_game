@@ -3,4 +3,10 @@
 # agents in ./agents play online.
 numpy>=1.24
 gymnasium>=0.29
+# the physics (Box2D)
+Box2D>=2.3.10
 aiohttp>=3.9
+# signing in with Google: OAuth and ID tokens (Authlib, and httpx2, the
+# HTTP client its OAuth client uses)
+authlib>=1.9
+httpx2>=2.13

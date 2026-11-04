@@ -3,4 +3,7 @@ pytest
 numpy
 pygame
 gymnasium
+Box2D
 aiohttp
+authlib
+httpx2

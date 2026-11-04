@@ -90,3 +90,6 @@ node_modules/
 # Accounts database (BONK_DB)
 bonk.db
 bonk.db-*
+
+# planck.js, gzipped for browsers that take it (npm run vendor makes it)
+!bonk_game/server/static/vendor/*.gz

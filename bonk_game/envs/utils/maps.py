@@ -8,9 +8,9 @@ It is automatically available in the main menu, in `main.py --train`, and as the
 import numpy as np
 
 from bonk_game.envs.utils import arena
-from bonk_game.envs.utils.bodies import Block, OrientedBlock, SlidingPlatform, Swing, collide_block
-from bonk_game.envs.utils.mechanics import env_collision, handle_env_collision
+from bonk_game.envs.utils.bodies import Block, MovingBlocks, OrientedBlock, SlidingPlatform, Swing
 from bonk_game.envs.utils.player import new_rng, player
+from bonk_game.envs.utils.world import World
 from bonk_game.ui import theme
 
 
@@ -89,22 +89,39 @@ class Map:
             p.reset()
             p.x, p.y = x, y
 
+    _world = None
+
     def reset(self):
         """Put any moving parts back where they start."""
+        self._world = None
+
+    def pieces(self):
+        """(static pieces, moving parts) that make up the level's physics."""
+        raise NotImplementedError
+
+    @property
+    def world(self):
+        """The level's Box2D world (world.py), made afresh after a reset."""
+        if self._world is None:
+            self._world = World(*self.pieces())
+        return self._world
 
     def step(self, move=True):
-        """A new step (before collisions). move: also move the moving parts
-        the whole step now. The envs pass False and move them in substeps,
-        alongside the players (move(), from stepping.advance)."""
+        """A new step. move: also move the moving parts the whole step now,
+        with no players (for tools and tests). The envs pass False and move
+        everything together (stepping.advance)."""
         if move:
             self.move(1.0)
 
     def move(self, dt):
-        """Move the moving parts for `dt` of a step."""
+        """Move the moving parts (and nobody else) for `dt` of a step."""
+        self.world.step((), time_scale=dt)
 
-    def collide(self, p):
-        """Collide a player with the level. Return True if it killed them."""
-        raise NotImplementedError
+    def killed(self, p):
+        """Has the level knocked this player out? True if they touched
+        something deadly during the last step (`doomed`) or are touching one
+        now (put there by hand), or (on open maps) left the play area."""
+        return bool(p.doomed) or self.world.deadly(p)
 
     def extra_obs(self):
         return np.zeros(0)
@@ -135,13 +152,8 @@ class ClassicMap(Map):
     def __init__(self):
         self.platforms = arena.make_platforms()
 
-    def collide(self, p):
-        for obj in self.platforms:
-            if env_collision(p, obj):
-                if obj.kill:
-                    return True
-                handle_env_collision(p, obj)
-        return False
+    def pieces(self):
+        return self.platforms, []
 
     def render(self, painter):
         for obj in self.platforms:
@@ -160,8 +172,8 @@ class OpenMap(Map):
     gives the other player a point and restarts the round.
 
     Subclasses fill in `self.blocks` (static Blocks) and/or `self.bodies`
-    (moving things like a Swing or SlidingPlatform, which need step(),
-    collide(p) and render(painter)).
+    (moving parts from bodies.py, like a Swing or SlidingPlatform); the
+    map's Box2D world (world.py) is made from them after each reset.
     """
 
     KILL_TOP = -120  # "way too high": well above the top of the screen
@@ -188,15 +200,15 @@ class OpenMap(Map):
         self.reset()
 
     def reset(self):
+        super().reset()
         self.steps = 0
+
+    def pieces(self):
+        return self.blocks, self.bodies
 
     def step(self, move=True):
         self.steps += 1
         super().step(move)
-
-    def move(self, dt):
-        for body in self.bodies:
-            body.step(dt)
 
     def out_of_bounds(self, p):
         return (p.y - p.r > self.height
@@ -204,14 +216,8 @@ class OpenMap(Map):
                 or p.x - p.r > self.width
                 or p.y < self.KILL_TOP)
 
-    def collide(self, p):
-        p.grounded = False
-        killed = False
-        for block in self.blocks:
-            killed |= collide_block(p, block)
-        for body in self.bodies:
-            killed |= bool(body.collide(p))
-        return killed or self.out_of_bounds(p)
+    def killed(self, p):
+        return super().killed(p) or self.out_of_bounds(p)
 
     def render(self, painter):
         painter.danger_edges()
@@ -363,20 +369,25 @@ class SwingMap(OpenMap):
     def floor(self):
         return self.blocks
 
+    @property
+    def sink(self):
+        """How far the floor has dropped."""
+        return self.sinking.oy
+
     def reset(self):
         super().reset()
-        self.sink = 0.0  # how far the floor has dropped
         self.blocks = self._build_floor()
+        # The floor (pit and pad included) moves as one, at a speed set each step
+        self.sinking = MovingBlocks(self.blocks)
         self.swing.reset()
         self.bodies = [self.swing]
 
-    def move(self, dt):
-        super().move(dt)
-        speed = self.SINK_SPEED if self.steps > self.SINK_DELAY else 0.0
-        self.sink += speed * dt
-        for block in self.blocks:
-            block.vy = speed
-            block.move(0, speed * dt)
+    def pieces(self):
+        return [], [self.swing, self.sinking]
+
+    def step(self, move=True):
+        self.sinking.vy = self.SINK_SPEED if self.steps >= self.SINK_DELAY else 0.0
+        super().step(move)
 
     def extra_obs(self):
         depth = min(self.sink / (self.height - self.FLOOR_Y + self.PIT_DEPTH), 1.0)
