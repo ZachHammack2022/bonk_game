@@ -37,8 +37,11 @@ const PALETTE = [
   ["Red", "#ff6b6b"], ["Blue", "#4dabf7"], ["Yellow", "#ffd43b"], ["Purple", "#b197fc"], ["Orange", "#ff922b"],
   ["Green", "#40c057"], ["Pink", "#faa2c1"], ["Cyan", "#3bc9db"], ["White", "#f1f3f5"], ["Brown", "#9c6644"],
 ];
-const PATTERNS = ["plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes"];
-const PATTERN_NAMES = { plain: "Plain", stripes: "Stripes", dots: "Dots", ring: "Ring", split: "Split", star: "Star", zigzag: "Zigzag", eyes: "Eyes" };
+// (The last few are for signed-in players: MEMBER_PATTERNS, as on the server)
+const MEMBER_PATTERNS = ["heart", "checker", "galaxy"];
+const PATTERNS = ["plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes", ...MEMBER_PATTERNS];
+const PATTERN_NAMES = { plain: "Plain", stripes: "Stripes", dots: "Dots", ring: "Ring", split: "Split", star: "Star", zigzag: "Zigzag", eyes: "Eyes",
+                        heart: "Heart", checker: "Checker", galaxy: "Galaxy" };
 const W = 680, H = 480;
 const TICK_MS = 1000 / 30;
 const playClock = BonkClock.make(TICK_MS);  // what moment of the match to draw (clock.js)
@@ -179,8 +182,17 @@ const me = {
   set name(v) { profileStore.update((p) => ({ ...p, name: v })); },
   get color() { const c = profileStore.get().color; return c !== null && c < PALETTE.length ? c : null; },
   set color(v) { profileStore.update((p) => ({ ...p, color: v })); },
-  get pattern() { const p = profileStore.get().pattern; return PATTERNS.includes(p) ? p : "plain"; },
+  get pattern() {
+    const p = profileStore.get().pattern;
+    if (MEMBER_PATTERNS.includes(p) && !profileStore.user) return "plain";  // (signed out)
+    return PATTERNS.includes(p) ? p : "plain";
+  },
   set pattern(v) { profileStore.update((p) => ({ ...p, pattern: v })); },
+  // A colour of your own ("#rrggbb"): an account's perk
+  get ownColor() { return profileStore.user ? profileStore.get().own_color || null : null; },
+  set ownColor(v) { profileStore.update((p) => ({ ...p, own_color: v })); },
+  // Your ball's colour as it looks: your own, your favourite, or the first
+  get ballHex() { return this.ownColor || (this.color === null ? PALETTE[0][1] : PALETTE[this.color][1]); },
 };
 // (me.color = ... and me.pattern = ... save straight away)
 function saveProfile() { renderHomeBall(); }
@@ -349,6 +361,7 @@ function onMessage(msg) {
       // Bring your profile along
       if (me.pattern !== "plain") send({ type: "pattern", pattern: me.pattern });
       if (me.color !== null) send({ type: "color", color: me.color, auto: true });
+      if (me.ownColor) send({ type: "own_color", color: me.ownColor, auto: true });
       break;
     case "lobby":
       app.lobby = msg;

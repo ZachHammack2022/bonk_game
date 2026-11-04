@@ -27,7 +27,8 @@ import traceback
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
 from bonk_game.server import delta, limits, lobby, metrics, modes, playtest, profiles, replay
-from bonk_game.server.lobby import GRAVITY, PATTERNS, ROUND_TIMES, bot_label, clean_name, map_order
+from bonk_game.server.lobby import (GRAVITY, HEX_COLOR, MEMBER_PATTERNS, PATTERNS, ROUND_TIMES, bot_label,
+                                    clean_name, map_order)
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
@@ -62,6 +63,7 @@ class Member:
         self.last_report = None  # when they last sent a playtest report
         self.errors_sent = 0     # client errors logged for them
         self.account = None      # their account id, when signed in (accounts.py)
+        self.own_color = None    # a colour of their own ("#rrggbb"): signed in only
 
 
 class Room:
@@ -190,6 +192,8 @@ class Room:
             "colors": ["#%02x%02x%02x" % c for c in theme.PLAYER_COLORS],
             "color_names": list(theme.PLAYER_NAMES),
             "patterns": list(PATTERNS),
+            "member_patterns": list(MEMBER_PATTERNS),
+            "signed_in": self.members[token].account is not None,
             "maps": [{"name": n, "title": MAPS[n].title, "description": MAPS[n].description,
                       "first_to": min(MAPS[n].winning_score, 10), "round_time": MAPS[n].round_time,
                       "respawn_ok": MAPS[n].respawn_ok, "players": list(MAPS[n].players)}
@@ -280,9 +284,18 @@ class Room:
             await self.broadcast_lobby()
             return
         if kind == "pattern":
-            if msg.get("pattern") in PATTERNS:
-                self.members[token].pattern = msg["pattern"]
+            p = msg.get("pattern")
+            if p in MEMBER_PATTERNS and self.members[token].account is None:
+                await self.error(token, "Sign in to use that pattern.")
+            elif p in PATTERNS:
+                self.members[token].pattern = p
                 await self.broadcast_lobby()
+            return
+        if kind == "own_color":
+            problem = self.pick_own_color(token, msg.get("color"))
+            if problem and not msg.get("auto"):
+                await self.error(token, problem)
+            await self.broadcast_lobby()
             return
         if kind == "team":
             problem = self.pick_team(token, msg.get("team"))
@@ -335,6 +348,18 @@ class Room:
             if any(m.color == color for t, m in self.members.items() if t != token):
                 return "Someone else has that colour."
         self.members[token].color = color
+        return None
+
+    def pick_own_color(self, token, color):
+        """A signed-in player picks any colour ("#rrggbb"), or None to go
+        back to the palette. Whether they get it depends on who else is
+        playing (lobby.own_colors)."""
+        m = self.members[token]
+        if m.account is None:
+            return "Sign in to pick any colour."
+        if color is not None and not (isinstance(color, str) and HEX_COLOR.match(color.lower())):
+            return "Unknown colour."
+        m.own_color = color.lower() if color else None
         return None
 
     def pick_team(self, token, team):
@@ -433,9 +458,10 @@ class Room:
             return
         teams = self.teams_for(humans, len(bots))
         colors = self.colors_for(humans, len(bots), teams)
+        own = lobby.own_colors(colors, [self.members[t].own_color for t in humans] + [None] * len(bots), teams)
         slots = [{"kind": "human", "name": self.members[t].name, "id": t, "color": c,
-                  "pattern": self.members[t].pattern}
-                 for t, c in zip(humans, colors)]
+                  "pattern": self.members[t].pattern, "own_color": own[k]}
+                 for k, (t, c) in enumerate(zip(humans, colors))]
         # Bots are named by colour ("Green bot"), which is easier to follow than
         # five "Medium bot"s
         slots += [{"kind": b, "color": c,

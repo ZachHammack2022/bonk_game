@@ -74,7 +74,7 @@ def steps():
     script += [("b", entry(rng, 100 + k)) for k in range(40)]
     script += [("merge", None), ("merge", None)]          # adding the same profile twice
     script += [("a", entry(rng, 200, best_hit=55.55, awards=["kos", "BAD key", 5], kos=5000, mode="<x>"))]
-    junk = {"format": "bonk-profile", "id": "x" * 99, "name": "n" * 40, "color": 12, "pattern": 7,
+    junk = {"format": "bonk-profile", "id": "x" * 99, "name": "n" * 40, "color": 12, "own_color": "#ZZZZZZ", "pattern": 7,
             "merged": ["ok", 3, ""], "stats": {"matches": -5, "wins": 2.7, "best_hit": "big", "awards": {"kos": 2, "Bad": 1},
                                                  "modes": {"ffa": {"matches": 3, "wins": "x"}, "UP": {}}, "first_at": None},
             "history": [{"id": "h1", "at": 5, "won": "yes"}, {"id": "h1"}, {"nope": 1}, "str"]}

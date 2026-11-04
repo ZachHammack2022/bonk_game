@@ -72,7 +72,8 @@ def test_colours_first_come_first_served_and_team_palettes():
 
 
 def test_the_lineup_shows_people_then_bots():
-    members = {t: SimpleNamespace(name=t.upper(), team=None, color=None, pattern="dots") for t in ("a", "b")}
+    members = {t: SimpleNamespace(name=t.upper(), team=None, color=None, pattern="dots", own_color=None)
+               for t in ("a", "b")}
     seats = lobby.lineup({**lobby.default_settings(), "bots": ["bot:hard"]}, members, ["a", "b"])
     assert [s["kind"] for s in seats] == ["human", "human", "bot:hard"]
     assert seats[0]["name"] == "A" and seats[0]["pattern"] == "dots" and seats[2]["bot"] == 0
@@ -82,3 +83,16 @@ def test_names_are_tidied():
     assert lobby.clean_name("  a   b ") == "a b" and lobby.clean_name("") == "Player"
     assert len(lobby.clean_name("x" * 50)) == lobby.NAME_LEN
     assert lobby.bot_label("bot:hard") == "Hard bot" and lobby.bot_label("ppo") == "PPO"
+
+
+def test_own_colours_for_signed_in_players_unless_too_close_or_teams():
+    from bonk_game.ui import theme
+    red = "#%02x%02x%02x" % theme.PLAYER_COLORS[0][:3]
+    # Palette colours 0 and 1 are taken by the others; a far-off colour is fine
+    assert lobby.own_colors([2, 0, 1], ["#123456", None, None]) == ["#123456", None, None]
+    # ...but not one that looks like someone else's
+    assert lobby.own_colors([2, 0, 1], [red, None, None]) == [None, None, None]
+    # Two people asking for the same colour: the first one gets it
+    assert lobby.own_colors([0, 1, 2, 3], ["#123456", "#123457", None, None])[:2] == ["#123456", None]
+    # Not in teams (colours show your side)
+    assert lobby.own_colors([2, 0], ["#123456", None], teams=[0, 1]) == [None, None]

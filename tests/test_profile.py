@@ -17,8 +17,11 @@ def test_the_client_knows_the_same_colours_and_patterns():
     pairs = re.findall(r'\["(\w+)", "(#[0-9a-f]{6})"\]', palette)
     assert [n for n, _ in pairs] == list(theme.PLAYER_NAMES)
     assert [c for _, c in pairs] == ["#%02x%02x%02x" % c for c in theme.PLAYER_COLORS]
+    member = re.findall(r'"(\w+)"', re.search(r"const MEMBER_PATTERNS = \[(.*?)\];", js).group(1))
     patterns = re.search(r"const PATTERNS = \[(.*?)\];", js).group(1)
-    assert re.findall(r'"(\w+)"', patterns) == list(PATTERNS)
+    assert patterns.endswith("...MEMBER_PATTERNS")
+    assert re.findall(r'"(\w+)"', patterns) + member == list(PATTERNS)
+    assert member == list(room_mod.MEMBER_PATTERNS)
 
 
 async def _room(*names):
