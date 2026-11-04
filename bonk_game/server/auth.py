@@ -11,7 +11,9 @@ Routes:
     GET  /auth/google/callback   Google sends people back here
     POST /auth/logout            sign out (this browser)
     GET  /api/me                 {"accounts": on?, "user": {...} or null,
-                                  "profile": {...}} (profile: signed in only)
+                                  "profile": {...}, (signed in only)
+                                  "cosmetics": {...}} (what you can wear:
+                                  cosmetics.catalog)
     PUT  /api/me/profile         change your name, ball or settings
     POST /api/me/merge           add a browser profile (or profile file) to
                                  your account: done once when you sign in
@@ -40,7 +42,7 @@ from urllib.parse import urlencode
 import aiohttp
 from aiohttp import web
 
-from bonk_game.server import limits, metrics
+from bonk_game.server import cosmetics, limits, metrics
 from bonk_game.server.accounts import SESSION_DAYS, Accounts
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -246,9 +248,11 @@ async def logout(request):
 def _me(request, user):
     accounts = request.app.get(ACCOUNTS)
     out = {"accounts": accounts is not None, "user": None}
+    profile = None
     if user is not None:
         out["user"] = {"id": user["id"], "name": user["name"], "email": user["email"]}
-        out["profile"] = accounts.profile(user["id"])
+        out["profile"] = profile = accounts.profile(user["id"])
+    out["cosmetics"] = cosmetics.catalog(profile)
     return out
 
 

@@ -100,7 +100,7 @@ function renderLobby() {
     if (seatInfo.kind === "human") {
       const you = seatInfo.id === me.token;
       const li = seat(seatInfo.color, seatInfo.name + (seatInfo.id === L.host ? "  ★" : ""), you ? "you" : "", you, seatInfo.pattern,
-                      seatInfo.own_color);
+                      seatInfo.own_color, seatInfo.hat);
       if (you) {
         const ball = li.querySelector(".ball");
         ball.classList.add("pick");
@@ -223,10 +223,20 @@ function colorPicker(current, own) {
       li.appendChild(note);
     }
   }
-  li.appendChild(patternRow(mine ? mine.pattern : me.pattern, own || (mine ? app.welcome.colors[mine.color] : T.faint), (p) => {
-    me.pattern = p; saveProfile();
-    send({ type: "pattern", pattern: p });
-  }));
+  const ballColor = own || (mine ? app.welcome.colors[mine.color] : T.faint);
+  for (const kind of looks.KINDS) {
+    const current = mine && mine[kind] ? mine[kind] : me.look(kind);
+    if (kind !== "pattern") {
+      const label = document.createElement("p");
+      label.className = "dim small look-label";
+      label.textContent = looks.LABELS[kind];
+      li.appendChild(label);
+    }
+    li.appendChild(lookRow(kind, current, ballColor, mine ? mine.pattern : me.pattern, (id) => {
+      me.setLook(kind, id); saveProfile();
+      send({ type: "look", [kind]: id });
+    }));
+  }
   return li;
 }
 
@@ -252,30 +262,8 @@ function ownColorButton(current, onPick) {
   return wrap;
 }
 
-// A row of buttons, one per pattern, drawn on a ball of `color`
-function patternRow(current, color, onPick) {
-  const row = document.createElement("div");
-  row.className = "patterns";
-  for (const p of PATTERNS) {
-    const b = document.createElement("button");
-    b.className = "pattern" + (p === current ? " on" : "");
-    b.title = PATTERN_NAMES[p];
-    b.setAttribute("aria-label", PATTERN_NAMES[p]);
-    b.dataset.pattern = p;
-    b.appendChild(ballCanvas(30, color, p));
-    if (MEMBER_PATTERNS.includes(p) && !profileStore.user) {
-      // An account's perk: shown, locked
-      b.classList.add("locked");
-      b.title = `${PATTERN_NAMES[p]}: sign in to unlock`;
-      b.addEventListener("click", () => toast(`Sign in (on the home page) to use ${PATTERN_NAMES[p]} and the other members' patterns.`));
-    } else b.addEventListener("click", () => onPick(p));
-    row.appendChild(b);
-  }
-  return row;
-}
-
-// A little canvas with a ball on it (lobby seats, pickers)
-function ballCanvas(size, color, pattern) {
+// A little canvas with a ball on it (lobby seats, pickers), with its hat
+function ballCanvas(size, color, pattern, hat = "none") {
   const c = document.createElement("canvas");
   const dpr = window.devicePixelRatio || 1;
   c.width = c.height = Math.round(size * dpr);
@@ -283,7 +271,8 @@ function ballCanvas(size, color, pattern) {
   c.className = "ball-canvas";
   const g = c.getContext("2d");
   g.scale(dpr, dpr);
-  drawBall(g, size / 2, size / 2, size / 2, 0, color, pattern, false);
+  if (hat && hat !== "none") drawBall(g, size / 2, size * 0.62, size * 0.36, 0, color, pattern, false, hat);
+  else drawBall(g, size / 2, size / 2, size / 2, 0, color, pattern, false);
   return c;
 }
 
@@ -291,9 +280,10 @@ function ballCanvas(size, color, pattern) {
 function renderHomeBall() {
   const el = $("home-ball");
   el.innerHTML = "";
-  el.appendChild(ballCanvas(40, me.ballHex, me.pattern));
+  el.appendChild(ballCanvas(40, me.ballHex, me.pattern, me.look("hat")));
   const name = me.ownColor ? "Your own colour" : me.color === null ? "Any colour" : PALETTE[me.color][0];
-  $("home-ball-label").textContent = `${name}, ${PATTERN_NAMES[me.pattern].toLowerCase()}`;
+  const extras = ["trail", "hat"].filter((k) => me.look(k) !== "none").map((k) => looks.name(k, me.look(k)).toLowerCase());
+  $("home-ball-label").textContent = [name, looks.name("pattern", me.pattern).toLowerCase(), ...extras].join(", ");
 }
 function renderProfileEditor() {
   const box = $("profile-colors");
@@ -316,20 +306,29 @@ function renderProfileEditor() {
   box.appendChild(ownColorButton(me.ownColor, (hex) => { me.ownColor = hex; saveProfile(); renderProfileEditor(); }));
   const pat = $("profile-patterns");
   pat.innerHTML = "";
-  pat.appendChild(patternRow(me.pattern, me.ballHex, (p) => {
-    me.pattern = p; saveProfile(); renderProfileEditor();
-  }));
+  const pick = (kind) => (id) => { me.setLook(kind, id); saveProfile(); renderProfileEditor(); };
+  pat.appendChild(lookRow("pattern", me.pattern, me.ballHex, me.pattern, pick("pattern")));
+  const extras = $("profile-extras");
+  extras.innerHTML = "";
+  for (const kind of ["trail", "hat", "ko"]) {
+    const label = document.createElement("label");
+    label.textContent = looks.LABELS[kind];
+    extras.append(label, lookRow(kind, me.look(kind), me.ballHex, me.pattern, pick(kind)));
+  }
+  $("profile-unlock").textContent = !looks.catalog ? ""
+    : profileStore.user ? "More unlock as you play: tap a 🔒 to see how."
+    : "Sign in (on the home page) to unlock more as you play.";
   $("profile-preview").innerHTML = "";
-  $("profile-preview").appendChild(ballCanvas(72, me.ballHex, me.pattern));
+  $("profile-preview").appendChild(ballCanvas(72, me.ballHex, me.pattern, me.look("hat")));
 }
 $("edit-ball").addEventListener("click", () => { renderProfileEditor(); $("profile").classList.remove("hidden"); });
 $("profile-close").addEventListener("click", () => $("profile").classList.add("hidden"));
 $("profile").addEventListener("click", (e) => { if (e.target === $("profile")) $("profile").classList.add("hidden"); });
 
-function seat(color, label, tag, you, pattern = "plain", own = null) {
+function seat(color, label, tag, you, pattern = "plain", own = null, hat = "none") {
   const li = document.createElement("li");
   li.className = "seat" + (you ? " you" : "");
-  const ball = ballCanvas(22, own || (color === null ? T.faint : app.welcome.colors[color]), pattern);
+  const ball = ballCanvas(22, own || (color === null ? T.faint : app.welcome.colors[color]), pattern, hat);
   ball.classList.add("ball");
   const who = document.createElement("span");
   who.className = "who";

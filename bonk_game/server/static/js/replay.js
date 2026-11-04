@@ -168,6 +168,7 @@ function watchReplay(body) {
     if (last) states.push(last);
   }
   app.match = body.match;
+  applyLooks(app.match);
   app.results = null;
   app.room = null;
   $("results").classList.add("hidden");

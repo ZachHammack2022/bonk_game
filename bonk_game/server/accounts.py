@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 """
 # What a browser may change in its account's profile. Stats and history are
 # the server's: it records each match an account plays (record()).
-EDITABLE = ("name", "color", "own_color", "pattern", "muted", "prefs")
+EDITABLE = ("name", "color", "own_color", "pattern", "trail", "hat", "ko", "muted", "prefs")
 
 
 def _hash(token):

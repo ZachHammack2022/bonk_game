@@ -15,16 +15,15 @@ import re
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import modes
+from bonk_game.server import cosmetics, modes
 from bonk_game.server.match import is_bot
 from bonk_game.ui import theme
 
 NAME_LEN = 16
 FIRST_TO_RANGE = (1, 100)
-# Ball patterns people can pick (the client draws them). The last few are
-# for signed-in players only (an account's perks, with any colour: own_colors)
-MEMBER_PATTERNS = ("heart", "checker", "galaxy")
-PATTERNS = ("plain", "stripes", "dots", "ring", "split", "star", "zigzag", "eyes") + MEMBER_PATTERNS
+# Ball patterns people can pick (the client draws them). Some are for
+# signed-in players, unlocked by playing (cosmetics.py)
+PATTERNS = cosmetics.IDS["pattern"]
 # A colour of your own has to be at least this far (in RGB) from everyone
 # else's, so balls stay easy to tell apart
 MIN_COLOR_GAP = 70
@@ -213,7 +212,7 @@ def lineup(settings, members, people):
     own = own_colors(colors, [members[t].own_color for t in humans] + [None] * len(bots), teams)
     team = lambda k: None if teams is None else teams[k]
     out = [{"id": t, "name": members[t].name, "kind": "human", "color": c, "team": team(k),
-            "pattern": members[t].pattern, "own_color": own[k]}
+            **members[t].look(), "own_color": own[k]}
            for k, (t, c) in enumerate(zip(humans, colors))]
     out += [{"id": None, "kind": b, "bot": k, "color": c, "team": team(len(humans) + k)}
             for k, (b, c) in enumerate(zip(bots, colors[len(humans):]))]

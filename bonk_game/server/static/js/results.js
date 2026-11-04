@@ -4,6 +4,7 @@
 
 function showResults(msg) {
   const slots = msg.slots || (app.match && app.match.slots) || [];
+  applyLooks({ mode: msg.mode, slots });  // (as the match looked on your screen)
   const w = msg.winner;
   const el = $("winner");
   const M = app.match || {};
