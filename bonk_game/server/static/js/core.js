@@ -17,6 +17,7 @@
 //   net.js       network timing and predicting your own ball (predict.js)
 //   replay.js    the killcam, and watching replay files
 //   draw.js      drawing the match
+//   account.js   signing in with Google (optional) and your account
 //   main.js      start up
 // Code that runs as a file loads may only use what earlier files define.
 "use strict";
@@ -104,16 +105,29 @@ function show(screen) {
 // App state
 // ---------------------------------------------------------------------------
 // Your profile: name, ball, settings, lifetime stats and recent matches
-// (static/profile.js has the format). Nothing else reads or writes it: for
-// now it's kept in this browser; with accounts (#38) only this changes.
+// (static/profile.js has the format). Nothing else reads or writes it.
+// - As a guest it's kept in this browser (KEY).
+// - Signed in (js/account.js), it's your account's, kept on the server; a
+//   copy (ACCOUNT_KEY) lets the page start with it. Changes to your name,
+//   ball and settings go to the server; the server records your matches.
 const profileStore = {
   KEY: "bonk.profile",
+  ACCOUNT_KEY: "bonk.account",
   current: null,
+  user: null,            // signed in: { id, name, email }
   get() {
     if (!this.current) this.current = this.load();
     return this.current;
   },
   load() {
+    try {
+      const a = JSON.parse(store.get(this.ACCOUNT_KEY, "null"));
+      const p = a && BonkProfile.validate(a.profile);
+      if (p && a.user && a.user.id) { this.user = a.user; return p; }
+    } catch (e) { /* unreadable: as a guest */ }
+    return this.loadGuest();
+  },
+  loadGuest() {
     let p = null;
     try { p = BonkProfile.validate(JSON.parse(store.get(this.KEY, "null"))); } catch (e) { /* unreadable: start again */ }
     if (p) return p;
@@ -131,15 +145,25 @@ const profileStore = {
   },
   save(p) {
     this.current = p;
-    store.set(this.KEY, JSON.stringify(p));
+    if (this.user) {
+      store.set(this.ACCOUNT_KEY, JSON.stringify({ user: this.user, profile: p }));
+      account.push(p);
+    } else store.set(this.KEY, JSON.stringify(p));
   },
   update(fn) { this.save(fn(this.get())); },
-  // One more match (a history entry: profile.js)
-  record(entry) { this.update((p) => BonkProfile.record(p, entry)); },
-  // A profile file from another browser (or an export of this one)
-  add(file) {
+  // One more match (a history entry: profile.js). Signed in, the server
+  // records it too (the same match counts once), and account.js fetches
+  // the server's copy afterwards.
+  record(entry) {
+    this.update((p) => BonkProfile.record(p, entry));
+    if (this.user) account.refreshSoon();
+  },
+  // A profile file from another browser (or an export of this one).
+  // Returns how many matches it added, or null if it isn't one.
+  async add(file) {
     const other = BonkProfile.validate(file);
     if (!other) return null;
+    if (this.user) return account.merge(other);
     const before = this.get().stats.matches;
     this.update((p) => BonkProfile.merge(p, other));
     return this.get().stats.matches - before;

@@ -17,6 +17,10 @@ Routes:
                          is set, send it as "Authorization: Bearer <token>".
     GET  /api/playtest   the latest playtest reports and browser errors
                          (playtest.py; same token as /metrics)
+    GET  /privacy        what the site keeps about people
+    /auth/..., /api/me   signing in with Google and your account, when
+                         GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set
+                         (auth.py, accounts.py)
 
 The page is served with every /static/ URL ending in ?v=<VERSION>, a hash
 of the client files, so browsers can cache them for good and still pick up
@@ -64,7 +68,7 @@ import traceback
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server import delta, limits, metrics, modes, playtest, replay
+from bonk_game.server import auth, delta, limits, metrics, modes, playtest, replay
 from bonk_game.server.room import RoomFull, RoomManager, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -323,8 +327,12 @@ async def websocket(request):
         if room is None:
             return await refuse("That room doesn't exist (or has closed).")
         token = str(msg.get("token") or "")[:64] or secrets.token_hex(12)
+        # Signed in? (The cookie comes with the WebSocket; only this site's
+        # own pages count, so another site can't play as you)
+        user = auth.user_for(request) if auth.same_origin(request) else None
         try:
-            await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True)
+            await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True,
+                            account=user["id"] if user else None)
         except RoomFull as e:
             token = None
             return await refuse(str(e))
@@ -364,9 +372,13 @@ async def websocket(request):
 
 
 async def _sweeper(app):
+    n = 0
     while True:
         await asyncio.sleep(SWEEP_EVERY)
         await app[ROOMS].sweep()
+        n += 1
+        if n % 720 == 0 and app.get(auth.ACCOUNTS) is not None:  # hourly
+            app[auth.ACCOUNTS].sweep()
 
 
 async def _start_background(app):
@@ -387,7 +399,13 @@ async def _stop_background(app):
         await room.stop()
 
 
-def make_app(rooms=None):
+async def privacy(request):
+    return web.FileResponse(os.path.join(STATIC, "privacy.html"))
+
+
+def make_app(rooms=None, auth_config=None, accounts=None):
+    """auth_config, accounts: for tests (normally from the environment:
+    auth.Config)."""
     app = web.Application(middlewares=[cache_headers], client_max_size=MAX_REPLAY_BYTES)
     app[ROOMS] = rooms or RoomManager(AgentStore())
     app[ROOM_LIMIT] = limits.PerKey(limits.ROOMS_PER_IP / 60, limits.ROOMS_PER_IP)
@@ -406,6 +424,10 @@ def make_app(rooms=None):
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/metrics", metrics_page)
     app.router.add_get("/api/playtest", playtest_page)
+    app.router.add_get("/privacy", privacy)
+    accounts = auth.setup(app, auth_config, accounts)
+    if accounts is not None and app[ROOMS].recorder is None:
+        app[ROOMS].recorder = accounts.record  # signed-in players' match history
     app.router.add_static("/static/", STATIC)
     app.on_startup.append(_start_background)
     app.on_shutdown.append(_shutdown)

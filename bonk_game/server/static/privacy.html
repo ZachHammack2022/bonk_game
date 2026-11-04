@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>bonk: privacy</title>
+  <style>
+    body { margin: 0; padding: 24px 16px; background: #182134; color: #f1f5f9; font: 16px/1.55 system-ui, sans-serif; }
+    main { max-width: 680px; margin: 0 auto; }
+    h1 { font-size: 26px; } h2 { font-size: 18px; margin-top: 28px; }
+    a { color: #ffd166; } li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>What bonk keeps about you</h1>
+  <p>bonk is a small game. You can play without an account, and signing in is optional.</p>
+
+  <h2>Playing as a guest</h2>
+  <ul>
+    <li>Your name, ball, settings, stats and recent matches stay in your browser (its local storage). The server doesn't keep them.</li>
+    <li>While you're in a room, the server holds your name and a random id for your browser, to put you back in your seat if you reconnect. Rooms are forgotten soon after everyone leaves.</li>
+  </ul>
+
+  <h2>If you sign in with Google</h2>
+  <ul>
+    <li>From Google we get your Google account id, your email address and your first name. We don't get your password, contacts or anything else.</li>
+    <li>We keep those, when you joined, and your bonk profile: name, ball, settings, stats and your last 50 matches.</li>
+    <li>A cookie keeps you signed in for up to 90 days. It's only used to sign you in; the server keeps a scrambled (hashed) copy, not the cookie itself.</li>
+    <li>Your email isn't shown to other players. They see the name you pick.</li>
+  </ul>
+
+  <h2>Playtest reports</h2>
+  <p>After a match your browser sends a short report: ping, frame rate, how smooth the game was, your device type and how the match felt (if you say). It carries your player name but no IP address, and the server keeps the latest 500. JavaScript errors are reported the same way.</p>
+
+  <h2>Logs</h2>
+  <p>The server logs events like rooms opening and matches ending, with room codes but not names or emails. Your IP address is used for limits against abuse while you're connected, and isn't stored.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li><b>Save your data:</b> "Your stats" on the home page has "Save to a file".</li>
+    <li><b>Delete your account:</b> "Your stats", then "Delete my account". Your account and profile are deleted from the server straight away.</li>
+    <li><b>Sign out:</b> on the home page. Signing out doesn't delete anything.</li>
+  </ul>
+
+  <p><a href="/">Back to the game</a></p>
+</main>
+</body>
+</html>
