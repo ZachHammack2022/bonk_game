@@ -334,7 +334,7 @@ function check(cond, what) {
 
     // Testing on a pretend slow network (netsim.js)
     const slow = await open("slow");
-    await slow.goto(url + "?net=far&seed=1");
+    await slow.goto(url + "&net=far&seed=1");
     check((await slow.textContent("#netsim")).includes("Simulating far"), "a simulated network says so on screen");
     await slow.fill("#name", "Eve");
     await slow.click("#join-form button");
