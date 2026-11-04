@@ -28,37 +28,42 @@
   <section id="home" class="screen">
     <h1 class="logo">b<span class="logo-ball"></span>nk</h1>
     <p class="tagline">a tiny physics brawler, with friends</p>
-    <div class="card">
-      <label for="name">Your name</label>
-      <input id="name" maxlength="16" autocomplete="nickname" placeholder="Player">
-      <div class="home-ball">
-        <span id="home-ball"></span>
-        <span id="home-ball-label" class="dim small"></span>
-        <button id="edit-ball">Customize</button>
+    <div class="card home-card">
+      <!-- Who you are: your ball (click it to change it) and your name -->
+      <div class="you">
+        <button id="edit-ball" class="ball-button" title="Customize your ball">
+          <span id="home-ball"></span>
+          <span class="ball-edit" aria-hidden="true"><svg class="i"><use href="#i-palette"/></svg></span>
+          <span class="sr">Customize your ball: </span><span id="home-ball-label" class="sr"></span>
+        </button>
+        <div class="you-name">
+          <label for="name">Your name</label>
+          <input id="name" maxlength="16" autocomplete="nickname" placeholder="Player">
+        </div>
       </div>
-      <button id="find" class="primary">Find a game</button>
-      <p id="find-help" class="dim small quick-help">See every game and pick one to join.</p>
-      <button id="create">New game</button>
-      <div class="or">or join one with its code</div>
-      <form id="join-form" class="row">
-        <input id="code" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
-        <button type="submit">Join</button>
+      <!-- One way in: the browser, where you join a game, make one or type a code.
+           Came with an invite link? Then it's straight into that game. -->
+      <div id="home-play">
+        <button id="find" class="primary big">Play</button>
+        <p id="find-help" class="dim small quick-help">Join a game or make your own.</p>
+      </div>
+      <form id="join-form" class="hidden">
+        <button type="submit" id="join-code" class="primary big">Join game</button>
+        <p class="dim small quick-help">You were invited. <button type="button" id="join-other" class="link-button">See all games instead</button></p>
       </form>
+      <div class="home-links">
+        <button id="open-stats" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg>Stats</button>
+        <button id="open-settings-home" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg>Settings</button>
+      </div>
       <div id="account" class="account hidden">
         <div id="account-out">
           <button id="sign-in" class="google-button">
-            <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
+            <svg viewBox="0 0 48 48" width="16" height="16" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
             Sign in with Google
           </button>
-          <p class="dim small">Optional. Signing in keeps your stats, match history and ball on every device, and unlocks <b>any colour</b> for your ball and a few members' patterns, a trail, a hat and a knockout effect. Or just play as a guest.</p>
+          <p class="dim small">Optional: keeps your stats and ball on every device, and unlocks more looks.</p>
         </div>
-        <div id="account-in" class="hidden">
-          <p class="small">Signed in as <b id="account-who"></b> <button id="sign-out" class="link-button">Sign out</button></p>
-        </div>
-      </div>
-      <div class="home-links">
-        <button id="open-stats" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg>Your stats</button>
-        <button id="open-settings-home" class="link-button"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg>Settings</button>
+        <p id="account-in" class="small dim hidden">Signed in as <b id="account-who"></b> · <button id="sign-out" class="link-button">Sign out</button></p>
       </div>
     </div>
     <footer class="home-footer"><a href="/privacy">Privacy policy</a> · <a href="/terms">Terms of service</a></footer>

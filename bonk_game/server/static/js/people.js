@@ -51,7 +51,7 @@ function renderHomeCount() {
   const n = d ? d.rooms.length : 0;
   $("find-help").textContent = n
     ? `${plural(n, "game")} on right now${d.online ? `, ${plural(d.online, "player")} online` : ""}.`
-    : "See every game and pick one to join.";
+    : "Join a game or make your own.";
 }
 
 function openBrowse(push) {

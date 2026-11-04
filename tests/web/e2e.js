@@ -89,7 +89,12 @@ function check(cond, what) {
     await host.keyboard.press("KeyH");
     await host.keyboard.press("Escape");
     check(await host.evaluate(() => JSON.parse(localStorage.getItem("bonk.profile")).prefs.keys.heavy === "KeyH"), "keys can be rebound in settings");
-    await host.click("#create");
+    check(!(await host.$("#create")) && !(await host.isVisible("#join-form")) && await host.isVisible("#find"),
+      "the start page has one way in: Play");
+    await shot(host, "home");
+    await host.click("#find");
+    await host.waitForSelector("#browse:not(.hidden)");
+    await host.click("#new-game");
     await host.waitForSelector("#new-dialog:not(.hidden)");
     const hostName = await host.inputValue("#name");
     check((await host.inputValue("#new-name")) === `${hostName}'s room`, "a new room is named after you, to start with");
@@ -115,6 +120,8 @@ function check(cond, what) {
     });
     await guest.goto(url);
     await guest.fill("#name", "Bob");
+    check((await guest.textContent("#join-form button")).includes(code) && await guest.isHidden("#find"),
+      "an invite link offers that game on the start page");
     await guest.click("#join-form button");
     await guest.waitForSelector("#lobby:not(.hidden)");
     check(true, "the invite link fills in the password");
@@ -298,8 +305,9 @@ function check(cond, what) {
     const phone = await open("phone", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     await phone.goto(base + "/");
     await phone.fill("#name", "Cat");
-    await phone.fill("#code", code.toLowerCase());
-    await phone.click("#join-form button");
+    await phone.click("#find");
+    await phone.fill("#browse-code", code.toLowerCase());
+    await phone.click("#code-form button");
     await phone.waitForSelector("#pw-dialog:not(.hidden)");
     check(true, "joining by code asks for the password");
     await phone.fill("#pw-input", "wrong1");
@@ -329,8 +337,9 @@ function check(cond, what) {
     const lost = await open("lost");
     await lost.goto(base + "/");
     await lost.fill("#name", "Dan");
-    await lost.fill("#code", "ZZZZ");
-    await lost.click("#join-form button");
+    await lost.click("#find");
+    await lost.fill("#browse-code", "ZZZZ");
+    await lost.click("#code-form button");
     await lost.waitForSelector("#toast:not(.hidden)");
     check((await lost.textContent("#toast")).includes("doesn't exist"), "a bad code says so");
 

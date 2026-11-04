@@ -213,28 +213,35 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
 @keyframes bob { 50% { transform: translateY(-5px); } }
 @media (prefers-reduced-motion: reduce) { .logo-ball { animation: none; } }
 .tagline { color: var(--dim); margin: 10px 0 28px; font-size: 16px; }
-.or { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 12px;
-      text-transform: uppercase; letter-spacing: 0.08em; margin: 4px 0 0; }
-.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-.quick-help { margin: -6px 0 2px; text-align: center; }
-.home-ball { display: flex; align-items: center; gap: 10px; padding: 2px 0; }
-.home-ball #home-ball { display: flex; }
-.home-ball #home-ball-label { flex: 1; }
-.home-ball button { padding: 0 12px; min-height: 34px; font-size: 14px; }
-.home-links { display: flex; justify-content: center; gap: 2px; flex-wrap: wrap; margin-top: 4px;
+.home-card { gap: 16px; }
+.quick-help { margin: 8px 0 0; text-align: center; }
+button.big { width: 100%; min-height: 56px; font-size: 19px; }
+#join-form .quick-help .link-button { min-height: 0; padding: 0 2px; font-size: inherit; color: var(--dim); text-decoration: underline; }
+/* You: your ball (a button: click to change it) beside your name */
+.you { display: flex; align-items: flex-end; gap: 14px; }
+.you-name { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ball-button { position: relative; flex: none; width: 56px; height: 56px; min-height: 0; padding: 0;
+               border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); }
+.ball-button #home-ball { display: flex; }
+.ball-edit { position: absolute; right: -4px; bottom: -4px; width: 24px; height: 24px; border-radius: 50%;
+             display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); color: var(--dim); }
+.ball-edit .i { width: 13px; height: 13px; }
+.ball-button:hover .ball-edit { color: var(--text); border-color: var(--dim); }
+.home-links { display: flex; justify-content: center; gap: 2px; flex-wrap: wrap;
               padding-top: 12px; border-top: 1px solid var(--line); }
 .home-footer { margin-top: 20px; font-size: 13px; color: var(--faint); }
 .home-footer a { color: var(--faint); text-decoration: none; }
 .home-footer a:hover { color: var(--dim); text-decoration: underline; }
 
 /* Signing in (optional): Google's button, or who you're signed in as */
-.account { margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--line); text-align: center; }
-.account p { margin: 8px 0 0; }
+.account { margin-top: -8px; text-align: center; }
+.account p { margin: 6px 0 0; }
 .google-button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; background: #fff; color: #1f1f1f; border-color: #dadce0; font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px;
+  padding: 0 14px; font-size: 14px; background: #fff; color: #1f1f1f; border-color: #dadce0; font-weight: 500;
 }
 .google-button:hover { background: #f2f2f2; border-color: #c6c8cc; }
+#account-in .link-button { min-height: 0; padding: 0 4px; font-size: inherit; }
 .privacy-link { display: block; text-align: center; margin-top: 4px; }
 
 /* --- the game browser (people.js) ------------------------------------------ */

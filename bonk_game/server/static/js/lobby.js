@@ -373,7 +373,7 @@ function ballCanvas(size, color, pattern, hat = "none") {
 function renderHomeBall() {
   const el = $("home-ball");
   el.innerHTML = "";
-  el.appendChild(ballCanvas(40, me.ballHex, me.pattern, me.look("hat")));
+  el.appendChild(ballCanvas(44, me.ballHex, me.pattern, me.look("hat")));
   const name = me.ownColor ? "Your own colour" : me.color === null ? "Any colour" : PALETTE[me.color][0];
   const extras = ["trail", "hat"].filter((k) => me.look(k) !== "none").map((k) => looks.name(k, me.look(k)).toLowerCase());
   $("home-ball-label").textContent = [name, looks.name("pattern", me.pattern).toLowerCase(), ...extras].join(", ");
