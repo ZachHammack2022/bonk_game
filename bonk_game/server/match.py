@@ -19,7 +19,7 @@ import random
 import numpy as np
 
 from bonk_game.envs.testing_env import TestEnv
-from bonk_game.envs.utils import arena
+from bonk_game.envs.utils import arena, stepping
 from bonk_game.envs.utils.mechanics import BOUNCE
 from bonk_game.envs.utils.controls import NO_BUTTONS, Buttons
 from bonk_game.server import modes, powerups
@@ -340,6 +340,7 @@ class Match:
             "min_m": p.min_m,
             "max_m": p.max_m,
             "mass_decay": MASS_DECAY,
+            "substeps": stepping.SUBSTEPS,  # moves per step, collided in between
             # Bounce off surfaces that don't say (Classic's floor and ceiling)
             "bounce": abs(BOUNCE) if p.can_fly else 0.3,
             "tick_ms": 1000 / TICK_HZ,

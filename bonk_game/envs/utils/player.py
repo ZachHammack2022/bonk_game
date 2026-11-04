@@ -62,19 +62,18 @@ class player():
         self.reset()
         self.normalize_obs()
 
-    def update_velocities(self):
-
-        # prepare velocities for normalization
-        self.y_v += self.gravity * self.gravity_mult
+    def update_velocities(self, dt=1.0):
+        """Gravity for `dt` of a step, then the speed cap."""
+        self.y_v += self.gravity * self.gravity_mult * dt
         cap = self.v_range * self.speed_mult
         self.x_v = max(-cap, min(cap, self.x_v))
         self.y_v = max(-cap, min(cap, self.y_v))
 
 
-    def update_position(self):
+    def update_position(self, dt=1.0):
 
-        self.x += self.x_v
-        self.y += self.y_v
+        self.x += self.x_v * dt
+        self.y += self.y_v * dt
         if self.clamp_bottom:
             self.y = min(self.bottom-self.r,self.y)
 
@@ -100,12 +99,27 @@ class player():
         self._obs = np.clip(np.array([x,y,x_v,y_v,self.alive,m]),-1,1)
 
     def update(self)-> None:
-        """_Update velocity and position values
-        """
+        """One whole step in one go (no substeps): begin_step, integrate,
+        end_step. The envs use stepping.advance() instead, which splits the
+        movement into substeps with collisions in between."""
+        self.begin_step()
+        self.integrate(1.0)
+        self.end_step()
+
+    def begin_step(self):
+        """Once a step, after the step's first collisions: jumping (which
+        needs to know whether we're standing on something)."""
         if not self.can_fly:
             self.update_jump()
-        self.update_velocities()
-        self.update_position()
+
+    def integrate(self, dt):
+        """Move for `dt` of a step (a substep): gravity, the speed cap, and
+        the position."""
+        self.update_velocities(dt)
+        self.update_position(dt)
+
+    def end_step(self):
+        """Once a step, at the end: heavy wears off."""
         self.update_mass()
 
 
@@ -127,6 +141,9 @@ class player():
         self.jump_buffer = 0
         self.air_steps = COYOTE_TIME + 1
         self.jump_used = False
+        # Touched something deadly between collision checks (a substep):
+        # dies at the start of the next step (see stepping.advance)
+        self.doomed = False
 
     def get_obs(self):
         self.normalize_obs()

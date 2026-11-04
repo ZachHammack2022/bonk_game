@@ -279,9 +279,10 @@ class SlidingPlatform:
         self.vx += jx / self.mass
         self.vx = max(-self.max_speed, min(self.max_speed, self.vx))
 
-    def step(self):
-        self.vx *= self.damping
-        new_offset = self.offset + self.vx
+    def step(self, dt=1.0):
+        """Slide for `dt` of a step (a substep: see stepping.py)."""
+        self.vx *= self.damping ** dt
+        new_offset = self.offset + self.vx * dt
         if abs(new_offset) > self.travel:
             # Hit the end of the rail: stop there and bounce back a little
             new_offset = math.copysign(self.travel, new_offset)
@@ -359,11 +360,12 @@ class Swing:
         self.omega += (jx * tx + jy * ty) / (self.mass * self.length)
         self.omega = max(-self.max_omega, min(self.max_omega, self.omega))
 
-    def step(self):
-        self.omega -= (GRAVITY / self.length) * math.sin(self.theta)
-        self.omega *= self.damping
+    def step(self, dt=1.0):
+        """Swing for `dt` of a step (a substep: see stepping.py)."""
+        self.omega -= (GRAVITY / self.length) * math.sin(self.theta) * dt
+        self.omega *= self.damping ** dt
         self.omega = max(-self.max_omega, min(self.max_omega, self.omega))
-        self.theta += self.omega
+        self.theta += self.omega * dt
 
     # --- shape --------------------------------------------------------
     def rects(self):

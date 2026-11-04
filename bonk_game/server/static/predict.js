@@ -5,7 +5,8 @@
 // come back: a full round trip. Instead, the client takes the latest
 // position the server sent and replays the keys you've pressed since
 // (the ones the server hasn't used yet) through a small copy of the ball
-// physics. That's drawn as your ball, so it reacts straight away.
+// physics (the same substeps as the server: envs/utils/stepping.py). That's
+// drawn as your ball, so it reacts straight away.
 //
 // The copy covers what matters most for feel: input forces (divided by
 // mass), gravity, the speed cap, jumping (with the same jump buffer and
@@ -64,22 +65,9 @@
     }
   }
 
-  // Advance one physics step with buttons b = [up, left, down, right, heavy].
-  // Same order as the env: inputs, then collisions, then the update.
-  function step(s, b, phys, fl, r) {
-    const F = phys.force;
-    // Inputs
-    if (b[3]) s.vx += F / s.m;
-    if (b[1]) s.vx -= F / s.m;
-    if (b[2]) s.vy += F / s.m;
-    if (b[0]) {
-      if (phys.can_fly) s.vy -= F / s.m;
-      else { s.jumpBuffer = JUMP_BUFFER; tryJump(s, phys); }
-    }
-    if (b[4] && s.m === phys.min_m) s.m = phys.max_m;
-
-    // Collisions with flat tops. Checks the path since the last step too,
-    // so a fast fall can't skip through a thin platform.
+  // Land on, bounce off and slide on flat tops. Checks the path since the
+  // last move too, so a fast fall can't skip through a thin platform.
+  function collide(s, fl, r) {
     s.grounded = false;
     const prevY = s.prevY ?? s.y;
     for (const f of fl) {
@@ -94,21 +82,50 @@
         s.vx -= f.f * s.vx;
       }
     }
+  }
 
-    // Update (player.update)
+  // Gravity, the speed cap and moving, for `dt` of a step (a substep)
+  function integrate(s, phys, dt, r) {
+    s.vy += phys.gravity * dt;
+    const v = phys.max_speed;
+    s.vx = Math.max(-v, Math.min(v, s.vx));
+    s.vy = Math.max(-v, Math.min(v, s.vy));
+    s.prevY = s.y;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    if (phys.clamp_bottom != null) s.y = Math.min(phys.clamp_bottom - r, s.y);
+  }
+
+  // Advance one physics step with buttons b = [up, left, down, right, heavy].
+  // Same order as the env (envs/utils/stepping.py): inputs, collisions,
+  // jumping, then the move in substeps with collisions in between, then
+  // heavy wearing off.
+  function step(s, b, phys, fl, r) {
+    const F = phys.force;
+    // Inputs
+    if (b[3]) s.vx += F / s.m;
+    if (b[1]) s.vx -= F / s.m;
+    if (b[2]) s.vy += F / s.m;
+    if (b[0]) {
+      if (phys.can_fly) s.vy -= F / s.m;
+      else { s.jumpBuffer = JUMP_BUFFER; tryJump(s, phys); }
+    }
+    if (b[4] && s.m === phys.min_m) s.m = phys.max_m;
+
+    collide(s, fl, r);
+
+    // Jumping (player.begin_step)
     if (!phys.can_fly) {
       if (s.grounded && s.vy > -phys.jump_speed / 2) { s.airSteps = 0; s.jumpUsed = false; }
       else s.airSteps += 1;
       if (s.jumpBuffer) { tryJump(s, phys); s.jumpBuffer = Math.max(0, s.jumpBuffer - 1); }
     }
-    s.vy += phys.gravity;
-    const v = phys.max_speed;
-    s.vx = Math.max(-v, Math.min(v, s.vx));
-    s.vy = Math.max(-v, Math.min(v, s.vy));
-    s.prevY = s.y;
-    s.x += s.vx;
-    s.y += s.vy;
-    if (phys.clamp_bottom != null) s.y = Math.min(phys.clamp_bottom - r, s.y);
+    // The move, in substeps (stepping.advance)
+    const n = phys.substeps || 1;
+    for (let k = 0; k < n; k++) {
+      integrate(s, phys, 1 / n, r);
+      if (k < n - 1) collide(s, fl, r);
+    }
     // pin_heavy: the Iron power-up keeps you at full weight
     if (phys.pin_heavy) s.m = phys.max_m;
     else if (s.m > phys.min_m) s.m = Math.max(s.m - phys.mass_decay, phys.min_m);

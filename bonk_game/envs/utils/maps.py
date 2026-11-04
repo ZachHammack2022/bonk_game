@@ -86,8 +86,15 @@ class Map:
     def reset(self):
         """Put any moving parts back where they start."""
 
-    def step(self):
-        """Advance moving parts by one step (before collisions)."""
+    def step(self, move=True):
+        """A new step (before collisions). move: also move the moving parts
+        the whole step now. The envs pass False and move them in substeps,
+        alongside the players (move(), from stepping.advance)."""
+        if move:
+            self.move(1.0)
+
+    def move(self, dt):
+        """Move the moving parts for `dt` of a step."""
 
     def collide(self, p):
         """Collide a player with the level. Return True if it killed them."""
@@ -174,10 +181,13 @@ class OpenMap(Map):
     def reset(self):
         self.steps = 0
 
-    def step(self):
+    def step(self, move=True):
         self.steps += 1
+        super().step(move)
+
+    def move(self, dt):
         for body in self.bodies:
-            body.step()
+            body.step(dt)
 
     def out_of_bounds(self, p):
         return (p.y - p.r > self.height
@@ -347,13 +357,13 @@ class SwingMap(OpenMap):
         self.swing.reset()
         self.bodies = [self.swing]
 
-    def step(self):
-        super().step()
+    def move(self, dt):
+        super().move(dt)
         speed = self.SINK_SPEED if self.steps > self.SINK_DELAY else 0.0
-        self.sink += speed
+        self.sink += speed * dt
         for block in self.blocks:
             block.vy = speed
-            block.move(0, speed)
+            block.move(0, speed * dt)
 
     def extra_obs(self):
         depth = min(self.sink / (self.height - self.FLOOR_Y + self.PIT_DEPTH), 1.0)
