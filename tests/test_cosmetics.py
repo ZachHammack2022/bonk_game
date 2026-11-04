@@ -23,9 +23,14 @@ def test_guests_get_the_free_ones_and_members_earn_the_rest():
     assert cosmetics.unlocked("pattern", "galaxy", fresh) and cosmetics.unlocked("hat", "cap", fresh)
     assert not cosmetics.unlocked("trail", "rainbow", fresh)
     assert cosmetics.unlocked("trail", "rainbow", _profile(wins=10))
-    assert not cosmetics.unlocked("hat", "halo", _profile(awards={"survivor": 4}))
-    assert cosmetics.unlocked("hat", "halo", _profile(awards={"survivor": 5}))
+    assert cosmetics.unlocked("hat", "halo", fresh) and cosmetics.unlocked("pattern", "target", fresh)
     assert not cosmetics.unlocked("hat", "sombrero", fresh)
+
+
+def test_nothing_is_locked_behind_awards():
+    for items in cosmetics.CATALOG.values():
+        for _i, _name, need in items:
+            assert need in (None, "account") or need[0] in cosmetics.STAT_WORDS
 
 
 def test_every_item_says_how_to_get_it():

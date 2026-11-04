@@ -3,9 +3,10 @@
 // - Killcam: the browser keeps the last few seconds of the match it was
 //   sent; on the results screen 🎬 plays the final knockout in slow motion.
 // - ⬇ Replay downloads the whole match as a small file (everyone's inputs).
-// - 🎞 Watch a replay (home screen): the server plays a file back through
-//   the same physics and sends the states; you can pause, change speed and
-//   jump around.
+// - Watching a replay file (#replay-file; there's no button for it on the
+//   home screen any more): the server plays a file back through the same
+//   physics and sends the states; you can pause, change speed and jump
+//   around.
 //
 // Both feed states into app.states as if they were arriving from a match,
 // so the match is drawn exactly as usual (draw.js).
@@ -139,7 +140,6 @@ $("replay-download").addEventListener("click", () => {
 // ---------------------------------------------------------------------------
 // Watching a replay file
 // ---------------------------------------------------------------------------
-$("open-replay").addEventListener("click", () => $("replay-file").click());
 $("replay-file").addEventListener("change", async () => {
   const f = $("replay-file").files[0];
   $("replay-file").value = "";
