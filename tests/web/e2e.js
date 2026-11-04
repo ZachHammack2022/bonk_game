@@ -75,9 +75,9 @@ function check(cond, what) {
     await host.click("#edit-ball");
     await host.click("#profile-colors [title=Purple]");
     await host.click("#profile-patterns [data-pattern=stripes]");
-    await host.waitForSelector("#profile-extras .looks-trail [data-look=rainbow]");
-    check(await host.isVisible("#profile-extras .looks-hat [data-look=none].on") && !(await host.$("#profile-extras .locked")),
-      "trails, hats and knockout effects are in Customize, all of them free for guests too");
+    await host.waitForSelector("#profile-extras .looks-trail [data-look=sparkle].locked");
+    check(await host.isVisible("#profile-extras .looks-hat [data-look=none].on") && !(await host.$("#profile-extras [data-look=halo].locked")),
+      "trails, hats and knockout effects are in Customize: a few locked for guests (sign in), the rest free");
     await host.click("#profile-extras .looks-hat [data-look=halo]");
     check(await host.isVisible("#profile-extras .looks-hat [data-look=halo].on"), "a guest can wear the halo");
     await host.click("#profile-extras .looks-hat [data-look=none]");

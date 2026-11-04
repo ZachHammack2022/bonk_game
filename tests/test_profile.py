@@ -21,7 +21,7 @@ def test_the_client_knows_the_same_colours_and_patterns():
     patterns = re.search(r"const PATTERNS = \[(.*?)\];", js, re.S).group(1)
     assert re.findall(r'"(\w+)"', patterns) == list(PATTERNS)
     names = re.search(r"const PATTERN_NAMES = \{(.*?)\};", js, re.S).group(1)
-    assert dict(re.findall(r'(\w+): "([^"]+)"', names)) == dict(cosmetics.CATALOG["pattern"])
+    assert dict(re.findall(r'(\w+): "([^"]+)"', names)) == {i: n for i, n, _ in cosmetics.CATALOG["pattern"]}
 
 
 async def _room(*names):

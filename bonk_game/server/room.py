@@ -82,7 +82,7 @@ class Member:
         self.last_report = None  # when they last sent a playtest report
         self.errors_sent = 0     # client errors logged for them
         self.account = None      # their account id, when signed in (accounts.py)
-        self.own_color = None    # a colour of their own ("#rrggbb")
+        self.own_color = None    # a colour of their own ("#rrggbb"): signed in only
         self.pid = secrets.token_hex(4)  # how the others see them (the token is a secret)
         self.names = collections.deque([name], maxlen=5)  # names they've used here, for reports
         self.report_times = collections.deque(maxlen=moderation.REPORTS_PER_MINUTE)
@@ -470,10 +470,12 @@ class Room:
         return None
 
     def pick_own_color(self, token, color):
-        """Someone picks any colour ("#rrggbb"), or None to go back to the
-        palette. Whether they get it depends on who else is playing
-        (lobby.own_colors)."""
+        """A signed-in player picks any colour ("#rrggbb"), or None to go
+        back to the palette. Whether they get it depends on who else is
+        playing (lobby.own_colors)."""
         m = self.members[token]
+        if m.account is None:
+            return "Sign in to pick any colour."
         if color is not None and not (isinstance(color, str) and HEX_COLOR.match(color.lower())):
             return "Unknown colour."
         m.own_color = color.lower() if color else None
@@ -481,9 +483,9 @@ class Room:
 
     def pick_look(self, token, kind, item):
         """Someone picks a pattern, trail, hat or knockout effect
-        (cosmetics.py: anyone can wear any of them). Returns what's wrong
-        (an unknown item), or None."""
-        problem = cosmetics.problem(kind, item)
+        (cosmetics.py: a few are for signed-in players). Returns what's
+        wrong, or None."""
+        problem = cosmetics.problem(kind, item, signed_in=self.members[token].account is not None)
         if problem is None:
             setattr(self.members[token], kind, item)
         return problem

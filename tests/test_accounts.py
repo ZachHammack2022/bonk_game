@@ -131,9 +131,9 @@ def test_accounts_are_off_without_google_settings():
             r = await client.get("/api/me")
             body = await r.json()
             assert body["accounts"] is False and body["user"] is None
-            # A guest can wear everything
+            # A guest can wear everything but the members' few
             free = {i["id"] for i in body["cosmetics"]["pattern"] if i["unlocked"]}
-            assert {"plain", "swirl", "galaxy", "target"} <= free
+            assert {"plain", "swirl", "target", "flame"} <= free and "galaxy" not in free
             r = await client.get("/auth/google", allow_redirects=False)
             assert r.status == 404
             r = await client.get("/privacy")
@@ -298,11 +298,10 @@ def test_account_perks_are_checked_by_the_server():
         await room.join("g", "Guest", guest)
         await room.join("m", "Member", member, account="u1")
         assert member.msgs[0]["signed_in"] and not guest.msgs[0]["signed_in"]
-        # Guests can pick any colour and wear anything too
-        await room.handle("g", {"type": "own_color", "color": "#abcdef"})
-        assert room.members["g"].own_color == "#abcdef"
+        await room.handle("g", {"type": "own_color", "color": "#123456"})
+        assert guest.msgs[-2]["message"] == "Sign in to pick any colour." and room.members["g"].own_color is None
         await room.handle("g", {"type": "pattern", "pattern": "galaxy"})
-        assert room.members["g"].pattern == "galaxy"
+        assert room.members["g"].pattern == "plain"
         await room.handle("m", {"type": "own_color", "color": "#123456"})
         await room.handle("m", {"type": "pattern", "pattern": "galaxy"})
         await room.handle("m", {"type": "own_color", "color": "red; x"})  # (refused)

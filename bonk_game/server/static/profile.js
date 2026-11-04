@@ -7,7 +7,7 @@
 //     id: "<random>",           this browser's profile (not the room token)
 //     merged: ["<id>", ...],    other profiles already added in (merge)
 //     name, color, own_color, pattern, trail, hat, ko, muted,
-//                               (own_color: "#rrggbb" or null)
+//                               (own_color: "#rrggbb" or null; accounts only)
 //     prefs: { volume, shake, ping, keys: {...} },
 //     stats: { matches, wins, kos, falls, deaths, pickups, best_hit,
 //              awards: { kos: 3, ... }, modes: { ffa: { matches, wins } },
