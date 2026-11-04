@@ -6,8 +6,9 @@ Routes:
     GET  /               the client (home screen)
     GET  /r/<code>       the client, opening room <code>
     GET  /static/...     client files
-    POST /api/rooms      create a room -> {"room": "ABCD"}
-    GET  /api/public     the public rooms, for the home page's list
+    GET  /play           the game browser (the page itself; the client draws it)
+    POST /api/rooms      create a room -> {"room": "ABCD"}; {"public": true} lists it
+    GET  /api/public     the game browser's list: public rooms, people online, private rooms
     POST /api/quickplay  a public room to join -> {"room": "ABCD"} (room.py)
     GET  /api/rooms/<code>   {"room": "ABCD", "players": 3} or 404
     GET  /api/rooms/<code>/replay   the room's last match as a replay file
@@ -230,11 +231,21 @@ async def create_room(request):
     except ServerFull:
         return web.json_response({"error": "The server is full right now. Try again later."},
                                  status=503)
-    return web.json_response({"room": room.code})
+    # {"public": true} lists it in the game browser from the start (the host
+    # can still change it in the lobby). Anything else: private.
+    try:
+        body = await request.json() if request.can_read_body else {}
+    except ValueError:
+        body = {}
+    if isinstance(body, dict) and body.get("public") is True:
+        room.settings["public"] = True
+    return web.json_response({"room": room.code, "public": room.settings["public"]})
 
 
 async def public_rooms(request):
-    return web.json_response({"rooms": request.app[ROOMS].public()},
+    """The game browser's list: {"rooms": [...], "online", "private", "more"}
+    (RoomManager.browse)."""
+    return web.json_response(request.app[ROOMS].browse(),
                              headers={"Cache-Control": "no-store"})
 
 
@@ -488,6 +499,7 @@ def make_app(rooms=None, auth_config=None, accounts=None):
     app[TERMS_PAGE] = render_privacy(name="terms.html")
     app.router.add_get("/", index)
     app.router.add_get("/r/{code}", index)
+    app.router.add_get("/play", index)        # the game browser
     app.router.add_post("/api/rooms", create_room)
     app.router.add_get("/api/public", public_rooms)
     app.router.add_post("/api/quickplay", quick_play)

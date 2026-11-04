@@ -54,7 +54,7 @@ EMOTES = 4               # emote ids 0-3 (the client picks the pictures)
 EMOTE_GAP = 0.8          # seconds between one person's emotes
 AUTO_START = 2.0         # quick-play rooms: seconds from someone joining to the match starting
 AUTO_NEXT = 10.0         # and from the results to the next match
-PUBLIC_LISTED = 50       # public rooms shown on the home page
+PUBLIC_LISTED = 200      # public rooms the game browser lists (it filters and pages them)
 
 
 class RoomFull(Exception):
@@ -774,13 +774,25 @@ class Room:
             self.task.cancel()
 
     def listing(self):
-        """How the room shows in the home page's list of public rooms."""
+        """How the room shows in the game browser (the list of public rooms).
+        Names are the ones shown in the room (already moderated); never
+        anyone's token."""
+        s = self.settings
         humans, bots = self.seats()
-        info = MAPS[self.settings["map"]]
+        info = MAPS[s["map"]]
+        mode = modes.MODES[s["mode"]]
         host = self.members.get(self.host)
-        return {"room": self.code, "map": info.title, "mode": modes.MODES[self.settings["mode"]].title,
+        match = self.match
+        return {"room": self.code, "map": info.title, "map_id": s["map"],
+                "mode": mode.title, "mode_id": s["mode"],
+                "goal": mode.goal_short(s["first_to"]),
                 "people": len(self.connected), "bots": len(bots), "most": info.players[1],
-                "playing": self.match is not None, "host": host.name if host else None}
+                "names": [m.name for m in self.connected][:limits.MAX_MEMBERS],
+                "playing": match is not None,
+                "elapsed": round(match.tick_count / TICK_HZ) if match is not None else None,
+                "open": self.has_space(),
+                "power_ups": bool(s.get("power_ups")), "gravity": s.get("gravity", "normal"),
+                "quick": self.quick, "host": host.name if host else None}
 
     def has_space(self):
         """Is there room to play here (now or in the next match)?"""
@@ -854,6 +866,17 @@ class RoomManager:
                  if r.settings.get("public") and r.connected and not r.closing]
         rooms.sort(key=lambda r: (-len(r.connected), r.created))
         return [r.listing() for r in rooms[:PUBLIC_LISTED]]
+
+    def browse(self):
+        """What the game browser shows: the public rooms, plus how many
+        people are playing and how many private rooms are going (counts
+        only: private rooms are reached by their code or link)."""
+        live = [r for r in self.rooms.values() if r.connected and not r.closing]
+        public = self.public()
+        return {"rooms": public,
+                "online": sum(len(r.connected) for r in live),
+                "private": sum(1 for r in live if not r.settings.get("public")),
+                "more": max(0, sum(1 for r in live if r.settings.get("public")) - len(public))}
 
     def quick_play(self, allow_new=lambda: True):
         """Quick play: the public room with the most people that still has

@@ -18,7 +18,7 @@
 //   replay.js    the killcam, and watching replay files
 //   draw.js      drawing the match
 //   looks.js     trails, hats, knockout effects, and how balls look on your screen
-//   people.js    Quick play and public rooms; muting and reporting people
+//   people.js    the game browser (public games, Quick match, New game); muting and reporting people
 //   account.js   signing in with Google (optional) and your account
 //   main.js      start up
 // Code that runs as a file loads may only use what earlier files define.
@@ -138,8 +138,8 @@ function status(text) {
   $("status").classList.toggle("hidden", !text);
 }
 function show(screen) {
-  for (const id of ["home", "lobby", "game"]) $(id).classList.toggle("hidden", id !== screen);
-  watchPublic(screen === "home");  // (people.js)
+  for (const id of ["home", "browse", "lobby", "game"]) $(id).classList.toggle("hidden", id !== screen);
+  watchPublic(screen === "home" || screen === "browse");  // (people.js)
 }
 
 // ---------------------------------------------------------------------------
@@ -255,20 +255,7 @@ $("name").addEventListener("change", () => {
   me.name = $("name").value.trim().slice(0, 16);
   send({ type: "name", name: me.name });
 });
-$("create").addEventListener("click", async () => {
-  $("name").dispatchEvent(new Event("change"));
-  $("create").disabled = true;
-  try {
-    const r = await fetch("/api/rooms", { method: "POST" });
-    const body = await r.json();
-    if (!r.ok) toast(body.error || "Couldn't create a room.", true);
-    else openRoom(body.room, true);
-  } catch (e) {
-    toast("Couldn't create a room. Is the server running?", true);
-  } finally {
-    $("create").disabled = false;
-  }
-});
+$("create").addEventListener("click", () => newGame(false, $("create")));  // (people.js)
 $("join-form").addEventListener("submit", (e) => {
   e.preventDefault();
   $("name").dispatchEvent(new Event("change"));
@@ -296,6 +283,9 @@ function route() {
       return;
     }
     openRoom(m[1], false);
+  } else if (/^\/play\/?$/.test(location.pathname)) {
+    leaveRoom();
+    openBrowse(false);  // (people.js)
   } else {
     leaveRoom();
   }
