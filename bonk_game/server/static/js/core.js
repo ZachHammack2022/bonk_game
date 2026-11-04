@@ -232,7 +232,7 @@ const app = {
   ws: null,
   room: null,
   password: null,    // the room's password, if it has one (sent in "hello")
-  linkPassword: null,  // [code, password] from a link opened before you had a name
+  invite: null,       // [code, password] from a link opened before you had a name
   welcome: null,
   lobby: null,
   match: null,       // the "match" message: slots, map, first_to
@@ -260,15 +260,23 @@ $("name").addEventListener("change", () => {
   me.name = $("name").value.trim().slice(0, 16);
   send({ type: "name", name: me.name });
 });
-$("create").addEventListener("click", () => openNewGame());  // (people.js)
+// Came with an invite link before you had a name: the home page offers that
+// game (after you've typed a name), or the list of every game instead
+function showInvite(code, password) {
+  app.invite = code ? [code, password || null] : null;
+  $("join-form").classList.toggle("hidden", !code);
+  $("home-play").classList.toggle("hidden", !!code);
+  if (code) $("join-code").textContent = `Join game ${code}`;
+}
 $("join-form").addEventListener("submit", (e) => {
   e.preventDefault();
+  if (!app.invite) return;
   $("name").dispatchEvent(new Event("change"));
-  const code = $("code").value.trim().toUpperCase();
-  const link = app.linkPassword;  // (came with a link, before you had a name)
-  if (code.length === 4) openRoom(code, true, link && link[0] === code ? link[1] : undefined);
-  else toast("Room codes are 4 letters.", true);
+  const [code, password] = app.invite;
+  showInvite(null);
+  openRoom(code, true, password || undefined);
 });
+$("join-other").addEventListener("click", () => { showInvite(null); openBrowse(true); });  // (people.js)
 
 // A room's link: with its password, if it has one, so it's filled in for you
 const roomLink = (code, password) => `/r/${code}` + (password ? `?pw=${encodeURIComponent(password)}` : "");
@@ -322,16 +330,17 @@ function route() {
     if (!me.name) {
       // Ask for a name first; joining comes from the form
       show("home");
-      $("code").value = m[1].toUpperCase();
-      app.linkPassword = pw ? [m[1].toUpperCase(), pw] : null;
+      showInvite(m[1].toUpperCase(), pw);
       $("name").focus();
       return;
     }
     openRoom(m[1], false, pw || undefined);
   } else if (/^\/play\/?$/.test(location.pathname)) {
+    showInvite(null);
     leaveRoom();
     openBrowse(false);  // (people.js)
   } else {
+    showInvite(null);
     leaveRoom();
   }
 }

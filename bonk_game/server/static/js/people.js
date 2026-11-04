@@ -18,7 +18,6 @@ const GAMES_PAGE = 20;      // rows shown before "Show more"
 let publicTimer = null;
 const browse = {
   data: null,             // the last /api/public answer
-  show: "all",            // all | open | lobby
   mode: "", map: "", search: "",
   hideLocked: false,      // Hide private games
   sort: "players", desc: true,
@@ -51,7 +50,7 @@ function renderHomeCount() {
   const n = d ? d.rooms.length : 0;
   $("find-help").textContent = n
     ? `${plural(n, "game")} on right now${d.online ? `, ${plural(d.online, "player")} online` : ""}.`
-    : "See every game and pick one to join.";
+    : "Join a game or make your own.";
 }
 
 function openBrowse(push) {
@@ -65,7 +64,6 @@ function openBrowse(push) {
 function filteredGames() {
   const q = browse.search.trim().toLowerCase();
   const rows = browse.data.rooms.filter((r) =>
-    (browse.show !== "open" || r.open) && (browse.show !== "lobby" || !r.playing) &&
     (!browse.hideLocked || !r.locked) &&
     (!browse.mode || r.mode_id === browse.mode) && (!browse.map || r.map_id === browse.map) &&
     (!q || [r.room, r.name || "", r.host || "", r.map, r.mode, ...(r.names || [])].some((t) => t.toLowerCase().includes(q))));
@@ -86,16 +84,13 @@ function filteredGames() {
   return rows;
 }
 
-// The mode and map filters offer what's being played right now (and keep
-// the one picked, even if its last game just ended)
-function fillFilter(select, pairs, picked, all) {
-  const want = [["", all], ...pairs];
-  if (picked && !pairs.some(([v]) => v === picked)) want.push([picked, picked]);
-  const now = Array.from(select.options, (o) => o.value + "|" + o.textContent).join(",");
-  if (now === want.map(([v, t]) => v + "|" + t).join(",")) return;
-  select.innerHTML = "";
-  for (const [v, t] of want) select.add(new Option(t, v, false, v === picked));
+// The mode and map filters offer every mode and map (NAMES, from the server:
+// stats.js), whether or not anyone's playing it right now
+function fillFilter(select, names, all) {
+  select.replaceChildren(new Option(all, ""), ...Object.entries(names).map(([v, t]) => new Option(t, v)));
 }
+fillFilter($("filter-mode"), NAMES.modes, "All modes");
+fillFilter($("filter-map"), NAMES.maps, "All maps");
 
 function renderBrowse() {
   const d = browse.data;
@@ -104,15 +99,12 @@ function renderBrowse() {
   const bits = [plural(rooms.length + (d.more || 0), "game") + (locked ? ` (${locked} private)` : ""),
     plural(d.online, "player") + " online"];
   $("browse-summary").textContent = bits.join(" · ");
-  const uniq = (key, title) => [...new Map(rooms.map((r) => [r[key], r[title]])).entries()].sort((a, b) => (a[1] < b[1] ? -1 : 1));
-  fillFilter($("filter-mode"), uniq("mode_id", "mode"), browse.mode, "All modes");
-  fillFilter($("filter-map"), uniq("map_id", "map"), browse.map, "All maps");
 
   const rows = filteredGames();
   const list = $("games-list");
   list.innerHTML = "";
   for (const r of rows.slice(0, browse.shown)) list.appendChild(gameRow(r));
-  const filtering = browse.show !== "all" || browse.mode || browse.map || browse.search.trim() || browse.hideLocked;
+  const filtering = browse.mode || browse.map || browse.search.trim() || browse.hideLocked;
   $("games-empty").classList.toggle("hidden", rows.length > 0);
   $("games-empty-text").textContent = rooms.length
     ? "No games match these filters."
@@ -183,11 +175,7 @@ function gameRow(r) {
   b.textContent = r.open ? "Join" : "Watch";
   b.setAttribute("aria-label", `${b.textContent} ${name.textContent}: ${r.mode} on ${r.map}`);
   // A game with a password: ask for it here (no need to ask the server first)
-  b.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (r.locked) askPassword(r.room, false);  // (core.js)
-    else openRoom(r.room, true, null);
-  });
+  b.addEventListener("click", (e) => { e.stopPropagation(); joinListed(r); });
   row.addEventListener("click", () => b.click());
 
   const lock = cell("g-lock");
@@ -202,17 +190,6 @@ function gameRow(r) {
   return row;
 }
 
-for (const b of document.querySelectorAll(".browse-bar .seg button")) {
-  b.addEventListener("click", () => {
-    browse.show = b.dataset.show;
-    browse.shown = GAMES_PAGE;
-    for (const o of document.querySelectorAll(".browse-bar .seg button")) {
-      o.classList.toggle("on", o === b);
-      o.setAttribute("aria-checked", String(o === b));
-    }
-    renderBrowse();
-  });
-}
 for (const b of document.querySelectorAll(".games-head [data-sort]")) {
   b.addEventListener("click", () => {
     if (browse.sort === b.dataset.sort) browse.desc = !browse.desc;
@@ -226,16 +203,26 @@ $("filter-map").addEventListener("change", () => { browse.map = $("filter-map").
 $("browse-search").addEventListener("input", () => { browse.search = $("browse-search").value; browse.shown = GAMES_PAGE; renderBrowse(); });
 $("games-more").addEventListener("click", () => { browse.shown += GAMES_PAGE; renderBrowse(); });
 $("clear-filters").addEventListener("click", () => {
-  Object.assign(browse, { show: "all", mode: "", map: "", search: "", shown: GAMES_PAGE, hideLocked: false });
-  $("browse-search").value = "";
+  Object.assign(browse, { mode: "", map: "", search: "", shown: GAMES_PAGE, hideLocked: false });
+  for (const id of ["browse-search", "filter-mode", "filter-map"]) $(id).value = "";
   $("hide-locked").checked = false;
-  document.querySelector('.browse-bar .seg [data-show="all"]').click();
+  renderBrowse();
 });
-$("code-form").addEventListener("submit", (e) => {
+function joinListed(r) {
+  if (r.locked) askPassword(r.room, false);  // (core.js)
+  else openRoom(r.room, true, null);
+}
+
+// Enter in the search: the one game it finds, or (for a game that isn't
+// listed yet) the 4-letter code you typed
+$("browse-search").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
   e.preventDefault();
-  const code = $("browse-code").value.trim().toUpperCase();
-  if (/^[A-Z]{4}$/.test(code)) openRoom(code, true);
-  else toast("Game codes are 4 letters.", true);
+  const q = $("browse-search").value.trim();
+  const found = browse.data ? filteredGames() : [];
+  const exact = found.length === 1 ? found[0] : found.find((r) => r.room === q.toUpperCase());
+  if (exact) joinListed(exact);
+  else if (/^[A-Za-z]{4}$/.test(q)) openRoom(q.toUpperCase(), true);  // (core.js)
 });
 $("find").addEventListener("click", () => openBrowse(true));
 $("browse-back").addEventListener("click", () => leaveRoom(true));

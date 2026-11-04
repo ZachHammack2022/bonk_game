@@ -43,7 +43,6 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "Escape") closeSettings();
     return;
   }
-  if (e.code === "Escape" && !$("stats").classList.contains("hidden")) { $("stats").classList.add("hidden"); return; }
   if (e.code === "Escape" && !$("game-settings").classList.contains("hidden")) { closeGameSettings(); return; }
   if (e.code === "Escape" && !e.target.matches("input")) { openSettings(); return; }
   // Typing (chat, names): not game keys

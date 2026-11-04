@@ -38,17 +38,52 @@ function keyName(code) {
 
 const menu = { capture: null };  // the action waiting for a key press
 
-function openSettings() {
-  renderSettings();
-  renderPeople();  // (people.js)
-  $("settings").classList.remove("hidden");
+// ---------------------------------------------------------------------------
+// Your profile: one page, the same from everywhere, with tabs for your ball,
+// your stats and your settings, and signing in at the bottom. The Profile
+// button (start page, game list) opens it on your ball; the gear and Esc (in
+// a room) open it on Settings.
+// ---------------------------------------------------------------------------
+const ME_PANES = { ball: "profile", stats: "stats", settings: "settings" };
+let meTab = "ball";
+
+function showMeTab(tab) {
+  meTab = tab;
+  menu.capture = null;
+  for (const b of document.querySelectorAll("#me-tabs button")) {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on);
+  }
+  for (const [t, id] of Object.entries(ME_PANES)) $(id).classList.toggle("hidden", t !== tab);
+  if (tab === "ball") renderProfileEditor();         // (lobby.js)
+  else if (tab === "stats") renderStats();           // (stats.js)
+  else { renderSettings(); renderPeople(); }         // (people.js)
+}
+function openMe(tab) {
+  showMeTab(tab || meTab);
+  renderMeHead();
+  $("me").classList.remove("hidden");
   held.keys.clear(); sendInput();
 }
-function closeSettings() {
+function closeMe() {
   menu.capture = null;
-  $("settings").classList.add("hidden");
+  $("me").classList.add("hidden");
 }
-const settingsOpen = () => !$("settings").classList.contains("hidden");
+const meOpen = () => !$("me").classList.contains("hidden");
+// Its header, and the Profile buttons: your ball and your name
+function renderMeHead() {
+  const name = (me.name || "").trim() || "Player";
+  $("me-name").textContent = profileStore.user ? `${name} · signed in` : `${name} · guest`;
+  $("me-ball").replaceChildren(ballCanvas(40, me.ballHex, me.pattern, me.look("hat")));  // (lobby.js)
+  for (const el of document.querySelectorAll(".me-button-ball")) {
+    el.replaceChildren(ballCanvas(22, me.ballHex, me.pattern, "none"));
+  }
+}
+
+const openSettings = () => openMe("settings");
+const closeSettings = closeMe;
+const settingsOpen = meOpen;
 
 function renderSettings() {
   $("set-volume").value = Math.round(prefs.volume * 100);
@@ -110,11 +145,16 @@ function updateHelp() {
   $("controls-help").textContent = `Move with ${moves} or the arrow keys. ${keyName(k.heavy)} or Shift goes heavy. 1–4 for emotes. Esc for settings.`;
 }
 
-for (const id of ["open-settings-home", "open-settings-lobby", "open-settings-game"]) {
+for (const id of ["open-settings-lobby", "open-settings-game"]) {
   $(id).addEventListener("click", (e) => { e.currentTarget.blur(); openSettings(); });
 }
-$("settings-close").addEventListener("click", closeSettings);
-$("settings").addEventListener("click", (e) => { if (e.target === $("settings")) closeSettings(); });
+for (const b of document.querySelectorAll(".me-button")) {
+  b.addEventListener("click", (e) => { e.currentTarget.blur(); openMe(b.dataset.me); });
+}
+for (const b of document.querySelectorAll("#me-tabs button")) b.addEventListener("click", () => showMeTab(b.dataset.tab));
+$("me-close").addEventListener("click", closeMe);
+$("me-done").addEventListener("click", closeMe);
+$("me").addEventListener("click", (e) => { if (e.target === $("me")) closeMe(); });
 $("set-volume").addEventListener("input", () => {
   prefs.volume = +$("set-volume").value / 100;
   if (sound.muted && prefs.volume > 0) sound.setMuted(false);

@@ -1,4 +1,4 @@
-// bonk web client: Your stats (📊 on the home screen): lifetime totals,
+// bonk web client: Your stats (the Stats tab of your profile): lifetime totals,
 // awards, results by mode and your recent matches, from your profile
 // (profileStore in core.js). Signed in, Download my data saves a copy.
 // Plain scripts sharing one global scope; index.html loads them in order.
@@ -34,7 +34,7 @@ function renderStats() {
   body.innerHTML = "";
   $("stats-since").textContent = s.first_at
     ? `${s.matches} match${s.matches === 1 ? "" : "es"} since ${new Date(s.first_at * 1000).toLocaleDateString()}.`
-    : "No matches yet.";
+    : "";
   if (!s.matches) {
     body.append(el("p", "dim", "No matches yet. Play one and it shows up here."));
     return;
@@ -91,9 +91,6 @@ function renderStats() {
 
 const AWARD_TITLES = { kos: "Most knockouts", hit: "Hardest hit", falls: "Butterfingers", survivor: "Survivor", pickups: "Power hungry" };
 
-function openStats() { renderStats(); $("stats").classList.remove("hidden"); }
-$("open-stats").addEventListener("click", openStats);
-$("stats-close").addEventListener("click", () => $("stats").classList.add("hidden"));
 
 // Signed in: a copy of everything your account keeps (see the privacy page)
 $("download-data").addEventListener("click", () => {

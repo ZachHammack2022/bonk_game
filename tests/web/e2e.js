@@ -81,7 +81,10 @@ function check(cond, what) {
     await host.click("#profile-extras .looks-hat [data-look=halo]");
     check(await host.isVisible("#profile-extras .looks-hat [data-look=halo].on"), "a guest can wear the halo");
     await host.click("#profile-extras .looks-hat [data-look=none]");
-    await host.click("#profile-close");
+    check(await host.isVisible('#me-tabs [data-tab="ball"].on'), "your ball opens your profile, on its Ball tab");
+    await host.click("#me-tabs [data-tab=settings]");
+    check(await host.isVisible("#set-keys") && await host.isHidden("#profile-colors"), "settings are a tab of your profile");
+    await host.click("#me-done");
     check((await host.textContent("#home-ball-label")).includes("Purple"), "you can pick a favourite colour and pattern");
     await host.keyboard.press("Escape");
     await host.waitForSelector("#settings:not(.hidden)");
@@ -89,7 +92,12 @@ function check(cond, what) {
     await host.keyboard.press("KeyH");
     await host.keyboard.press("Escape");
     check(await host.evaluate(() => JSON.parse(localStorage.getItem("bonk.profile")).prefs.keys.heavy === "KeyH"), "keys can be rebound in settings");
-    await host.click("#create");
+    check(!(await host.$("#create")) && !(await host.isVisible("#join-form")) && await host.isVisible("#find"),
+      "the start page has one way in: Play");
+    await shot(host, "home");
+    await host.click("#find");
+    await host.waitForSelector("#browse:not(.hidden)");
+    await host.click("#new-game");
     await host.waitForSelector("#new-dialog:not(.hidden)");
     const hostName = await host.inputValue("#name");
     check((await host.inputValue("#new-name")) === `${hostName}'s room`, "a new room is named after you, to start with");
@@ -115,6 +123,8 @@ function check(cond, what) {
     });
     await guest.goto(url);
     await guest.fill("#name", "Bob");
+    check((await guest.textContent("#join-form button")).includes(code) && await guest.isHidden("#find"),
+      "an invite link offers that game on the start page");
     await guest.click("#join-form button");
     await guest.waitForSelector("#lobby:not(.hidden)");
     check(true, "the invite link fills in the password");
@@ -294,12 +304,16 @@ function check(cond, what) {
     await host.click("#game-settings-done");
     await shot(host, "lobby-crown");
 
-    // A phone joins by typing the code
+    // A phone joins by searching for the code
     const phone = await open("phone", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     await phone.goto(base + "/");
     await phone.fill("#name", "Cat");
-    await phone.fill("#code", code.toLowerCase());
-    await phone.click("#join-form button");
+    await phone.click("#find");
+    check(!(await phone.$("#browse-code")), "the game list has one search box, no separate code box");
+    await phone.fill("#browse-search", code.toLowerCase());
+    await phone.waitForFunction(() => document.querySelectorAll("#games-list .game-row").length === 1);
+    check(true, "searching a code finds its game");
+    await phone.press("#browse-search", "Enter");
     await phone.waitForSelector("#pw-dialog:not(.hidden)");
     check(true, "joining by code asks for the password");
     await phone.fill("#pw-input", "wrong1");
@@ -329,8 +343,9 @@ function check(cond, what) {
     const lost = await open("lost");
     await lost.goto(base + "/");
     await lost.fill("#name", "Dan");
-    await lost.fill("#code", "ZZZZ");
-    await lost.click("#join-form button");
+    await lost.click("#find");
+    await lost.fill("#browse-search", "ZZZZ");
+    await lost.press("#browse-search", "Enter");
     await lost.waitForSelector("#toast:not(.hidden)");
     check((await lost.textContent("#toast")).includes("doesn't exist"), "a bad code says so");
 
@@ -378,17 +393,19 @@ function check(cond, what) {
     check(prof.stats.matches === 2 && prof.history.length === 2 && prof.history[0].map === "classic" && prof.history[0].of === prof.history[0].players,
       `matches go into your history (${prof.stats.matches}: ${prof.history.map((h) => h.mode + " " + h.place + "/" + h.of).join(", ")})`);
     await host.goto(base + "/");
-    await host.click("#open-stats");
+    await host.click("#open-profile");
+    await host.click("#me-tabs [data-tab=stats]");
     check((await host.$$eval("#stats .stat-history li", (els) => els.length)) === 2 && (await host.isVisible(".stat-tiles")),
       "the stats screen shows your totals and recent matches");
     await shot(host, "stats");
     check(await host.isHidden("#download-data"), "guests have no data download (their profile is in the browser)");
     const fresh = await open("fresh");
     await fresh.goto(base + "/");
-    await fresh.click("#open-stats");
+    await fresh.click("#open-profile");
+    await fresh.click("#me-tabs [data-tab=stats]");
     check((await fresh.textContent("#stats-body")).includes("No matches yet"), "a new browser has no matches");
 
-    await fresh.click("#stats-close");
+    await fresh.click("#me-done");
     check(!(await fresh.$("#replay-file")) && !(await fresh.$("#replay-download")), "there are no replay files to watch or download");
     check((await fetch(base + "/api/replay", { method: "POST", body: "{}" })).status === 404, "and no server routes for them");
 
@@ -432,6 +449,10 @@ function check(cond, what) {
     await shot(q2, "browse");
     await q2.selectOption("#filter-map", "platform");
     check((await q2.$$("#games-list .game-row")).length === 1, "and filters by map");
+    check(await q2.evaluate(() => document.querySelectorAll("#filter-map option").length === Object.keys(NAMES.maps).length + 1 &&
+      document.querySelectorAll("#filter-mode option").length === Object.keys(NAMES.modes).length + 1),
+    "the map and mode filters offer every map and mode, played right now or not");
+    check(!(await q2.$(".browse-bar .seg")), "there's no All / Open seats / In lobby switch");
     await q2.fill("#browse-search", "nothing like this");
     await q2.waitForSelector("#games-empty:not(.hidden)");
     check((await q2.textContent("#games-empty-text")).includes("match these filters"), "a search with no games says so");
@@ -454,7 +475,7 @@ function check(cond, what) {
     await q1.click("#report-send");
     await q1.waitForFunction(() => /Thanks/.test(document.querySelector("#toast").textContent));
     await q1.click("#person-close");
-    await q1.click("#settings-close");
+    await q1.click("#me-done");
     check(await q1.evaluate(() => app.match.slots.some((s) => s.name === "Muted player")), "a muted player's name is hidden");
     await q2.keyboard.press("Digit1");
     await q2.waitForTimeout(500);
