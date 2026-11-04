@@ -4,10 +4,10 @@
 "use strict";
 
 // ---------------------------------------------------------------------------
-// The game browser (/play): every game in a table to filter, sort and join.
-// A game with a password shows a lock, and asks for it when you join (its
-// invite link has it in, so friends never see the question). Quick match and
-// New game live here too.
+// The game browser (/play): every game, public and private, in a table to
+// filter, sort and join. A private game (it has a password) shows a lock and
+// asks for the password when you join (its invite link has it in, so friends
+// never see the question). New game lives here too.
 //
 // It's built for any number of games: the server sends up to a couple of
 // hundred (the busiest first) with the totals, and this filters, sorts and
@@ -20,7 +20,7 @@ const browse = {
   data: null,             // the last /api/public answer
   show: "all",            // all | open | lobby
   mode: "", map: "", search: "",
-  hideLocked: false,      // Hide passworded
+  hideLocked: false,      // Hide private games
   sort: "players", desc: true,
   shown: GAMES_PAGE,
 };
@@ -100,7 +100,9 @@ function fillFilter(select, pairs, picked, all) {
 function renderBrowse() {
   const d = browse.data;
   const rooms = d.rooms;
-  const bits = [plural(rooms.length + (d.more || 0), "game"), plural(d.online, "player") + " online"];
+  const locked = rooms.filter((r) => r.locked).length;
+  const bits = [plural(rooms.length + (d.more || 0), "game") + (locked ? ` (${locked} private)` : ""),
+    plural(d.online, "player") + " online"];
   $("browse-summary").textContent = bits.join(" · ");
   const uniq = (key, title) => [...new Map(rooms.map((r) => [r[key], r[title]])).entries()].sort((a, b) => (a[1] < b[1] ? -1 : 1));
   fillFilter($("filter-mode"), uniq("mode_id", "mode"), browse.mode, "All modes");
@@ -117,7 +119,6 @@ function renderBrowse() {
     : "No games right now. Start one and it shows up here.";
   $("clear-filters").classList.toggle("hidden", !filtering || !rooms.length);
   $("empty-public").classList.toggle("hidden", !!rooms.length && !!filtering);
-  $("empty-quick").classList.toggle("hidden", !!rooms.length && !!filtering);
   const left = rows.length - browse.shown;
   $("games-more").classList.toggle("hidden", left <= 0);
   $("games-more").textContent = `Show ${Math.min(left, GAMES_PAGE)} more (${left} hidden)`;
@@ -192,8 +193,8 @@ function gameRow(r) {
   const lock = cell("g-lock");
   if (r.locked) {
     lock.innerHTML = icon("lock");
-    lock.title = "Has a password";
-    lock.setAttribute("aria-label", "Has a password");
+    lock.title = "Private: needs the password";
+    lock.setAttribute("aria-label", "Private");
   }
 
   row.append(game, cell("g-players", dots, count), cell("g-mode", mode, goal), lock, cell("g-map", r.map),
@@ -239,31 +240,12 @@ $("code-form").addEventListener("submit", (e) => {
 $("find").addEventListener("click", () => openBrowse(true));
 $("browse-back").addEventListener("click", () => leaveRoom(true));
 
-// Quick match: the busiest public game with a free seat, or a new one with bots
-async function quickMatch(button) {
-  $("name").dispatchEvent(new Event("change"));
-  button.disabled = true;
-  try {
-    const r = await fetch("/api/quickplay", { method: "POST" });
-    const body = await r.json();
-    if (!r.ok) toast(body.error || "Couldn't find a match.", true);
-    else openRoom(body.room, true);
-  } catch (e) {
-    toast("Couldn't reach the server. Try again in a moment.", true);
-  } finally {
-    button.disabled = false;
-  }
-}
-$("quick").addEventListener("click", () => quickMatch($("quick")));
-$("empty-quick").addEventListener("click", () => quickMatch($("empty-quick")));
-
-// New game: its name ("<your name>'s room" to start with) and whether it
-// has a password (made up by the server; it's in the invite link)
+// New game: its name ("<your name>'s room" to start with), public or private
+// (a private one gets a password from the server; it's in the invite link)
 const defaultRoomName = () => `${(me.name || "Player").trim() || "Player"}'s room`;
 function openNewGame() {
   $("name").dispatchEvent(new Event("change"));
   $("new-name").value = defaultRoomName();
-  $("new-locked").checked = true;
   $("new-dialog").classList.remove("hidden");
   $("new-name").focus();
   $("new-name").select();
@@ -284,10 +266,8 @@ async function newGame(name, locked, button) {
   }
 }
 $("new-game").addEventListener("click", openNewGame);
-$("new-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  newGame($("new-name").value.trim(), $("new-locked").checked, $("new-create"));
-});
+$("new-public").addEventListener("click", () => newGame($("new-name").value.trim(), false, $("new-public")));
+$("new-private").addEventListener("click", () => newGame($("new-name").value.trim(), true, $("new-private")));
 $("empty-public").addEventListener("click", openNewGame);
 $("new-cancel").addEventListener("click", () => $("new-dialog").classList.add("hidden"));
 $("new-dialog").addEventListener("click", (e) => { if (e.target === $("new-dialog")) $("new-dialog").classList.add("hidden"); });

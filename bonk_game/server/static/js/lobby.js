@@ -46,24 +46,27 @@ function renderLobby() {
   const L = app.lobby, Wm = app.welcome;
   if (!Wm) return;
   $("room-code").textContent = L.room;
-  $("room-name").textContent = L.title || "";
   const host = isHost();
   const s = L.settings;
 
-  // The room's name and password (everyone in the room can see it, to invite people)
+  // The room: its name (the host edits it in place), public or private, and
+  // a private room's password (everyone in the room sees it, to invite people)
   const nameBox = $("room-name-input");
-  if (document.activeElement !== nameBox) nameBox.value = s.name || "";
-  nameBox.placeholder = L.title || "";
-  nameBox.disabled = !host;
-  $("room-locked").checked = !!s.password;
-  $("room-locked").disabled = !host;
+  if (document.activeElement !== nameBox) nameBox.value = L.title || "";
+  nameBox.readOnly = !host;
+  nameBox.title = host ? "Rename the room" : "";
+  for (const b of $("privacy").querySelectorAll("button")) {
+    const on = (b.dataset.private === "1") === !!s.password;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", String(on));
+    b.disabled = !host;
+    b.classList.toggle("hidden", !host && !on);  // (guests just see which it is)
+  }
   $("password-row").classList.toggle("hidden", !s.password);
   const pwBox = $("room-password");
   if (document.activeElement !== pwBox) pwBox.value = s.password || "";
   pwBox.readOnly = !host;
-  $("password-help").textContent = s.password
-    ? "Everyone sees this game in Find a game, but only people with the password can join. Your invite link has it in."
-    : "Anyone can join from Find a game.";
+  pwBox.size = Math.max(6, (s.password || "").length);
 
   // Mode, map and the other settings
   const mode = modeInfo(s.mode);
@@ -82,6 +85,7 @@ function renderLobby() {
   $("map").disabled = !host;
   const mapInfo = Wm.maps.find((m) => m.name === s.map);
   $("map-desc").textContent = mapInfo ? `${mapInfo.description} For ${mapInfo.players[0]}–${mapInfo.players[1]} players.` : "";
+  drawMapPreview($("map-preview"), mapInfo);
   $("goal-label").textContent = mode.goal_label;
   const goals = mode.goal_choices.includes(s.first_to) ? mode.goal_choices : [...mode.goal_choices, s.first_to].sort((a, b) => a - b);
   fillSelect($("first-to"), goals.map((n) => [n, String(n)]));
@@ -142,13 +146,13 @@ function renderLobby() {
       if (you && picker.open) ul.appendChild(colorPicker(seatInfo.color, seatInfo.own_color));
     } else {
       const b = seatInfo.bot;
-      const li = seat(seatInfo.color, botLabel(seatInfo.kind), "", false);
+      const li = seat(seatInfo.color, botLabel(seatInfo.kind), "bot", false);
       if (host) {
         const sel = document.createElement("select");
         sel.setAttribute("aria-label", "Bot type");
         for (const opt of L.bot_options) {
           const o = document.createElement("option");
-          o.value = opt; o.textContent = botLabel(opt);
+          o.value = opt; o.textContent = botLabel(opt).replace(/ bot$/, "");  // (the card says "bot")
           sel.appendChild(o);
         }
         sel.value = seatInfo.kind;
@@ -156,8 +160,7 @@ function renderLobby() {
           const next = s.bots.slice(); next[b] = sel.value;
           send({ type: "settings", bots: next });
         });
-        li.querySelector(".who").textContent = "";
-        li.insertBefore(sel, li.querySelector(".tag"));
+        li.querySelector(".who").replaceWith(sel);
         li.appendChild(removeButton("Remove bot", () => {
           const next = s.bots.slice(); next.splice(b, 1);
           send({ type: "settings", bots: next });
@@ -171,11 +174,27 @@ function renderLobby() {
     li.classList.add("away");
     ul.appendChild(li);
   }
-  // The map says how many can play
+  // The map says how many can play: the seats left show as open, and the
+  // host fills one with a bot by clicking it
   const n = L.seats.length;
   const [fewest, most] = mapInfo ? mapInfo.players : [2, Wm.max_players];
   $("seat-count").textContent = `${n} / ${most}`;
-  $("add-bot").disabled = n >= most;
+  for (let k = n; k < most; k++) {
+    const li = document.createElement("li");
+    li.className = "open-seat";
+    if (host) {
+      const b = document.createElement("button");
+      if (k === n) b.id = "add-bot";
+      b.className = "add-seat";
+      b.innerHTML = `${icon("plus")}Add bot`;
+      b.title = "Fill this seat with a bot (people who join take bots' seats)";
+      b.addEventListener("click", () => send({ type: "settings", bots: [...app.lobby.settings.bots, "bot:medium"] }));
+      li.appendChild(b);
+    } else {
+      li.textContent = "Open seat";
+    }
+    ul.appendChild(li);
+  }
   const extra = here - most;
   $("spectators").textContent = extra > 0 ? `${extra} more watching (the match is full).` : "";
   // Too few to start: say so next to the button, and offer the bots it'd take
@@ -383,10 +402,12 @@ $("edit-ball").addEventListener("click", () => { renderProfileEditor(); $("profi
 $("profile-close").addEventListener("click", () => $("profile").classList.add("hidden"));
 $("profile").addEventListener("click", (e) => { if (e.target === $("profile")) $("profile").classList.add("hidden"); });
 
+// A seat card: the ball, the name with what they are under it (you, host,
+// bot), and room on the right for buttons
 function seat(color, label, tag, you, pattern = "plain", own = null, hat = "none") {
   const li = document.createElement("li");
   li.className = "seat" + (you ? " you" : "");
-  const ball = ballCanvas(22, own || (color === null ? T.faint : app.welcome.colors[color]), pattern, hat);
+  const ball = ballCanvas(34, own || (color === null ? T.faint : app.welcome.colors[color]), pattern, hat);
   ball.classList.add("ball");
   const who = document.createElement("span");
   who.className = "who";
@@ -394,8 +415,48 @@ function seat(color, label, tag, you, pattern = "plain", own = null, hat = "none
   const t = document.createElement("span");
   t.className = "tag";
   t.textContent = tag;
-  li.append(ball, who, t);
+  const text = document.createElement("span");
+  text.className = "seat-text";
+  text.append(who, t);
+  li.append(ball, text);
   return li;
+}
+
+// The map, small, as it looks at the start (the server sends its shapes in
+// "welcome"). Flat colours: a picture to recognise it by, not the game's art.
+function drawMapPreview(canvas, mapInfo) {
+  const key = mapInfo ? mapInfo.name : "";
+  if (canvas.dataset.map === key) return;
+  canvas.dataset.map = key;
+  const g = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 340;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(w * (H / W) * dpr);
+  g.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+  const sky = g.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, T.bgTop); sky.addColorStop(1, T.bgBottom);
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  for (const sh of (mapInfo && mapInfo.preview) || []) {
+    g.fillStyle = sh.c || T.rail;
+    g.strokeStyle = sh.c || T.rail;
+    if (sh.t === "rect") {
+      const [x1, y1, x2, y2] = sh.r;
+      g.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.max(3, Math.abs(x2 - x1)), Math.max(3, Math.abs(y2 - y1)));
+    } else if (sh.t === "poly") {
+      g.beginPath(); sh.p.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.fill();
+    } else if (sh.t === "ball") {
+      g.beginPath(); g.arc(sh.x, sh.y, sh.r, 0, Math.PI * 2); g.fill();
+    } else if (sh.t === "line") {
+      g.lineWidth = sh.w * 1.5; g.beginPath(); g.moveTo(...sh.a); g.lineTo(...sh.b); g.stroke();
+    } else if (sh.t === "rail") {
+      g.strokeStyle = T.rail; g.lineWidth = 4; g.beginPath(); g.moveTo(sh.x1, sh.y); g.lineTo(sh.x2, sh.y); g.stroke();
+    } else if (sh.t === "pivot") {
+      g.fillStyle = T.rope; g.beginPath(); g.arc(sh.x, sh.y, 6, 0, Math.PI * 2); g.fill();
+    } else if (sh.t === "edges") {
+      g.strokeStyle = "rgba(239,83,80,0.6)"; g.lineWidth = 8; g.strokeRect(0, 0, W, H);
+    }
+  }
 }
 
 $("map").addEventListener("change", () => send({ type: "settings", map: $("map").value }));
@@ -406,7 +467,13 @@ $("gravity").addEventListener("change", () => send({ type: "settings", gravity: 
 $("speed").addEventListener("change", () => send({ type: "settings", speed: $("speed").value }));
 $("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
 $("room-name-input").addEventListener("change", () => send({ type: "settings", name: $("room-name-input").value.trim() || null }));
-$("room-locked").addEventListener("change", () => send({ type: "settings", password: $("room-locked").checked ? true : null }));
+$("room-name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
+for (const b of $("privacy").querySelectorAll("button")) {
+  b.addEventListener("click", () => {
+    const priv = b.dataset.private === "1";
+    if (priv !== !!app.lobby.settings.password) send({ type: "settings", password: priv ? true : null });
+  });
+}
 $("room-password").addEventListener("change", () => {
   const pw = $("room-password").value.trim();
   if (pw) send({ type: "settings", password: pw });
@@ -421,7 +488,6 @@ $("add-needed").addEventListener("click", (e) => {
   const short = +e.target.dataset.short || 1;
   send({ type: "settings", bots: [...app.lobby.settings.bots, ...Array(short).fill("bot:medium")] });
 });
-$("add-bot").addEventListener("click", () => send({ type: "settings", bots: [...app.lobby.settings.bots, "bot:medium"] }));
 $("start").addEventListener("click", () => send({ type: "start" }));
 $("again").addEventListener("click", () => send({ type: "start" }));
 $("vote").addEventListener("click", () => send({ type: "vote" }));

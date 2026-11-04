@@ -42,11 +42,12 @@ import time
 import traceback
 
 from bonk_game.envs.utils import arena
-from bonk_game.envs.utils.maps import MAPS
+from bonk_game.envs.utils.maps import MAPS, make_map
 from bonk_game.server import (cosmetics, delta, limits, lobby, metrics, moderation, modes, playtest,
                               profiles)
 from bonk_game.server.lobby import GRAVITY, HEX_COLOR, PATTERNS, ROUND_TIMES, SPEEDS, bot_label, map_order
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
+from bonk_game.server.scene import level_shapes
 from bonk_game.ui import theme
 
 ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"  # no I or O
@@ -61,6 +62,16 @@ AUTO_NEXT = 10.0         # and from the results to the next match
 LISTED = 200             # rooms the game browser lists (it filters and pages them)
 
 
+_PREVIEWS = {}
+
+
+def map_preview(name):
+    """The shapes a map starts with, for the lobby's picture of it (made once)."""
+    if name not in _PREVIEWS:
+        _PREVIEWS[name] = level_shapes(make_map(name))
+    return _PREVIEWS[name]
+
+
 class RoomFull(Exception):
     """Can't join: the room is full, or the host removed you."""
 
@@ -69,7 +80,7 @@ class PasswordNeeded(RoomFull):
     """The room has a password, and it wasn't given (wrong: a wrong one was)."""
 
     def __init__(self, wrong):
-        super().__init__("Wrong password." if wrong else "This room has a password.")
+        super().__init__("Wrong password." if wrong else "This game is private: it needs its password.")
         self.wrong = wrong
 
 
@@ -291,7 +302,8 @@ class Room:
             "signed_in": self.members[token].account is not None,
             "maps": [{"name": n, "title": MAPS[n].title, "description": MAPS[n].description,
                       "first_to": min(MAPS[n].winning_score, 10), "round_time": MAPS[n].round_time,
-                      "respawn_ok": MAPS[n].respawn_ok, "players": list(MAPS[n].players)}
+                      "respawn_ok": MAPS[n].respawn_ok, "players": list(MAPS[n].players),
+                      "preview": map_preview(n)}
                      for n in map_order()],
             "modes": modes.describe_modes(),
             "round_times": list(ROUND_TIMES),
