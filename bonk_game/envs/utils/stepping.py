@@ -34,6 +34,13 @@ import math
 from bonk_game.envs.utils.mechanics import player_collision
 
 SUBSTEPS = 4
+# How fast the world runs: the share of a "physics step" that passes in each
+# 1/30 s tick. Below 1 everything happens in slow motion: moves, falls, pushes
+# and heavy wearing off all take longer, but every path is the same (jumps go
+# as high, bounces as far), so the maps play the same, just with more time to
+# think. 1.0 is the original speed, which felt too quick to plan anything.
+# Rooms can pick another (lobby.SPEEDS).
+TIME_SCALE = 0.75
 
 
 def collide_players(players, on_contact=None):
@@ -46,16 +53,17 @@ def collide_players(players, on_contact=None):
             player_collision(a, b)
 
 
-def advance(movers, game_map, substeps=SUBSTEPS, on_contact=None):
+def advance(movers, game_map, substeps=SUBSTEPS, on_contact=None, time_scale=1.0):
     """Move `movers` (the players in play this step) and the map's moving
     parts (game_map.move: the swing, sliders, a sinking floor) through one
     step, in substeps, colliding the players with the level and each other
     in between. (The env calls game_map.step(move=False) first.)
     on_contact(a, b) is told about player pairs that touch (the movers
-    themselves)."""
+    themselves). time_scale: how much of a physics step passes (TIME_SCALE;
+    the players' own time_scale scales their pushes and heavy)."""
     for p in movers:
         p.begin_step()
-    dt = 1.0 / substeps
+    dt = time_scale / substeps
     for k in range(substeps):
         game_map.move(dt)
         for p in movers:

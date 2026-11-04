@@ -13,7 +13,7 @@ tested (and read) without a Room. room.py calls them.
 import math
 import re
 
-from bonk_game.envs.utils import arena
+from bonk_game.envs.utils import arena, stepping
 from bonk_game.envs.utils.maps import MAPS
 from bonk_game.server import cosmetics, moderation, modes
 from bonk_game.server.match import is_bot
@@ -32,6 +32,9 @@ DEFAULT_MAP = "platform"
 # Room settings besides the map, mode and goal
 ROUND_TIMES = (None, 0, 20, 30, 45, 60, 90)   # seconds before sudden death; None: the map's own
 GRAVITY = {"low": 0.6, "normal": 1.0, "high": 1.4}
+# Game speed: how fast the world runs (stepping.TIME_SCALE). Normal is a bit
+# slower than the original, which is "fast"
+SPEEDS = {"slow": 0.6, "normal": stepping.TIME_SCALE, "fast": 1.0}
 QUICK_BOTS = 3   # bots in a room Quick play makes
 
 
@@ -39,7 +42,7 @@ def default_settings():
     """public: listed on the home page for anyone to join (#35); private
     rooms are reached by their link or code only."""
     return {"map": DEFAULT_MAP, "first_to": 5, "bots": ["bot:medium"],
-            "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal",
+            "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal", "speed": "normal",
             "power_ups": False, "public": False}
 
 
@@ -124,6 +127,10 @@ def check_settings(settings, msg, people, bot_options):
         if msg["gravity"] not in GRAVITY:
             return settings, "Unknown gravity."
         s["gravity"] = msg["gravity"]
+    if "speed" in msg:
+        if msg["speed"] not in SPEEDS:
+            return settings, "Unknown speed."
+        s["speed"] = msg["speed"]
     # (From here on the map and the rest are kept even if the bots are wrong)
     options = bot_options(s)
     problem = None

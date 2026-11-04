@@ -39,7 +39,7 @@ def test_each_level_beats_the_one_below(strong, weak):
     # Fixed seeds, so this is deterministic. Wider runs (24 matches on each
     # of 5 maps) gave 77% for medium over easy and 68% for hard over medium.
     won = sum(wins(m, strong, weak, 16) for m in ("platform", "ramps", "classic"))
-    assert won >= 30  # of 48 (currently 39 and 38)
+    assert won >= 30  # of 48 (currently 42 and 31, at the default game speed)
 
 
 def test_levels_are_the_three_names():

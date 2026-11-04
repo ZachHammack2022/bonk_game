@@ -16,6 +16,7 @@ function fillMapOptions() {
   }
   fillSelect($("mode"), app.welcome.modes.map((m) => [m.id, m.title]));
   fillSelect($("gravity"), app.welcome.gravities.map((g) => [g, g[0].toUpperCase() + g.slice(1)]));
+  fillSelect($("speed"), (app.welcome.speeds || ["normal"]).map((g) => [g, g[0].toUpperCase() + g.slice(1)]));
 }
 
 function fillSelect(sel, pairs) {
@@ -76,6 +77,8 @@ function renderLobby() {
   $("round-time").disabled = !host;
   $("gravity").value = s.gravity;
   $("gravity").disabled = !host;
+  $("speed").value = s.speed || "normal";
+  $("speed").disabled = !host;
   $("power-ups").checked = !!s.power_ups;
   $("power-ups").disabled = !host;
   $("public-room").checked = !!s.public;
@@ -386,6 +389,7 @@ $("first-to").addEventListener("change", () => send({ type: "settings", first_to
 $("mode").addEventListener("change", () => send({ type: "settings", mode: $("mode").value }));
 $("round-time").addEventListener("change", () => send({ type: "settings", round_time: JSON.parse($("round-time").value) }));
 $("gravity").addEventListener("change", () => send({ type: "settings", gravity: $("gravity").value }));
+$("speed").addEventListener("change", () => send({ type: "settings", speed: $("speed").value }));
 $("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
 $("public-room").addEventListener("change", () => send({ type: "settings", public: $("public-room").checked }));
 $("switch-team").addEventListener("click", () => {

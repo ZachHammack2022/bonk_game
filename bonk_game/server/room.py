@@ -41,7 +41,7 @@ from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS
 from bonk_game.server import (cosmetics, delta, limits, lobby, metrics, moderation, modes, playtest,
                               profiles, replay)
-from bonk_game.server.lobby import GRAVITY, HEX_COLOR, PATTERNS, ROUND_TIMES, bot_label, map_order
+from bonk_game.server.lobby import GRAVITY, HEX_COLOR, PATTERNS, ROUND_TIMES, SPEEDS, bot_label, map_order
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.ui import theme
 
@@ -274,6 +274,7 @@ class Room:
             "modes": modes.describe_modes(),
             "round_times": list(ROUND_TIMES),
             "gravities": list(GRAVITY),
+            "speeds": list(SPEEDS),
             "team_names": list(modes.TEAM_NAMES),
             "team_colors": list(modes.TEAM_HEX),
             "team_size": modes.TEAM_SIZE,
@@ -620,7 +621,8 @@ class Room:
             return
         self.match = Match(s["map"], slots, s["first_to"], agents, mode=s["mode"],
                            round_time=s["round_time"] if mode.uses_round_time else None,
-                           gravity=GRAVITY[s["gravity"]], power_ups=s["power_ups"])
+                           gravity=GRAVITY[s["gravity"]], speed=SPEEDS[s.get("speed", "normal")],
+                           power_ups=s["power_ups"])
         self.match_tokens = humans + [None] * len(bots)
         # Who's signed in, as the match starts (a stand-in bot plays for
         # anyone who drops out; the match still counts for them)
@@ -792,6 +794,7 @@ class Room:
                 "elapsed": round(match.tick_count / TICK_HZ) if match is not None else None,
                 "open": self.has_space(),
                 "power_ups": bool(s.get("power_ups")), "gravity": s.get("gravity", "normal"),
+                "speed": s.get("speed", "normal"),
                 "quick": self.quick, "host": host.name if host else None}
 
     def has_space(self):
