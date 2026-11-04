@@ -7,22 +7,12 @@ import pytest
 
 from bonk_game.envs.testing_env import TestEnv
 from bonk_game.envs.utils.maps import MAPS, make_map
-from bonk_game.envs.utils.mechanics import player_collision
+from physics_helpers import tick
 
 
 @pytest.fixture(autouse=True)
 def seeded():
     np.random.seed(0)
-
-
-def tick(m, players):
-    m.step()
-    dead = [m.collide(p) for p in players]
-    if len(players) == 2:
-        player_collision(*players)
-    for p in players:
-        p.update()
-    return dead
 
 
 def place(p, x, y):
@@ -78,7 +68,7 @@ def test_slider_moves_when_pushed_and_stays_on_its_rail():
     for _ in range(200):
         a.move_right(2)
         tick(m, [a])
-        assert abs(m.platform.offset) <= m.TRAVEL
+        assert abs(m.platform.offset) <= m.TRAVEL + 0.5  # (Box2D's joint limits give a hair)
     assert m.platform.offset > 50  # player shoved it right
 
 

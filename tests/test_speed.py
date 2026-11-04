@@ -44,7 +44,7 @@ def test_slow_motion_jumps_as_high_but_takes_longer():
 
 
 def test_running_takes_longer_to_get_up_to_speed():
-    def run(time_scale):
+    def run(time_scale, ticks):
         env = TestEnv("human", "human", map_name="platform", time_scale=time_scale)
         env.reset()
         env.timer.limit = 0
@@ -53,13 +53,14 @@ def test_running_takes_longer_to_get_up_to_speed():
         for _ in range(10):
             env.step()
         x0 = a.x
-        for _ in range(10):
+        for _ in range(ticks):
             env.step([RIGHT, None])
         return a.x - x0
 
-    # Slower world: less ground covered in the same time (about time_scale²
-    # for a run starting from standing still)
-    assert run(0.75) == pytest.approx(run(1.0) * 0.75 ** 2, rel=0.1)
+    # Slower world: less ground covered in the same time...
+    assert run(0.75, 12) < run(1.0, 12) * 0.8
+    # ...but the same run, just taking longer (grip included)
+    assert run(0.75, 16) == pytest.approx(run(1.0, 12), rel=0.05)
 
 
 def test_heavy_lasts_longer_in_slow_motion():

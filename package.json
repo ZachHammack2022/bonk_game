@@ -1,15 +1,17 @@
 {
   "name": "bonk-game-dev",
   "private": true,
-  "description": "Tools for the browser client: linting (eslint) and the browser tests (playwright). The game itself needs none of this.",
+  "description": "Tools for the browser client: linting (eslint), the browser tests (playwright) and planck.js (the browser's copy of the physics, served from bonk_game/server/static/vendor: `npm run vendor` copies it there after an update).",
   "scripts": {
     "lint": "eslint .",
-    "test:web": "node tests/web/e2e.js"
+    "test:web": "node tests/web/e2e.js",
+    "vendor": "cp node_modules/planck/dist/planck.min.js node_modules/planck/LICENSE.txt bonk_game/server/static/vendor/ && mv bonk_game/server/static/vendor/LICENSE.txt bonk_game/server/static/vendor/planck.LICENSE && gzip -9kfn bonk_game/server/static/vendor/planck.min.js"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "eslint": "10.12.0",
     "globals": "15.15.0",
+    "planck": "1.5.1",
     "playwright": "1.48.2"
   }
 }

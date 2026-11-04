@@ -1,9 +1,9 @@
-// bonk web client: Network timing and predicting your own ball (with predict.js).
+// bonk web client: Network timing and predicting your own ball (with physics.js).
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";
 
 // ---------------------------------------------------------------------------
-// Network timing and predicting your own ball (see predict.js)
+// Network timing and predicting your own ball (see physics.js)
 // ---------------------------------------------------------------------------
 const net = {
   rtt: null,                                  // smoothed round trip, ms
@@ -32,13 +32,30 @@ function predictFrom(entry, now) {
   const n = Math.min((now - arrived + rtt) / tick + 0.5, 15);
   const inputs = [];
   for (let k = 0; k <= Math.ceil(n); k++) inputs.push(buttonsAt(arrived - rtt + (k + 1) * tick));
-  return BonkPredict.predict(ownBall(S, i), effectPhysics(M, S, i), S.level, inputs, n, M.radius);
+  return BonkPhysics.predict(S, i, S.you || [0, 0, 0], effectPhysics(M, S, i), inputs, n, M.radius,
+    othersMoving(S, M));
 }
 
-// Your ball as predict.js wants it: [x, y, heavy, alive, vx, vy, standing].
-// Everyone gets positions; only you get your speeds ("you").
-function ownBall(S, i) {
-  return [...S.players[i].slice(0, 4), ...(S.you || [0, 0, 0])];
+// How fast everyone else is going (px per physics step), worked out from
+// this state and the one before: only your own speeds are sent ("you").
+// Remembered for each state, as it's asked for every frame.
+const movingCache = new WeakMap();
+function othersMoving(S, M) {
+  if (movingCache.has(S)) return movingCache.get(S);
+  let prev = null;
+  for (let k = app.states.length - 1; k >= 0; k--) {
+    const P = app.states[k][1];
+    if (P.tick < S.tick) { prev = P; break; }
+  }
+  const ticks = prev ? S.tick - prev.tick : 0;
+  const per = (M.physics.time_scale || 1) * ticks;
+  const moving = S.players.map((p, j) => {
+    const q = prev && prev.players[j];
+    if (!q || !per || ticks > 3 || !q[3] || !p[3]) return null;
+    return [(p[0] - q[0]) / per, (p[1] - q[1]) / per];
+  });
+  movingCache.set(S, moving);
+  return moving;
 }
 
 // Your ball's physics with any power-up you're holding
@@ -48,14 +65,17 @@ function effectPhysics(M, S, i) {
   if (!k) return M.physics;
   const P = M.physics;
   const force = P.force * k.force * (k.pin_heavy ? P.max_m / P.min_m : 1);
-  return { ...P, force, max_speed: P.max_speed * k.max_speed, gravity: P.gravity * k.gravity, pin_heavy: !!k.pin_heavy };
+  return {
+    ...P, force, max_speed: P.max_speed * k.max_speed, gravity: P.gravity * k.gravity, pin_heavy: !!k.pin_heavy,
+    base: P,  // (everyone else's)
+  };
 }
 
 // Where to draw your ball: predicted, with corrections from the server
 // faded in over ~0.1 s instead of snapping. Null when not predicting.
 function ownPosition(now, dt) {
   const M = app.match;
-  if (!PREDICT || !M || !app.states.length || typeof BonkPredict === "undefined" || replayer.active) return null;
+  if (!PREDICT || !M || !app.states.length || typeof BonkPhysics === "undefined" || replayer.active) return null;
   const i = M.slots.findIndex((s) => s.id === me.id);
   const entry = app.states[app.states.length - 1];
   const S = entry[1];

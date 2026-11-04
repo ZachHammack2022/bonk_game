@@ -49,12 +49,8 @@ class ShapeRecorder:
     def danger_edges(self):
         self.shapes.append({"t": "edges"})
 
-    def block(self, x1, y1, x2, y2, color, kind="solid", bounce=None, friction=None):
-        shape = {"t": "rect", "r": [_r(x1), _r(y1), _r(x2), _r(y2)], "c": hex_color(color), "k": kind}
-        if bounce is not None:
-            shape["e"] = round(bounce, 3)  # for the client's prediction (predict.js)
-            shape["fr"] = round(friction or 0.0, 3)
-        self.shapes.append(shape)
+    def block(self, x1, y1, x2, y2, color, kind="solid"):
+        self.shapes.append({"t": "rect", "r": [_r(x1), _r(y1), _r(x2), _r(y2)], "c": hex_color(color), "k": kind})
 
     def draw_block(self, block):
         # Same styling rules as Painter.draw_block
@@ -67,8 +63,7 @@ class ShapeRecorder:
             self.shapes.append({"t": "poly", "p": _pts(block.corners()),
                                 "l": _r(min(3, block.h / 3)), "c": hex_color(color), "k": kind})
         else:
-            self.block(block.x1, block.y1, block.x2, block.y2, color, kind,
-                       bounce=block.restitution, friction=block.friction)
+            self.block(block.x1, block.y1, block.x2, block.y2, color, kind)
 
     def swing(self, swing):
         sx, sy = swing.seat_pos()
@@ -103,7 +98,7 @@ def player_state(p):
 
 def player_motion(p):
     """[x speed, y speed, standing on something]: only for the player's own
-    browser, which predicts its ball (predict.js). Speeds to 0.1 px a tick
+    browser, which predicts its ball (physics.js). Speeds to 0.1 px a tick
     (the prediction's error from that is well under a pixel)."""
     return [num(p.x_v), num(p.y_v), 1 if p.grounded else 0]
 

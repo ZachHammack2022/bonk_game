@@ -15,7 +15,7 @@ const STATIC = path.join(__dirname, "bonk_game", "server", "static");
 const CLIENT = fs.readdirSync(path.join(STATIC, "js")).map((f) => path.join(STATIC, "js", f))
   .filter((f) => f.endsWith(".js"));
 // The UMD files (also used by Node in tests) put one name on window
-const SHARED = ["predict.js", "netsim.js", "clock.js", "profile.js", "delta.js"].map((f) => path.join(STATIC, f));
+const SHARED = ["physics.js", "netsim.js", "clock.js", "profile.js", "delta.js"].map((f) => path.join(STATIC, f));
 
 const declared = {};
 for (const f of CLIENT) {
@@ -40,7 +40,7 @@ const rules = {
 };
 
 module.exports = [
-  { ignores: ["node_modules/**", "agents/**"] },
+  { ignores: ["node_modules/**", "agents/**", "bonk_game/server/static/vendor/**"] },
   {
     // The client scripts: browser, sharing one global scope
     files: ["bonk_game/server/static/js/**/*.js"],

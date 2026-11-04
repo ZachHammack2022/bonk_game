@@ -5,7 +5,6 @@ import numpy as np
 
 from bonk_game.envs.utils import arena, stepping
 from bonk_game.envs.utils.maps import DEFAULT_MAP, agent_dir, make_map
-from bonk_game.envs.utils.mechanics import player_collision
 
 
 class BonkEnv(gym.Env):
@@ -61,9 +60,8 @@ class BonkEnv(gym.Env):
 
     def check_collisions(self):
         for p in self.players:
-            if self.map.collide(p) or p.doomed:
+            if self.map.killed(p):
                 p.dies()
-        player_collision(self.p1, self.p2)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -86,7 +84,7 @@ class BonkEnv(gym.Env):
 
         arena.apply_action(self.p1, action)
 
-        self.map.step(move=False)  # (stepping.advance moves its parts)
+        self.map.step(move=False)  # (stepping.advance moves everything)
         self.check_collisions()
         stepping.advance(self.players, self.map, time_scale=self.time_scale)
 

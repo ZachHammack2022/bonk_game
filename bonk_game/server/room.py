@@ -305,7 +305,7 @@ class Room:
 
     async def send_state(self, text, match):
         """Everyone gets the same state, and each player their own ball's
-        speeds as well ("you": [vx, vy, standing], for predict.js). Only
+        speeds as well ("you": [vx, vy, standing], for physics.js). Only
         they need those, so the others don't pay for them."""
         live = self.connected
         if not live:

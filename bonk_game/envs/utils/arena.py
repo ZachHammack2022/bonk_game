@@ -12,7 +12,6 @@ import numpy as np
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
 from bonk_game.envs.utils.player import new_rng, player
-from bonk_game.envs.utils.platform import platform
 from bonk_game.ui.theme import PLAYER_COLORS
 
 # Screen size
@@ -59,11 +58,19 @@ def make_players():
     return p1, p2
 
 
+# Classic's floor and ceiling keep this much of a ball's speed when it bounces
+CLASSIC_BOUNCE = 0.8
+
+
 def make_platforms():
-    floor = platform(LEFT, RIGHT, BOTTOM, BOTTOM + 15, FLOOR_COLOR, kill=False)
-    left_wall = platform(LEFT - 20, LEFT, TOP - 20, BOTTOM + 15, WALL_COLOR, kill=True)
-    right_wall = platform(RIGHT, RIGHT + 20, TOP - 20, BOTTOM + 15, WALL_COLOR, kill=True)
-    ceiling = platform(LEFT, RIGHT, TOP - 20, TOP, FLOOR_COLOR, kill=False)
+    """Classic's box: a bouncy floor and ceiling (no friction: you slide)
+    and deadly side walls."""
+    from bonk_game.envs.utils.bodies import Block
+    solid = dict(restitution=CLASSIC_BOUNCE, friction=0.0)
+    floor = Block(LEFT, BOTTOM, RIGHT, BOTTOM + 15, FLOOR_COLOR, **solid)
+    left_wall = Block(LEFT - 20, TOP - 20, LEFT, BOTTOM + 15, WALL_COLOR, kill=True)
+    right_wall = Block(RIGHT, TOP - 20, RIGHT + 20, BOTTOM + 15, WALL_COLOR, kill=True)
+    ceiling = Block(LEFT, TOP - 20, RIGHT, TOP, FLOOR_COLOR, **solid)
     return [floor, left_wall, right_wall, ceiling]
 
 

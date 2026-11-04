@@ -12,6 +12,7 @@ from bonk_game.envs.testing_env import TestEnv
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.controls import Buttons
 from bonk_game.envs.utils.maps import MAPS, make_map
+from physics_helpers import deadly_here
 
 
 def no_overlaps(players):
@@ -30,7 +31,7 @@ def test_every_map_spawns_n_players_apart_and_on_screen(name, n):
         assert no_overlaps(players)
         for p in players:
             assert p.r <= p.x <= m.width - p.r
-            assert not m.collide(p), "spawned inside a deadly piece or out of bounds"
+            assert not deadly_here(m, p), "spawned inside a deadly piece or out of bounds"
 
 
 def test_player_count_limits():
@@ -101,9 +102,10 @@ def test_respawn_map_credits_the_last_hitter():
     env.reset()
     a, b, c = env.players
     put(a, 300, 300)
-    put(b, 300 + a.r + b.r - 2, 300)  # touching a
+    put(b, 300 + a.r + b.r + 2, 300)
+    b.x_v = -6  # bumps into a
     put(c, 500, 200)
-    env.check_collisions()
+    env.step()
     assert env.last_hit[0][0] == 1 and env.last_hit[1][0] == 0
 
     put(a, arena.LEFT, 300)  # into the deadly wall

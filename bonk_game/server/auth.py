@@ -19,35 +19,47 @@ Routes:
                                  your account: done once when you sign in
     DELETE /api/me               delete your account
 
-How sign-in works (OpenID Connect's "authorization code" flow, with PKCE):
-the browser goes to Google with a random `state` and a code challenge, both
-also kept in a short-lived cookie. Google sends it back with a code, which
-the server swaps (with its client secret) for Google's ID token, straight
-from Google over HTTPS. Its claims say who signed in ("sub", their email
-and name); the server checks they're for this client, from Google, and
-current. Then it starts a session: a random cookie (HttpOnly, SameSite=Lax,
-Secure over HTTPS) whose hash is in the database.
+How sign-in works (OpenID Connect's "authorization code" flow, with PKCE),
+done by Authlib (https://authlib.org): the browser goes to Google with a
+random `state`, a `nonce` and a PKCE code challenge, kept for the way back
+in a short-lived cookie. Google sends it back with a code, which Authlib's
+OAuth client swaps (with our client secret and the PKCE verifier) for
+Google's ID token. joserfc (Authlib's JOSE library) checks the token is
+signed by one of Google's published keys, and its claims are from Google,
+for this client, current and for this sign-in (the nonce). They say who
+signed in ("sub", their email and name). Then the server starts a session:
+a random cookie (HttpOnly, SameSite=Lax, Secure over HTTPS) whose hash is
+in the database (accounts.py), so signing out or deleting the account ends
+it everywhere.
 
 Changes (PUT, POST, DELETE) must come from this site's own pages: the
 cookie is SameSite=Lax, and the Origin header has to match.
 """
 import base64
-import hashlib
 import json
 import os
+import re
 import secrets
 import time
-from urllib.parse import urlencode
 
-import aiohttp
+import httpx2
 from aiohttp import web
+from authlib.common.errors import AuthlibBaseError
+from authlib.common.security import generate_token
+from authlib.integrations.httpx_client import AsyncOAuth2Client
+from joserfc import jwt
+from joserfc.errors import JoseError
+from joserfc.jwk import KeySet
 
 from bonk_game.server import cosmetics, limits, metrics
 from bonk_game.server.accounts import SESSION_DAYS, Accounts
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
+GOOGLE_KEYS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"]
+SCOPE = "openid email profile"
+CLOCK_SKEW = 60  # seconds of difference between our clock and Google's that's fine
 SESSION_COOKIE = "bonk_session"
 FLOW_COOKIE = "bonk_signin"
 FLOW_SECONDS = 600
@@ -137,41 +149,63 @@ def _signed_in(request):
     return user
 
 
-def _decode_jwt_claims(token):
-    """The claims of a JWT. Not checking the signature is fine here: the token
-    came straight from Google's token endpoint over HTTPS, in answer to our
-    client secret (OpenID Connect Core, 3.1.3.7)."""
+def oauth_client(cfg, redirect_uri, transport=None):
+    """Authlib's OAuth 2 client for Google, with PKCE (S256)."""
+    return AsyncOAuth2Client(cfg.client_id, cfg.client_secret, scope=SCOPE, redirect_uri=redirect_uri,
+                             code_challenge_method="S256", timeout=10, transport=transport)
+
+
+def _max_age(cache_control, default):
+    m = re.search(r"max-age=(\d+)", cache_control or "")
+    return int(m.group(1)) if m else default
+
+
+class GoogleKeys:
+    """Google's public keys, for checking ID tokens' signatures. Fetched when
+    first needed and kept as long as Google says (Cache-Control); fetched
+    again early if a token names a key we don't have (Google rotates them)."""
+
+    def __init__(self, url=GOOGLE_KEYS_URL):
+        self.url = url
+        self.keys = None
+        self.until = 0.0
+
+    async def get(self, refresh=False, transport=None):
+        if refresh or self.keys is None or time.time() >= self.until:
+            async with httpx2.AsyncClient(timeout=10, transport=transport) as http:
+                r = await http.get(self.url)
+                r.raise_for_status()
+            self.keys = KeySet.import_key_set(r.json())
+            self.until = time.time() + _max_age(r.headers.get("Cache-Control"), 3600)
+        return self.keys
+
+
+GOOGLE_KEYS = GoogleKeys()
+
+
+def verify_id_token(id_token, keys, client_id, nonce, now=None):
+    """The claims of Google's ID token if it's signed with one of `keys`,
+    from Google, for `client_id`, current, and for this sign-in (`nonce`);
+    else None."""
     try:
-        payload = token.split(".")[1]
-        return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
-    except (IndexError, ValueError, AttributeError):
+        token = jwt.decode(id_token, keys, algorithms=["RS256"])
+        jwt.JWTClaimsRegistry(
+            now=None if now is None else int(now), leeway=CLOCK_SKEW,
+            iss={"essential": True, "values": GOOGLE_ISSUERS},
+            aud={"essential": True, "value": client_id},
+            sub={"essential": True},
+            exp={"essential": True},
+            nonce={"essential": True, "value": nonce},
+        ).validate(token.claims)
+    except (JoseError, ValueError, TypeError):
         return None
+    return token.claims
 
 
-async def exchange_code(cfg, code, redirect_uri, verifier):
-    """Google's ID token claims for a sign-in code, or None. (Tests replace
-    this: it's the only part that talks to Google.)"""
-    data = {"code": code, "client_id": cfg.client_id, "client_secret": cfg.client_secret,
-            "redirect_uri": redirect_uri, "grant_type": "authorization_code", "code_verifier": verifier}
-    timeout = aiohttp.ClientTimeout(total=10)
-    async with aiohttp.ClientSession(timeout=timeout) as s:
-        async with s.post(GOOGLE_TOKEN_URL, data=data) as r:
-            if r.status != 200:
-                metrics.event("signin_failed", why="token", status=r.status)
-                return None
-            body = await r.json()
-    return _decode_jwt_claims(body.get("id_token", ""))
-
-
-def check_claims(claims, client_id, now=None):
-    """Who signed in, if Google's claims are for us and current: (sub, email,
-    name), else None."""
-    now = time.time() if now is None else now
+def signed_in_as(claims):
+    """Who checked claims say signed in: (sub, email, name), or None. The
+    email only if Google has verified it."""
     if not isinstance(claims, dict):
-        return None
-    if claims.get("iss") not in GOOGLE_ISSUERS or claims.get("aud") != client_id:
-        return None
-    if not isinstance(claims.get("exp"), (int, float)) or claims["exp"] < now:
         return None
     sub = claims.get("sub")
     if not isinstance(sub, str) or not sub:
@@ -181,19 +215,50 @@ def check_claims(claims, client_id, now=None):
     return sub, str(email or "")[:200], str(name)[:60]
 
 
+async def exchange_code(cfg, code, redirect_uri, verifier, nonce, transport=None):
+    """Google's checked ID token claims for a sign-in code, or None. (Tests
+    replace this, or pass an httpx2 transport that pretends to be Google:
+    it's the only part that talks to Google.)"""
+    try:
+        async with oauth_client(cfg, redirect_uri, transport) as client:
+            token = await client.fetch_token(GOOGLE_TOKEN_URL, code=code, code_verifier=verifier)
+        id_token = token.get("id_token", "")
+        keys = await GOOGLE_KEYS.get(transport=transport)
+        claims = verify_id_token(id_token, keys, cfg.client_id, nonce)
+        if claims is None and _unknown_key(id_token, keys):
+            keys = await GOOGLE_KEYS.get(refresh=True, transport=transport)
+            claims = verify_id_token(id_token, keys, cfg.client_id, nonce)
+    except (AuthlibBaseError, httpx2.HTTPError, ValueError) as e:
+        metrics.event("signin_failed", why="token", error=type(e).__name__)
+        return None
+    if claims is None:
+        metrics.event("signin_failed", why="id_token")
+    return claims
+
+
+def _unknown_key(id_token, keys):
+    """Does the token name a key that isn't in `keys`? (Then Google may have
+    rotated its keys since we fetched them.)"""
+    try:
+        raw = id_token.split(".")[0]
+        header = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
+        return header.get("kid") not in {k.kid for k in keys.keys}
+    except (ValueError, AttributeError, IndexError):
+        return False
+
+
 # --- routes -------------------------------------------------------------------
 async def google_start(request):
     cfg = request.app[CONFIG]
     if not cfg.enabled:
         raise web.HTTPNotFound(text="Sign-in isn't set up on this server")
-    state = secrets.token_urlsafe(24)
-    verifier = secrets.token_urlsafe(48)
-    challenge = _b64(hashlib.sha256(verifier.encode()).digest())
-    params = {"client_id": cfg.client_id, "redirect_uri": _site(request) + "/auth/google/callback",
-              "response_type": "code", "scope": "openid email profile", "state": state,
-              "code_challenge": challenge, "code_challenge_method": "S256", "prompt": "select_account"}
-    response = web.HTTPFound(GOOGLE_AUTH_URL + "?" + urlencode(params))
-    flow = json.dumps({"state": state, "verifier": verifier, "next": _safe_next(request.query.get("next"))})
+    verifier, nonce = generate_token(48), generate_token(24)
+    client = oauth_client(cfg, _site(request) + "/auth/google/callback")
+    url, state = client.create_authorization_url(GOOGLE_AUTH_URL, code_verifier=verifier, nonce=nonce,
+                                                 prompt="select_account")
+    response = web.HTTPFound(url)
+    flow = json.dumps({"state": state, "verifier": verifier, "nonce": nonce,
+                       "next": _safe_next(request.query.get("next"))})
     _cookie(response, request, FLOW_COOKIE, _b64(flow.encode()), FLOW_SECONDS)
     raise response
 
@@ -220,8 +285,8 @@ async def google_callback(request):
     if "error" in request.query or "code" not in request.query:
         raise back("cancelled")
     claims = await exchange_code(cfg, request.query["code"], _site(request) + "/auth/google/callback",
-                                 str(flow.get("verifier", "")))
-    who = check_claims(claims, cfg.client_id)
+                                 str(flow.get("verifier", "")), str(flow.get("nonce", "")))
+    who = signed_in_as(claims)
     if who is None:
         metrics.event("signin_failed", why="claims")
         raise back("failed")

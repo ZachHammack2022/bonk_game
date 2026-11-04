@@ -8,6 +8,7 @@ import pytest
 
 from bonk_game.envs.testing_env import TestEnv
 from bonk_game.envs.utils.maps import MAPS, SwingMap, agent_dir, env_id, make_map
+from physics_helpers import tick
 
 
 @pytest.fixture(autouse=True)
@@ -20,10 +21,8 @@ def simulate(m, p, steps, control=None):
     for t in range(steps):
         if control:
             control(t, p)
-        m.step()
-        if m.collide(p):
+        if tick(m, [p])[0]:
             return t
-        p.update()
     return None
 
 
@@ -78,9 +77,7 @@ def test_launch_pad_fires_players_out_of_the_pit():
     place(p, (m.HOLE_LEFT + m.HOLE_RIGHT) / 2, m.FLOOR_Y + 30)
     lowest_y = p.y
     for _ in range(40):
-        m.step()
-        m.collide(p)
-        p.update()
+        tick(m, [p])
         lowest_y = min(lowest_y, p.y)
     assert lowest_y < m.FLOOR_Y - 80
 
@@ -90,9 +87,10 @@ def test_heavy_players_kick_the_swing_harder():
         m = make_map("swing")
         p, _ = m.make_players()
         sx, sy = m.swing.seat_pos()
-        place(p, sx - m.swing.seat_width / 2 - p.r + 2, sy - 5)
+        place(p, sx - m.swing.seat_width / 2 - p.r - 4, sy - 5)
         p.x_v, p.m = 15, mass
-        m.collide(p)
+        p.gravity = 0
+        tick(m, [p])
         return m.swing.omega
 
     light, heavy = kick(1), kick(5)
@@ -107,13 +105,12 @@ def test_up_is_a_jump_not_flight():
     heights = []
     for _ in range(120):
         p.move_up(2)
-        m.step()
-        m.collide(p)
-        p.update()
+        tick(m, [p])
         heights.append(p.y)
-    # Jumps go up but always come back down to the floor
+    # Jumps go up but always come back down to the floor (holding "up", the
+    # next jump goes the moment you land, partway through a step)
     assert min(heights) < m.FLOOR_Y - 150
-    assert max(heights[60:]) > m.FLOOR_Y - p.r - 5
+    assert max(heights[60:]) > m.FLOOR_Y - p.r - 15
 
     # Mid-air "up" does nothing
     place(p, 200, 200)
@@ -149,7 +146,7 @@ def test_leaving_the_screen_kills(x, y):
     m = make_map("swing")
     p, _ = m.make_players()
     place(p, x, y)
-    assert m.collide(p)
+    assert m.killed(p)
 
 
 def test_swing_match_resets_the_round_on_each_kill():
@@ -190,8 +187,9 @@ def test_agent_up_actions_jump_on_jump_maps():
     from bonk_game.envs.utils import arena
     m = make_map("swing")
     p, _ = m.make_players()
-    place(p, 200, m.FLOOR_Y - p.r + 1)  # resting on the floor
-    m.collide(p)
+    place(p, 200, m.FLOOR_Y - p.r - 1)
+    for _ in range(5):  # land and settle on the floor
+        tick(m, [p])
     assert p.grounded
     arena.apply_action(p, 3)  # up
     assert p.y_v == -m.jump_speed
