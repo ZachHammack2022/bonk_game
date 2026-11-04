@@ -50,6 +50,8 @@ class player():
         # player is standing on something (set grounded during collisions).
         self.can_fly = True
         self.jump_speed = 0
+        self.push = 2  # sideways and down push from an input (map.push_force)
+        self.hover = 0.0  # jump maps: share of gravity "up" cancels in the air
         self.gravity = 1.5  # added to the vertical speed every step (world.GRAVITY)
         # How much of a physics step passes each tick (stepping.TIME_SCALE):
         # scales pushes from inputs and heavy wearing off, as the world scales
@@ -94,8 +96,12 @@ class player():
             self.update_jump()
 
     def end_step(self):
-        """Once a step, at the end: heavy wears off."""
+        """Once a step, at the end: heavy wears off, and a remembered "up"
+        press counts down (it lasts the whole step: landing partway through
+        one fires it, world.World.step)."""
         self.update_mass()
+        if self.jump_buffer:
+            self.jump_buffer -= 1
 
 
     def reset(self)->None:
@@ -134,6 +140,10 @@ class player():
         if self.can_fly:
             self.y_v -= force*self.force_mult*self.time_scale/self.m
         else:
+            if not self.grounded and self.hover:
+                # Hovering: holding "up" in the air cancels part of gravity
+                self.y_v -= (self.hover * self.gravity * self.gravity_mult
+                             * self.time_scale / self.m)
             self.jump_buffer = JUMP_BUFFER
             self.try_jump()
 
@@ -162,7 +172,6 @@ class player():
             self.air_steps += 1
         if self.jump_buffer:
             self.try_jump()
-            self.jump_buffer = max(0, self.jump_buffer - 1)
 
     def move_down(self,force):
         self.y_v += force*self.force_mult*self.time_scale/self.m

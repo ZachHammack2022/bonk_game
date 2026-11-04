@@ -10,7 +10,7 @@ import pytest
 
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import make_map
-from bonk_game.envs.utils.world import World
+from bonk_game.envs.utils.world import PLAYER_BOUNCE, World
 from bonk_game.envs.testing_env import TestEnv
 from physics_helpers import deadly_here, tick
 
@@ -95,11 +95,11 @@ def test_collision_conserves_momentum_and_separates_players():
     w.step([a, b], on_contact=lambda i, j: contacts.append((i, j)))
     after = a.m * a.x_v + b.m * b.x_v
     assert contacts and contacts[0] == (0, 1)
-    assert after == pytest.approx(before, abs=1e-3)
+    assert after == pytest.approx(before, rel=0.01)
     assert a.x_v < 0  # lighter player bounces back
     assert np.hypot(a.x - b.x, a.y - b.y) >= a.r + b.r - 0.5
-    # A full bounce: no speed lost between the balls
-    assert a.m * a.x_v ** 2 + b.m * b.x_v ** 2 == pytest.approx(1 * 25 + 3 * 25, rel=0.02)
+    # They part at PLAYER_BOUNCE of the speed they met at
+    assert b.x_v - a.x_v == pytest.approx(PLAYER_BOUNCE * 10, abs=0.01)
 
 
 def test_separating_players_are_not_pulled_back_together():

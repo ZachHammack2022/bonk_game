@@ -304,7 +304,9 @@ class Match:
         the ball's settings, the level as Box2D bodies, and Box2D's own."""
         p = self.env.players[0]
         return {
-            "force": arena.FORCE,
+            "force": p.push,  # sideways and down
+            "fly_force": arena.FORCE,  # up, on maps where you fly
+            "hover": p.hover,  # share of gravity "up" cancels in the air (jump maps)
             "gravity": p.gravity,
             "max_speed": p.v_range,
             "can_fly": p.can_fly,

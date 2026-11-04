@@ -130,12 +130,12 @@ def test_a_player_can_jump_into_the_swing():
         if p.y > sy and p.grounded and abs(p.x - target) < 15:
             p.move_up(2)
         elif p.y > sy + 20 and p.grounded:
-            (p.move_right if p.x < target else p.move_left)(1)
+            (p.move_right if p.x < target else p.move_left)(p.push)
         else:
             if p.x < sx - 3 and p.x_v < 4:
-                p.move_right(1)
+                p.move_right(p.push)
             if p.x > sx + 3 and p.x_v > -4:
-                p.move_left(1)
+                p.move_left(p.push)
 
     assert simulate(m, p, 1500, climb) is None
     assert math.dist((p.x, p.y), m.swing.seat_pos()) < 2 * p.r

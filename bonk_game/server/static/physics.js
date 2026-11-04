@@ -164,13 +164,19 @@
   // Buttons b = [up, left, down, right, heavy] (controls.apply_input)
   function applyInput(s, b) {
     const ph = s.ph;
-    const F = ph.force * (ph.time_scale ?? 1);
+    const ts = ph.time_scale ?? 1;
+    const F = ph.force * ts;  // sideways and down (player.push)
     if (b[3]) s.vx += F / s.m;
     if (b[1]) s.vx -= F / s.m;
     if (b[2]) s.vy += F / s.m;
     if (b[0]) {
-      if (ph.can_fly) s.vy -= F / s.m;
-      else { s.jumpBuffer = JUMP_BUFFER; tryJump(s); }
+      // Flying up is full thrust; on jump maps "up" jumps, and hovers in the
+      // air (cancels ph.hover of gravity: player.move_up)
+      if (ph.can_fly) s.vy -= (ph.fly_force ?? ph.force) * ts / s.m;
+      else {
+        if (!s.grounded && ph.hover) s.vy -= ph.hover * ph.gravity * ts / s.m;
+        s.jumpBuffer = JUMP_BUFFER; tryJump(s);
+      }
     }
     if (b[4] && s.m === ph.min_m) s.m = ph.max_m;
   }
@@ -180,12 +186,14 @@
     if (s.ph.can_fly) return;
     if (s.grounded && s.vy > -s.ph.jump_speed / 2) { s.airSteps = 0; s.jumpUsed = false; }
     else s.airSteps += 1;
-    if (s.jumpBuffer) { tryJump(s); s.jumpBuffer = Math.max(0, s.jumpBuffer - 1); }
+    if (s.jumpBuffer) tryJump(s);
   }
 
-  // player.end_step: heavy wears off (the Iron power-up keeps you heavy)
+  // player.end_step: heavy wears off (the Iron power-up keeps you heavy),
+  // and a remembered "up" press counts down
   function endStep(s) {
     const ph = s.ph;
+    if (s.jumpBuffer) s.jumpBuffer -= 1;
     if (ph.pin_heavy) s.m = ph.max_m;
     else if (s.m > ph.min_m) s.m = Math.max(s.m - ph.mass_decay * (ph.time_scale ?? 1), ph.min_m);
   }

@@ -1,5 +1,6 @@
 """Matches with 2-10 players (issue #12)."""
 import math
+import random
 import os
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -246,8 +247,11 @@ def test_wasd_and_arrows_both_work():
 def test_ten_bot_match_plays_to_results(app, map_name):
     from bonk_game.ui import app as A
     np.random.seed(0)
+    random.seed(0)
     picks = ["human"] + ["bot"] * 9
-    scene = A.PlayerSelectScene(app, map_name, picks=picks, first_to=3)
+    # (First to 2: with ten balls, first to 3 can take longer than the time
+    # below, depending on how the bots' coin flips go)
+    scene = A.PlayerSelectScene(app, map_name, picks=picks, first_to=2)
     app.scene = scene
     scene.start()
     assert isinstance(app.scene, A.MatchScene)

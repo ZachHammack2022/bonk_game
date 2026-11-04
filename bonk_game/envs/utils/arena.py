@@ -25,7 +25,14 @@ TOP = 135
 BOTTOM = 420
 
 RADIUS = 20
-FORCE = 2  # change in velocity a player gets from one input
+FORCE = 2  # change in velocity a player gets from one input (Classic, and flying up)
+# On the open maps, measured from bonk.io (a recording, with balls the same
+# size as ours): sideways and down pushes are a quarter as strong as FORCE,
+# so you commit to a direction instead of turning on a dime; "up" jumps off
+# whatever you stand on, and held in the air it hovers, cancelling most of
+# gravity but never all of it, so you float and fall slowly but can't climb.
+OPEN_PUSH = 0.5
+OPEN_HOVER = 0.75  # share of gravity that holding "up" in the air cancels
 
 MIN_PLAYERS = 2
 MAX_PLAYERS = len(PLAYER_COLORS)  # 10
@@ -77,12 +84,12 @@ def make_platforms():
 def apply_action(agent, action):
     """Apply a discrete action (0-15) to a player."""
     dx, dy, heavy = ACTIONS[int(action)]
-    agent.move_right(dx * FORCE)
+    agent.move_right(dx * agent.push)
     # Go through move_up so maps where "up" is a jump work for agents too
     if dy < 0:
         agent.move_up(FORCE)
     elif dy > 0:
-        agent.move_down(FORCE)
+        agent.move_down(agent.push)
     if heavy:
         agent.make_heavy()
 

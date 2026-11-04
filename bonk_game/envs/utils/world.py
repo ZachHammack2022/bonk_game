@@ -45,7 +45,9 @@ GRIP = 150.0
 # Moving up faster than this (px per step), a ball has left the ground: grip
 # stops at once, so it doesn't take anything off a jump
 LIFT_OFF = 2.0
-PLAYER_BOUNCE = 1.0        # balls bounce off each other without losing speed
+# Share of their closing speed two balls bounce apart with (1 would lose
+# nothing; bonk.io's balls keep roughly 70-100%)
+PLAYER_BOUNCE = 0.85
 
 
 def to_m(px):

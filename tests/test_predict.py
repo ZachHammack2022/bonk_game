@@ -82,6 +82,8 @@ CASES = {
     "run, then reverse": ("platform", [R] * 6 + [L] * 8, put(340, 270), None),
     "jump and land": ("platform", [U] + [NONE] * 24, put(340, 270), None),
     "jump while running": ("platform", [R, U] + [R] * 10, put(280, 270), None),
+    "jump and hover": ("platform", [U] * 30, put(340, 270), None),
+    "hover on the way down": ("platform", [NONE] * 3 + [U] * 12, put(340, 150), None),
     "heavy then move": ("platform", [H] + [L] * 10, put(380, 270), None),
     # (Box2D and planck.js bounce a fast landing on a moving part a little
     # differently: within a few px, which js/net.js smooths out)

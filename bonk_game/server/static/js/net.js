@@ -64,9 +64,10 @@ function effectPhysics(M, S, i) {
   const k = eff && M.powerups && M.powerups[eff[0]];
   if (!k) return M.physics;
   const P = M.physics;
-  const force = P.force * k.force * (k.pin_heavy ? P.max_m / P.min_m : 1);
+  const mult = k.force * (k.pin_heavy ? P.max_m / P.min_m : 1);
+  const force = P.force * mult;
   return {
-    ...P, force, max_speed: P.max_speed * k.max_speed, gravity: P.gravity * k.gravity, pin_heavy: !!k.pin_heavy,
+    ...P, force, fly_force: (P.fly_force ?? P.force) * mult, max_speed: P.max_speed * k.max_speed, gravity: P.gravity * k.gravity, pin_heavy: !!k.pin_heavy,
     base: P,  // (everyone else's)
   };
 }
