@@ -11,10 +11,9 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from bonk_game.server import auth, profiles
-from bonk_game.server.accounts import SESSION_DAYS, Accounts
-
-aiohttp = pytest.importorskip("aiohttp")
+aiohttp = pytest.importorskip("aiohttp")  # (the web server's packages; the training CI job has none)
+from bonk_game.server import auth, profiles  # noqa: E402
+from bonk_game.server.accounts import SESSION_DAYS, Accounts  # noqa: E402
 from bonk_game.server.web import ROOMS as ROOMS_KEY  # noqa: E402
 from bonk_game.server.web import VERSION, make_app  # noqa: E402
 
