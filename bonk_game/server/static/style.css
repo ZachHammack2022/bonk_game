@@ -152,15 +152,46 @@ body.is-host .guest-only { display: none !important; }
 #stage { width: 100vw; height: 100vh; height: 100dvh; display: flex; align-items: center; justify-content: center; }
 #canvas { display: block; touch-action: none; }
 
-#touch { position: fixed; inset: auto 0 0 0; display: flex; justify-content: space-between; padding: 16px; pointer-events: none; }
-#touch .pad-left, #touch .pad-right { display: flex; gap: 12px; pointer-events: auto; }
-#touch button {
-  width: 68px; height: 68px; border-radius: 50%;
-  background: rgba(19, 27, 43, 0.6); border-color: rgba(160, 174, 198, 0.4);
-  font-size: 22px; user-select: none; -webkit-user-select: none; touch-action: none;
+/* Touch controls: two see-through halves over the game. The joystick
+   starts wherever your thumb lands on the left half (it rests low on the
+   left); anywhere on the right half is heavy. */
+#touch { position: fixed; inset: 0; display: flex; }
+#touch.off { display: none; }
+#touch .zone { flex: 1; position: relative; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.stick {
+  --size: 128px;
+  position: absolute; width: var(--size); height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  left: 50%; top: 82%;   /* (portrait: in the space under the game) */
+  border-radius: 50%;
+  background: rgba(241, 245, 249, 0.07);
+  border: 2px solid rgba(241, 245, 249, 0.28);
+  opacity: 0.55; transition: opacity 0.15s;
+  pointer-events: none;
 }
-#touch button[data-b="4"] { font-size: 14px; }
-#touch button.down { background: rgba(255, 209, 102, 0.45); }
+.stick.active { opacity: 1; transition: none; }
+.stick .knob {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  background: rgba(241, 245, 249, 0.32);
+  border: 2px solid rgba(241, 245, 249, 0.5);
+}
+.heavy-btn {
+  position: absolute; right: 45%; top: 82%; width: 96px; height: 96px; margin: -48px -48px 0 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font: 800 13px system-ui; letter-spacing: 1px; color: rgba(241, 245, 249, 0.8);
+  background: rgba(241, 245, 249, 0.07);
+  border: 2px solid rgba(241, 245, 249, 0.28);
+  opacity: 0.55; transition: opacity 0.15s, transform 0.08s;
+  pointer-events: none;
+}
+.heavy-btn.down { opacity: 1; transform: scale(0.92); background: rgba(255, 209, 102, 0.35); border-color: rgba(255, 209, 102, 0.8); }
+/* Landscape: in the margins either side of the game, low down where thumbs rest */
+@media (orientation: landscape) {
+  .stick { --size: 112px; top: 68%; left: 22%; }
+  .heavy-btn { top: 68%; right: 22%; }
+}
 
 .overlay {
   position: fixed; inset: 0;

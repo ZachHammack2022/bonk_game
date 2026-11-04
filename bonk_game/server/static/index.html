@@ -96,6 +96,16 @@
   <!-- The match -->
   <section id="game" class="screen hidden">
     <div id="stage"><canvas id="canvas"></canvas></div>
+    <!-- Touch controls (phones, tablets): see-through, over the game. Touch
+         anywhere on the left half for the joystick, the right half to go heavy -->
+    <div id="touch" class="hidden">
+      <div id="move-zone" class="zone" aria-label="Joystick: touch and drag to move, push up to jump">
+        <div id="stick" class="stick"><div class="knob"></div></div>
+      </div>
+      <div id="heavy-zone" class="zone" aria-label="Touch to go heavy">
+        <div id="heavy-btn" class="heavy-btn">HEAVY</div>
+      </div>
+    </div>
     <div id="killcam" class="killcam hidden"><b>KILLCAM</b><span class="dim small">click to skip</span></div>
     <div id="replay-bar" class="replay-bar hidden">
       <button id="replay-play" aria-label="Play or pause">❚❚</button>
@@ -113,16 +123,6 @@
         <button data-e="1" title="Emote (2)">😂</button>
         <button data-e="2" title="Emote (3)">😮</button>
         <button data-e="3" title="Emote (4)">😤</button>
-      </div>
-    </div>
-    <div id="touch" class="hidden">
-      <div class="pad-left">
-        <button data-b="1" aria-label="left">◀</button>
-        <button data-b="3" aria-label="right">▶</button>
-      </div>
-      <div class="pad-right">
-        <button data-b="4" aria-label="heavy">heavy</button>
-        <button data-b="0" aria-label="jump">▲</button>
       </div>
     </div>
     <div id="results" class="overlay hidden">

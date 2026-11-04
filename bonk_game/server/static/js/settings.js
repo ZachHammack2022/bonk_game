@@ -99,6 +99,10 @@ function captureKey(e) {
 function updateHelp() {
   const k = prefs.keys;
   const moves = [k.up, k.left, k.down, k.right].map(keyName).join(" ");
+  if (document.body.classList.contains("touch")) {
+    $("controls-help").textContent = "Touch the left half of the screen and drag to move (push up to jump); touch the right half to go heavy.";
+    return;
+  }
   $("controls-help").textContent = `Move with ${moves} or the arrow keys. ${keyName(k.heavy)} or Shift goes heavy. 1–4 for emotes. Esc for settings.`;
 }
 
