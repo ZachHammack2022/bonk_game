@@ -91,12 +91,15 @@ Optional: without these settings the server runs with guests only. With them, pe
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | (none) | from Google (below). Both set turns accounts on. Keep the secret a secret (`fly secrets set`). |
 | `BONK_DB` | `bonk.db` | the SQLite file. It must outlive deploys: `fly.toml` puts it on a volume (`/data/bonk.db`). |
 | `BONK_PUBLIC_URL` | (from the request) | the site's address, e.g. `https://bonk-game.fly.dev`, if the server can't tell it from the request |
+| `BONK_CONTACT` | (none) | an email address for the privacy page's "contact" line (Google's review wants one) |
+| `BONK_GOOGLE_SITE_VERIFICATION` | (none) | proves to Google you own the site: Search Console's "HTML tag" code (just the `content="..."` part) |
 
 **Getting the Google client** (once, about 10 minutes, at [console.cloud.google.com](https://console.cloud.google.com)):
 1. Make a project (any name, e.g. "bonk").
 2. **APIs & Services → OAuth consent screen** (or **Google Auth Platform → Branding**): user type **External**, app name "bonk", your email as the support and developer contact, and `https://<your-site>/privacy` as the privacy policy. Scopes: `openid`, `email` and `profile` (the basic ones; Google doesn't review them). While it's in **Testing**, only the test users you add can sign in; **Publish** it to let anyone.
 3. **Credentials → Create credentials → OAuth client ID**, type **Web application**. Authorised redirect URI: `https://<your-site>/auth/google/callback` (for trying it locally, also `http://localhost:8000/auth/google/callback`).
 4. Copy the client ID and secret into the server's environment. On Fly: `fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... -a <app>`.
+5. To publish with your app's name (Google's brand verification): the home page links to the privacy policy already; set `BONK_CONTACT` to an email for it, and prove you own the site in [Search Console](https://search.google.com/search-console) (add a **URL prefix** property for `https://<your-site>/`, pick **HTML tag**, set `BONK_GOOGLE_SITE_VERIFICATION` to its code, deploy, then press Verify). Google re-checks within a day or so.
 
 **On Fly**, accounts need the volume `fly.toml` mounts at `/data`. Make it once, in the app's region, before deploying this version: `fly volumes create bonk_data --size 1 --region iad -a <app>` (1 GB is far more than enough). A volume lives on one machine, which suits the single machine rooms already need. Fly snapshots volumes daily.
 

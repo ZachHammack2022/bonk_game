@@ -57,6 +57,7 @@ and closes. Browsers reconnect to the new server and reopen their room.
 import asyncio
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
@@ -91,6 +92,13 @@ REPLAY_CHUNK = 30           # ticks simulated between letting the rooms run
 PROTOCOL = 1
 DRAIN_SECONDS = limits._env("BONK_DRAIN_SECONDS", 120.0)
 METRICS_TOKEN = os.environ.get("BONK_METRICS_TOKEN", "")
+# Proving to Google that you own the site (Search Console's "HTML tag"
+# method: the content="..." part), which Google asks for before showing
+# the app's name on its sign-in screen
+SITE_VERIFICATION = os.environ.get("BONK_GOOGLE_SITE_VERIFICATION", "")
+# How people reach whoever runs the server (an email address), for the
+# privacy page
+CONTACT = os.environ.get("BONK_CONTACT", "")
 
 
 def client_version(static=STATIC):
@@ -121,7 +129,22 @@ def render_index(version=VERSION):
     names = names.replace("<", "\\u003c")
     head = (f'<head>\n  <meta name="bonk-version" content="{version}">'
             f'\n  <script id="bonk-names" type="application/json">{names}</script>')
+    if SITE_VERIFICATION:
+        head += f'\n  <meta name="google-site-verification" content="{html.escape(SITE_VERIFICATION)}">'
     return page.replace("<head>", head, 1)
+
+
+def render_privacy(contact=None):
+    """privacy.html, with how to reach whoever runs the server."""
+    contact = CONTACT if contact is None else contact
+    with open(os.path.join(STATIC, "privacy.html"), encoding="utf-8") as f:
+        page = f.read()
+    if contact:
+        safe = html.escape(contact)
+        how = f'email <a href="mailto:{safe}">{safe}</a>' if "@" in contact else safe
+    else:
+        how = "contact whoever runs this server"
+    return page.replace("{{contact}}", how)
 
 
 class AgentStore:
@@ -163,6 +186,7 @@ def _sender(ws):
 
 
 PAGE = web.AppKey("page", str)
+PRIVACY_PAGE = web.AppKey("privacy_page", str)
 
 
 async def index(request):
@@ -400,7 +424,8 @@ async def _stop_background(app):
 
 
 async def privacy(request):
-    return web.FileResponse(os.path.join(STATIC, "privacy.html"))
+    return web.Response(text=request.app[PRIVACY_PAGE], content_type="text/html",
+                        headers={"Cache-Control": "no-cache"})
 
 
 def make_app(rooms=None, auth_config=None, accounts=None):
@@ -414,6 +439,7 @@ def make_app(rooms=None, auth_config=None, accounts=None):
     app[CONNECTIONS] = {}  # ip -> open WebSockets
     app[SOCKETS] = set()  # open WebSockets, closed on shutdown
     app[PAGE] = render_index()
+    app[PRIVACY_PAGE] = render_privacy()
     app.router.add_get("/", index)
     app.router.add_get("/r/{code}", index)
     app.router.add_post("/api/rooms", create_room)

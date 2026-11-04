@@ -254,3 +254,19 @@ def test_a_kick_follows_a_signed_in_player_to_another_browser():
             await room.join("tok-2", "Bob", noop, account="u1")  # another browser, same account
         await room.join("tok-3", "Cat", noop)  # someone else is fine
     run(go())
+
+
+def test_google_review_pages(monkeypatch):
+    """What Google's brand review checks: a privacy policy with real content
+    and a contact, linked from the home page, and a way to prove you own
+    the site."""
+    from bonk_game.server import web as web_mod
+    page = web_mod.render_privacy("owner@example.com")
+    assert "{{contact}}" not in page and 'href="mailto:owner@example.com"' in page
+    for must in ("Google API Services User Data Policy", "Limited Use", "Delete my account", "openid"):
+        assert must in page
+    assert "{{contact}}" not in web_mod.render_privacy("")
+    assert 'href="/privacy"' in web_mod.render_index()
+    assert "google-site-verification" not in web_mod.render_index()
+    monkeypatch.setattr(web_mod, "SITE_VERIFICATION", 'abc"123')
+    assert '<meta name="google-site-verification" content="abc&quot;123">' in web_mod.render_index()
