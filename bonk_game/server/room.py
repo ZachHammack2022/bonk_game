@@ -143,6 +143,7 @@ class Room:
         self.match_tokens = []     # slot -> member token (None for bots)
         self.results = None
         self.task = None
+        self.ending = None  # who ended the match early (the host's name), until it stops
         self.encoder = None        # the match's state messages (delta.py)
         self.banned = set()        # tokens (and accounts) the host removed
         self.votes = set()         # tokens that want a rematch (on the results screen)
@@ -470,6 +471,11 @@ class Room:
             await self.broadcast_lobby()
         elif kind == "start":
             await self.start()
+        elif kind == "end_match":
+            # The host stops the match now (to change the map, say): back to
+            # the lobby, no results, nothing counted
+            if self.match is not None and self.ending is None:
+                self.ending = self.members[token].name
         elif kind == "lobby":
             if self.match is None:
                 self.results = None
@@ -703,6 +709,7 @@ class Room:
         self.match_accounts = [self.members[t].account for t in humans] + [None] * len(bots)
         self.waiting = [m.token for m in self.connected if m.token not in humans]
         self.results = None
+        self.ending = None
         self.votes.clear()
         await self.broadcast(self.match.describe())
         await self.broadcast_lobby()
@@ -724,6 +731,9 @@ class Room:
         match_accounts = self.match_accounts  # (people who drop in are added to it)
         try:
             while not match.finished:
+                if self.ending is not None:
+                    why = "ended"
+                    break
                 if self.waiting:
                     await self.drop_in()
                 t0 = time.perf_counter()
@@ -742,12 +752,13 @@ class Room:
                 if not self.connected:
                     why = "everyone_left"
                     break  # everyone left: stop simulating
-            self.results = match.results()
-            # For players' match history (profiles.py): which match, and when
-            self.results["match_id"] = f"{self.code}-{int(began_at * 1000)}"
-            self.results["at"] = int(began_at)
-            self.results["slots"] = match.describe()["slots"]
-            self._record(match_accounts)
+            if why != "ended":
+                self.results = match.results()
+                # For players' match history (profiles.py): which match, and when
+                self.results["match_id"] = f"{self.code}-{int(began_at * 1000)}"
+                self.results["at"] = int(began_at)
+                self.results["slots"] = match.describe()["slots"]
+                self._record(match_accounts)
         except asyncio.CancelledError:
             why = "stopped"
             raise
@@ -766,7 +777,10 @@ class Room:
                           seconds=round(loop.time() - began, 1),
                           scores=match.mode.scores())
         self.waiting = []
-        if self.results is not None:
+        if why == "ended":
+            ender, self.ending = self.ending, None
+            await self.say(f"{ender} ended the match")
+        elif self.results is not None:
             await self.broadcast(self.results)
         else:
             await self.broadcast({"type": "error", "message": "Something went wrong in that match. Sorry!"})
