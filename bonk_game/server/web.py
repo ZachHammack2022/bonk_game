@@ -22,6 +22,10 @@ Routes:
     GET  /api/playtest   the latest playtest reports and browser errors
                          (playtest.py; same token as /metrics)
     GET  /api/reports    the latest player reports (moderation.py; same token)
+    GET  /admin          a page charting the server's numbers, now and over the
+                         last 90 days (you paste the metrics token into it)
+    GET  /api/admin/metrics?range=<seconds>   what that page shows (same token;
+                         unlike /metrics, refused if BONK_METRICS_TOKEN isn't set)
     GET  /privacy        what the site keeps about people
     GET  /terms          the terms of use
     /auth/..., /api/me   signing in with Google and your account, when
@@ -106,6 +110,27 @@ MAX_MESSAGE = 4096
 PROTOCOL = 1
 DRAIN_SECONDS = limits._env("BONK_DRAIN_SECONDS", 120.0)
 METRICS_TOKEN = os.environ.get("BONK_METRICS_TOKEN", "")
+# Wrong metrics tokens one IP may try (a burst, then this many a minute)
+WRONG_TOKENS = 10
+TOKEN_LIMIT = web.AppKey("token_limit", object)
+# The server's numbers every minute (metrics.History): a file, so they
+# outlast restarts and deploys; ":memory:" (the default) keeps them only
+# while the server runs
+METRICS_DB = os.environ.get("BONK_METRICS_DB", ":memory:")
+HISTORY = web.AppKey("history", object)
+SAMPLER = web.AppKey("sampler", object)
+ADMIN = os.path.join(os.path.dirname(__file__), "admin")
+# The admin page is nobody else's business: no search engines, no other
+# site framing it, no address sent on when you follow a link
+ADMIN_HEADERS = {
+    "Cache-Control": "no-store",
+    "X-Robots-Tag": "noindex, nofollow",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": ("default-src 'none'; script-src 'self'; style-src 'self'; "
+                                "connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; "
+                                "base-uri 'none'; form-action 'none'"),
+}
 # Proving to Google that you own the site (Search Console's "HTML tag"
 # method: the content="..." part), which Google asks for before showing
 # the app's name on its sign-in screen
@@ -283,11 +308,22 @@ async def healthz(request):
     return web.Response(text="ok")
 
 
-def _check_token(request):
-    if METRICS_TOKEN:
-        given = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        if not hmac.compare_digest(given.encode(), METRICS_TOKEN.encode()):
-            raise web.HTTPUnauthorized(text="Send the metrics token.")
+def _check_token(request, required=False):
+    """The metrics token, as "Authorization: Bearer <token>". Without
+    BONK_METRICS_TOKEN set, anyone may look (handy locally), unless
+    `required`. An IP that keeps guessing wrong has to wait."""
+    if not METRICS_TOKEN:
+        if required:
+            raise web.HTTPServiceUnavailable(text="Set BONK_METRICS_TOKEN on the server first.",
+                                             headers=ADMIN_HEADERS)
+        return
+    given = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not hmac.compare_digest(given.encode(), METRICS_TOKEN.encode()):
+        if not request.app[TOKEN_LIMIT].allow(limits.client_ip(request)):
+            raise web.HTTPTooManyRequests(text="Too many wrong tokens. Try again in a minute.",
+                                          headers=ADMIN_HEADERS)
+        metrics.event("wrong_metrics_token", logging.WARNING, path=request.path)
+        raise web.HTTPUnauthorized(text="Send the metrics token.", headers=ADMIN_HEADERS)
 
 
 async def playtest_page(request):
@@ -304,19 +340,59 @@ async def reports_page(request):
                              headers={"Cache-Control": "no-store"})
 
 
-async def metrics_page(request):
-    _check_token(request)
-    snap = metrics.STATS.snapshot(request.app[ROOMS])
+def _snapshot(app):
+    """Everything /metrics reports."""
+    snap = metrics.STATS.snapshot(app[ROOMS])
     snap["playtest_reports_total"] = playtest.REPORTS.reports
     snap["client_errors_total"] = playtest.REPORTS.client_errors
     snap["player_reports_total"] = moderation.REPORTS.total
     snap["version"] = VERSION
+    return snap
+
+
+async def metrics_page(request):
+    _check_token(request)
+    snap = _snapshot(request.app)
     headers = {"Cache-Control": "no-store"}
     if request.query.get("format") == "json":
         return web.json_response(snap, headers=headers)
     snap.pop("version")
     text = f'# TYPE bonk_info gauge\nbonk_info{{version="{VERSION}"}} 1\n' + metrics.prometheus(snap)
     return web.Response(text=text, content_type="text/plain", headers=headers)
+
+
+ADMIN_FILES = {"admin.js": "application/javascript", "admin.css": "text/css"}
+ADMIN_RANGES = (3600, 6 * 3600, 86400, 7 * 86400, 30 * 86400, 90 * 86400)
+
+
+async def admin_page(request):
+    """The page itself has no secrets in it: the numbers come from
+    /api/admin/metrics, which needs the token."""
+    name = request.match_info.get("file", "admin.html")
+    if name != "admin.html" and name not in ADMIN_FILES:
+        raise web.HTTPNotFound()
+    with open(os.path.join(ADMIN, name), encoding="utf-8") as f:
+        text = f.read()
+    return web.Response(text=text, content_type=ADMIN_FILES.get(name, "text/html"),
+                        headers=ADMIN_HEADERS)
+
+
+async def admin_metrics(request):
+    _check_token(request, required=True)
+    try:
+        seconds = int(request.query.get("range", 86400))
+    except ValueError:
+        seconds = 86400
+    seconds = min(ADMIN_RANGES, key=lambda r: abs(r - seconds))
+    history = request.app[HISTORY]
+    return web.json_response({
+        "now": _snapshot(request.app),
+        "range": seconds,
+        "sample_every": history.SAMPLE_EVERY,
+        "keep_days": history.KEEP_DAYS,
+        "kept": history.path != ":memory:",
+        "history": history.series(seconds),
+    }, headers=ADMIN_HEADERS)
 
 
 async def websocket(request):
@@ -431,8 +507,25 @@ async def _sweeper(app):
             app[auth.ACCOUNTS].sweep()
 
 
+async def _sampler(app):
+    """A sample for the history every minute (and one now, so a fresh
+    server shows up straight away)."""
+    history = app[HISTORY]
+    n = 0
+    while True:
+        try:
+            history.add(_snapshot(app))
+            if n % 60 == 0:  # hourly
+                history.prune()
+        except Exception as e:  # (a full disk, say): the game carries on
+            metrics.event("error", logging.ERROR, where="metrics_history", error=repr(e))
+        n += 1
+        await asyncio.sleep(history.SAMPLE_EVERY)
+
+
 async def _start_background(app):
     app[SWEEPER] = asyncio.ensure_future(_sweeper(app))
+    app[SAMPLER] = asyncio.ensure_future(_sampler(app))
 
 
 async def _shutdown(app, drain=None):
@@ -445,6 +538,11 @@ async def _shutdown(app, drain=None):
 
 async def _stop_background(app):
     app[SWEEPER].cancel()
+    app[SAMPLER].cancel()
+    try:
+        app[HISTORY].add(_snapshot(app))  # the last numbers before stopping
+    except Exception:
+        pass
     for room in list(app[ROOMS].rooms.values()):
         await room.stop()
 
@@ -459,13 +557,15 @@ async def terms(request):
                         headers={"Cache-Control": "no-cache"})
 
 
-def make_app(rooms=None, auth_config=None, accounts=None):
-    """auth_config, accounts: for tests (normally from the environment:
-    auth.Config)."""
+def make_app(rooms=None, auth_config=None, accounts=None, history=None):
+    """auth_config, accounts, history: for tests (normally from the
+    environment: auth.Config, BONK_METRICS_DB)."""
     app = web.Application(middlewares=[cache_headers])
     app[ROOMS] = rooms or RoomManager(AgentStore())
     app[ROOM_LIMIT] = limits.PerKey(limits.ROOMS_PER_IP / 60, limits.ROOMS_PER_IP)
     app[GUESS_LIMIT] = limits.PerKey(WRONG_PASSWORDS / 60, WRONG_PASSWORDS)
+    app[TOKEN_LIMIT] = limits.PerKey(WRONG_TOKENS / 60, WRONG_TOKENS)
+    app[HISTORY] = history or metrics.History(METRICS_DB)
     app[CONNECTIONS] = {}  # ip -> open WebSockets
     app[SOCKETS] = set()  # open WebSockets, closed on shutdown
     app[PAGE] = render_index()
@@ -483,6 +583,9 @@ def make_app(rooms=None, auth_config=None, accounts=None):
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/metrics", metrics_page)
     app.router.add_get("/api/playtest", playtest_page)
+    app.router.add_get("/admin", admin_page)
+    app.router.add_get("/admin/{file}", admin_page)
+    app.router.add_get("/api/admin/metrics", admin_metrics)
     app.router.add_get("/privacy", privacy)
     app.router.add_get("/terms", terms)
     accounts = auth.setup(app, auth_config, accounts)

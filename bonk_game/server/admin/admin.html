@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>bonk admin</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script src="/admin/admin.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <h1><span class="brand">bonk</span> admin</h1>
+    <div id="about" class="dim"></div>
+    <button id="sign-out" class="ghost hidden" type="button">Sign out</button>
+  </header>
+
+  <main>
+    <form id="login" class="card login" autocomplete="off">
+      <h2>Metrics token</h2>
+      <p class="dim">The <code>BONK_METRICS_TOKEN</code> secret set on the server. It's sent only to this
+        server, in a request header, and kept in this tab until you close it.</p>
+      <label class="sr-only" for="token">Metrics token</label>
+      <input id="token" type="password" spellcheck="false" placeholder="Paste the token" required>
+      <label class="check"><input id="remember" type="checkbox"> Remember on this device</label>
+      <p id="login-error" class="error" role="alert"></p>
+      <button class="primary" type="submit">Open</button>
+    </form>
+
+    <div id="dash" class="hidden">
+      <section aria-labelledby="now-title">
+        <div class="section-head">
+          <h2 id="now-title">Right now</h2>
+          <span id="updated" class="dim"></span>
+        </div>
+        <div id="tiles" class="tiles"></div>
+        <p id="totals" class="dim totals"></p>
+      </section>
+
+      <section aria-labelledby="history-title">
+        <div class="section-head">
+          <h2 id="history-title">History</h2>
+          <div id="ranges" class="seg" role="group" aria-label="Time range"></div>
+        </div>
+        <p id="history-note" class="dim"></p>
+        <div id="charts" class="charts"></div>
+        <details id="table-view">
+          <summary>Show as a table</summary>
+          <div class="table-wrap"><table id="table"></table></div>
+        </details>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
