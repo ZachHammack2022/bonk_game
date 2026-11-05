@@ -1,133 +1,270 @@
 [![main](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml/badge.svg?branch=main&event=push)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml?query=branch%3Amain+event%3Apush) [![staging](https://github.com/ZachHammack2022/bonk_game/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/deploy.yml)
 
-bonk is a tiny physics brawler, inspired by bonk.io, that you play in the browser with friends: 2 to 10 balls on a map, everyone trying to knock everyone else off. A Python server runs every match, with [Box2D](https://box2d.org) doing the physics; the browser runs the same engine ([planck.js](https://piqnt.com/planck.js/), its JavaScript port) to predict your ball. The same physics is a Gymnasium env for training AI agents with Stable Baselines 3, and trained agents can join online matches alongside the built-in bots.
+# bonk
 
-## Play online with friends
-The server runs every match; your browser just sends your keys and draws what it gets back, so friends only need a link.
+A tiny physics brawler for the browser, inspired by bonk.io: 2 to 10 balls on a map, everyone trying to knock everyone else off. Play it at **[bonk-game.fly.dev](https://bonk-game.fly.dev)**.
+
+Under the hood it's a small but complete multiplayer game: a Python server runs every match with [Box2D](https://box2d.org) physics at 30 steps a second and streams it over WebSockets; your browser runs the same physics ([planck.js](https://piqnt.com/planck.js/), Box2D's JavaScript port) to predict your own ball, so it reacts instantly even with lag. The same physics is a [Gymnasium](https://gymnasium.farama.org/) env for training AI agents, and trained agents can play online next to the built-in bots.
+
+This README is in four parts:
+
+1. **[Play](#play)**: running it, and how the game works.
+2. **[Run a server](#run-a-server)**: hosting, deploys, watching it, accounts, security.
+3. **[Learn how it works](#learn-how-it-works)**: a guided tour of the ideas in the code (networking, prediction, servers, auth, security, testing), with where to read and what to try.
+4. **[Develop](#develop)**: tests, CI, maps, training, and the code layout.
+
+---
+
+## Play
+
+### Quick start
 
 ```
 pip install -r requirements-server.txt
 python -m bonk_game.server            # http://localhost:8000 (--port to change)
 ```
 
-Pick a name (click your ball beside it to customize it) and press **Play**: that opens the list of every game going, where you join one (search by room, host, player or 4-letter code; Enter joins), or press **New game** to make your own: name it (*<your name>'s room* to start with) and make it **public** (anyone can join) or **private** (listed, but joining needs its password; the server makes one up). You get a 4-letter room code; **Copy invite link** and send it to friends: a private game's link has the password in it, so they get straight in (the start page just asks for their name, then offers **Join game**). Whoever made the room is the host (marked ★): they pick the mode, the map and the settings, and fill open seats with bots (Easy, Medium or Hard; click an open seat), up to 10 players. Then **Start match**. If the map needs more players than are in the room (Grand Stage and Double Decker need 4), the button says how many more, and the lobby offers to add the bots it would take. **← Leave** (or Back in the browser) goes back to the start page; your place goes straight away, rather than being kept for a reconnect. The host can **End match** at any time (bottom left during the match, or in the lobby while it's on): everyone goes back to the lobby with no results and nothing counted, say to change the map. It asks first if other people are playing. During a match, **← Lobby** (bottom left) takes you out to the lobby while a bot plays for you; **Back to the match** puts you back in, and **← Leave** from there leaves the room.
+Open the page, pick a name and press **Play**. You'll see every game going: join one, or press **New game** to make your own and send friends the invite link. That's all anyone needs: the server runs the game, and the browser only sends your keys and draws what comes back.
 
-Every game, public and private, is listed after **Play** by its name; private ones show a lock, and **Hide private games** leaves them out. Joining a private game by its code or from the list asks for the password. In the lobby the host renames the room by clicking its name, and switches it between **Public** and **Private**. A private game's password is made up by the server (nobody types one in; switching to public and back makes a new one). The header shows the **Room code** and **Room password**; click either to copy it. The map, mode and rules are summed up on the right, under a picture of the map, and set in **Game settings**. Someone who arrives while a match is on takes over a bot's seat, keeping its colour and score: straight away in Lives, Knockouts and Crown, and at the next round in the others. If there's no bot to take over, they watch and play in the next match.
+### Getting into a game
 
-**Chat.** Everyone in a room can chat: a panel in the lobby, and during a match the latest lines show for a few seconds in the bottom-left corner (top-left on touch screens). Press **Enter** or **T** (or the 💬 button) to type, Enter to send, Esc to close; your ball lets go of every key while you type. People who join get the last 50 lines, and the chat says who joined and left. A few messages a second at most. Turn it off during matches in ⚙ Settings.
+- **Play** opens the game list. Search by room, host, player or 4-letter code (Enter joins), filter by mode or map.
+- **New game** makes a room: name it, and make it **public** (anyone can join) or **private** (listed with a lock; joining needs the password, which the server makes up). **Copy invite link** gives a link with the password in it, so friends get straight in.
+- **The host** (★, whoever made the room) picks the mode, map and settings, fills open seats with bots (Easy, Medium or Hard), and presses **Start match**. They can rename the room, switch it between public and private, remove people (they can't come back), and **End match** at any time (say, to change the map without waiting for bots to finish).
+- **Joining mid-match**: you take over a bot's seat, keeping its colour and score (straight away in Lives, Knockouts and Crown; at the next round otherwise), or watch until the next match.
+- **← Lobby** during a match steps out while a bot plays for you; **← Leave** leaves the room. If you refresh or lose connection, you get your seat back; after 30 seconds away you leave.
+- After a match everyone can vote to play again, and **Killcam** replays the final knockout in slow motion.
 
-**Moderation.** Names (guests' and accounts' alike) and chat go through the same filter (`bonk_game/server/moderation.py`): [better-profanity](https://github.com/snguyenthanh/better_profanity)'s word list and its look-alike spellings, minus mild words that are part of a game (`GAME_WORDS`: "kill", "hell", "noob"…), plus a short list of our own that also catches slurs inside longer words and spellings like f.u.c.k or fuuuck. An offensive name is replaced with "Player 42"; offensive words in chat are starred out (`****`) and the rest of the message is kept. It catches the common cases, not everything. Click **⋯** next to someone (in the lobby, on the results screen, or in ⚙ Settings during a match) to **mute** them, which hides their chat, emotes and name on your screen only, or to **report** them. Reports are logged (`"event": "player_report"`) with the room, both names and accounts, and what happened in the room lately; the latest 500 are at `GET /api/reports` (same token as `/metrics`). The host can remove anyone from their room. The limits: a removed guest can come back by clearing their browser data (signed-in players can't, on any device), and nothing happens to a reported player automatically. People see each other by a public id, never the browser token that holds your seat.
+### Modes
 
 | Mode | How it works |
 |---|---|
 | Free-for-all | On most maps a ball that's knocked out sits out the rest of the round, and the last one standing scores. (On Classic, where you respawn, the point goes to whoever last hit you.) First to N points. |
-| Teams | Red team against Blue team, up to 5 a side, each in its own colours. The last team standing scores the round (on Classic, every knockout scores for the other side). Bumping a teammate off doesn't count. Click **Switch to …** in the lobby to change sides. |
-| Lives | Everyone has N lives and respawns until they run out. Last ball left wins. The sudden-death walls still close in when the round clock runs out. |
+| Teams | Red against Blue, up to 5 a side. The last team standing scores the round (on Classic, every knockout scores for the other side). Bumping a teammate off doesn't count. |
+| Lives | N lives each, respawning until they run out. Last ball left wins. |
 | Knockouts | N minutes, respawning; the most knockouts wins. A tie goes to overtime: the next knockout wins. |
-| Crown | One player wears the crown and scores a point a second. Bump the wearer to steal it; knock them out and it's yours. First to wear it for N seconds in total wins. |
+| Crown | One player wears the crown and scores a point a second. Bump the wearer to steal it; knock them out and it's yours. First to N seconds wins. |
 
-The respawning modes (Lives, Knockouts and Crown) don't work on Sinking Swing, whose floor is gone by the end of a round.
+The respawning modes don't work on Sinking Swing, whose floor is gone by the end of a round. A ball that respawns is held still and untouchable for 2 seconds, so you can see where you are.
 
-A ball that respawns (in those modes, and on Classic) is held still for 2 seconds first, so you can see where you are: it's see-through, with a ring running down (and the seconds left, on your own ball). While it's held your keys do nothing, and nothing can hit it or knock it out; bots go after someone else.
+A knockout counts for whoever last hit you in the past 3 seconds; if nobody did, you just fell. The results screen hands out awards: most knockouts, hardest hit, butterfingers (most falls with nobody near) and survivor.
 
-The host can also set the **round time** (how long before the sudden-death walls close in, or off), **gravity** (low, normal or high), the **speed** (slow, normal or fast: the whole game in slow motion or not, with every jump and bounce the same, just taking longer; normal is 75% of the original speed, which was too quick to plan anything, and fast is the original) and turn on **power-ups**. With power-ups on, a pickup appears every few seconds; touch it for a few seconds of ⚡ speed (push harder, faster top speed), 🎈 float (much less gravity), 🪨 iron (as heavy as a heavy ball the whole time, but you move as if you weren't) or 👊 punch (the next ball you bump goes flying).
+The host can also set the **round time** (when the sudden-death walls close in), **gravity**, **speed** (normal is 75% of the original, which was too quick to plan anything) and **power-ups**: ⚡ speed, 🎈 float, 🪨 iron (heavy without being slow) and 👊 punch (the next ball you bump goes flying).
 
-A knockout counts for whoever last hit you in the past 3 seconds; if nobody did, you just fell. The feed in the top right shows who knocked out whom, and the results screen hands out awards: most knockouts, hardest hit, butterfingers (most falls with nobody near) and survivor (knocked out the fewest times).
-
-Going **heavy** makes you 5x heavier for a moment, so you hit harder and get knocked around less, but you move more slowly and can't go heavy again until it wears off.
+### Controls
 
 | | Move / jump | Go heavy |
 |---|---|---|
 | Keyboard | W A S D or the arrow keys | Space or Shift |
 | Gamepad | left stick or d-pad; A jumps | B, X, a bumper or a trigger |
+| Touch | drag anywhere on the left half (pushing up jumps) | touch the right half |
 
-On a gamepad, Y waves, Start opens settings, and A votes to play again on the results screen. Any controller the browser knows (Xbox, PlayStation, Switch Pro and most others) works; press a button on it once the page is open.
+Going **heavy** makes you 5x heavier for a moment: you hit harder and get knocked around less, but move more slowly. On a gamepad, Y waves, Start opens settings, and A votes for a rematch. Press 1-4 for emotes, Enter or T to chat, Esc for settings, M to mute.
 
-- On phones and tablets, touch anywhere on the left half of the screen and drag to move: the joystick starts where your thumb lands, and pushing up jumps. Touch anywhere on the right half to go heavy. Both are see-through, over the game. M mutes.
-- Your own ball reacts as soon as you press a key: the browser predicts where the server will put it, running the same physics as the server (Box2D, as planck.js: `static/physics.js`) on the whole level, moving parts and the other balls included, and smooths out any difference when the server's answer arrives. Your ping is in the bottom-right corner. To try it on a worse connection, add `?net=mobile` to the page address (see [Simulating bad networks](#simulating-bad-networks)); `?predict=0` turns prediction off for comparison.
-- If you refresh or lose connection, you get your seat back; a Medium bot plays for you while you're gone. After 30 seconds away you leave the room.
-- People who join during a match watch it and play in the next one.
-- **Your ball:** pick a favourite colour and a pattern (stripes, dots, eyes and more) in the **Ball** tab of your profile (**Profile**, top right of the start page and the game list, or click your ball beside your name), or by clicking your ball in the lobby. They're saved in your browser (no sign-up needed) and come with you into every room; you get your colour whenever it's free. On your own screen your ball is always your colour: anyone else close to it is shown in a different one (bots get the matching name). Customize also has **trails, hats and knockout effects**. Nearly everything is for everyone, guests included. A few things are for signed-in players: **any colour** for your ball (a colour picker next to the palette; you get it unless it looks too much like someone else's, and not in Teams, where colours show your side), the heart, checker and galaxy patterns, the sparkle trail, the cap and the confetti knockout. Signing in is all it takes: nothing is earned by playing or by winning awards. Guests see those with a lock. The list is in `bonk_game/server/cosmetics.py`, and the server checks every pick.
-- **Colourblind mode** (⚙ settings): every ball gets a pattern of its own, so you never have to tell colours apart. **High-contrast colours** swaps in colours that are easy to tell apart (Okabe and Ito's). Both change only your screen.
-- **Your stats** (the **Stats** tab of your profile): wins, knockouts, falls, your hardest hit, the awards you've won, how you do in each mode, and your last 50 matches (place, mode, map, knockouts, awards). Every match you play in is added when it ends. Like your ball and settings, they're kept in your browser, as one profile. Signing in adds them to your account, so they're the same on every device; signed in, **Download my data** saves a copy.
-- **Accounts (optional):** play as a guest with no sign-up, as before, or **Sign in with Google** at the bottom of your profile to keep your profile (name, ball, settings, stats and match history) on the server, the same on every device. The first time you sign in on a browser, its profile is added to your account. Signed out, you're back to that browser's guest profile. **Delete my account** is under 📊 Your stats. `/privacy` says what's kept, and `/terms` has the terms of service (both linked from the home page). Sign-in only shows up on a server set up for it ([Accounts](#accounts-sign-in-with-google)).
-- **Killcam:** on the results screen, **Killcam** plays the final knockout again in slow motion.
-- **Settings** (the **Settings** tab of your profile; ⚙ or Esc opens it straight there in a room): volume, mute, screen shake, show ping, and your keys. The arrow keys and Shift always work as well.
-- Press 1-4 (or the buttons in the corner) for emotes during a match.
-- After a match everyone can vote to play again; the next one starts when everyone has voted (or the host starts it). The host can also remove someone from the room (✕ next to their name); they can't rejoin it.
-- Trained agents can play online too: if the server has stable-baselines3 installed and agents in `./agents`, they show up next to the bots.
+### Your profile
 
-### Running it on the internet
-Run it on any host that supports WebSockets. The `Dockerfile` builds the server (`docker build -t bonk . && docker run -p 8000:8000 bonk`), and it reads the port from `PORT`. Rooms live in memory, so run a single instance. Serve it over HTTPS: the page then connects with `wss://` by itself.
+**Profile** (top right, or click your ball) has three tabs:
 
-**Hosting it on Fly.io** (what `fly.toml` is set up for). [Install flyctl](https://fly.io/docs/flyctl/install/) and make a Fly account, then:
+- **Ball**: colour, pattern, trail, hat and knockout effect. Nearly everything is for everyone; a few things (any colour, some patterns, the sparkle trail, the cap, confetti) are for signed-in players. On your own screen your ball is always your colour.
+- **Stats**: wins, knockouts, falls, hardest hit, awards, how you do per mode, and your last 50 matches.
+- **Settings**: volume, screen shake, ping display, key bindings, **colourblind mode** (every ball gets its own pattern) and **high-contrast colours** (Okabe and Ito's palette).
+
+It's all kept in your browser, no sign-up needed. **Sign in with Google** (bottom of the profile) to keep it on the server, the same on every device; **Download my data** and **Delete account** are in Stats. `/privacy` and `/terms` say what's kept.
+
+### Chat and safety
+
+Everyone in a room can chat (in the lobby, and over the match for a few seconds). Names and chat go through a word filter: an offensive name becomes "Player 42", and offensive words in chat are starred out. Click **⋯** next to anyone to **mute** them (on your screen only) or **report** them. It catches the common cases, not everything.
+
+### Maps
+
+| Map | Players | |
+|---|---|---|
+| Classic | 2-8 | A box with a bouncy floor and ceiling and deadly side walls. You can fly. Push people into the walls. |
+| Floating Platform | 2-6 | One platform. Knock them off. |
+| Sliding Platform | 2-6 | A platform with bumper posts that slides on a rail; rock it to fling people. |
+| Sinking Swing | 2-6 | A floor with a launch pad that sinks away, and a swing to survive on. |
+| Ramp Rumble | 2-8 | A halfpipe with springy bumpers overhead. |
+| Grand Stage | 4-10 | A wide stage for a crowd, with bumpers in the corners. |
+| Double Decker | 4-10 | A short upper deck above a long lower one. |
+
+Apart from Classic, the maps float in open space, bonk-style: fall off the bottom or go off the sides and you're out until the next round. "Up" is a small hop, and held in the air it hovers, so you float but can't climb. These numbers were measured from a recording of bonk.io. Rounds last 45 seconds (Classic gives you 30 to score); then it's **sudden death** and red walls close in.
+
+You can make your own maps as JSON files: see [Making maps](#making-maps).
+
+---
+
+## Run a server
+
+### On Fly.io
+
+`fly.toml` and `deploy/fly.sh` are set up for [Fly.io](https://fly.io). [Install flyctl](https://fly.io/docs/flyctl/install/), make an account, then:
 
 ```
-./deploy/fly.sh bonk-yourname ord     # app name (it's in the address), then a region
+./deploy/fly.sh bonk-yourname iad     # app name (it's in the address), then a region
 ```
 
-Pick the region nearest your players (`fly platform regions` lists them: `iad` Virginia, `ord` Chicago, `lax` Los Angeles, `lhr` London, `fra` Frankfurt…). The first run makes the app and prints a metrics token; keep it. Every run builds the Dockerfile, deploys it to one small machine (`shared-cpu-1x`, 512 MB, about 10 full rooms), and runs the smoke test against `https://bonk-yourname.fly.dev`, which is the link to send friends. Run the same command again to deploy an update: matches being played finish first. The machine stops when nobody has been connected for a while and starts again on the next visit (the first page load then takes a few seconds), so it costs little when idle. `fly logs -a bonk-yourname` shows the server's logs.
+Pick the region nearest your players (`fly platform regions`). The first run makes the app and prints a **metrics token**; keep it. Every run builds the Dockerfile, deploys one small machine (`shared-cpu-1x`, 512 MB, about 10 full rooms) and runs a smoke test against `https://bonk-yourname.fly.dev`. The machine stops when nobody's connected and starts on the next visit (the first load takes a few seconds), so it costs little when idle.
 
-`fly.toml` sets `BONK_TRUST_PROXY=1`, HTTPS only, the `/healthz` check, and a stop timeout longer than the server's drain. Elsewhere (Render, Railway, a VPS behind nginx or Caddy), set the same yourself.
+Accounts and metrics history live on a volume. Make it once: `fly volumes create bonk_data --size 1 --region iad -a <app>`. Fly snapshots it daily.
 
-**Checking a deploy.** `python -m bonk_game.server.smoke https://your-server` loads the page, makes a room, connects over the WebSocket, plays a few seconds against a bot and prints the ping and how steadily states arrive from where you run it. It exits 1 if anything fails.
+**Elsewhere** (Render, Railway, a VPS behind nginx or Caddy): run the `Dockerfile` (`docker build -t bonk . && docker run -p 8000:8000 bonk`), a single instance (rooms live in memory), over HTTPS, with `BONK_TRUST_PROXY=1` behind a proxy, a health check on `/healthz` and a stop timeout over 120 s.
 
-**Updating it.** Stop the server with SIGTERM (what Docker, Fly and most hosts send). It stops taking new connections, lets the matches being played finish (up to `BONK_DRAIN_SECONDS`, 120 by default; give your host a stop timeout a bit longer than that), tells everyone it's restarting, and exits. Open tabs reconnect to the new server and get their room back: same code, same host, same settings. Every client file's URL carries a hash of the client (`?v=...`), so browsers cache them for good but load the new ones after a deploy. A tab still running the old client is told to refresh, and does.
+### Deploys and updates
 
-**Watching it.** The server logs one JSON object per line (room created/closed, match started/ended, errors with a traceback). `GET /metrics` reports rooms, people, matches running, tick time (average and p99), bytes sent (as JSON, and on the wire after compression) and more, in Prometheus' format (`/metrics?format=json` for JSON). Set `BONK_METRICS_TOKEN` to require `Authorization: Bearer <token>` for it. **`/admin`** (e.g. `https://bonk-yourname.fly.dev/admin`) is a page for the same numbers: paste the metrics token into it (kept in that tab only, or on that device if you tick "Remember"; sent only in a request header) and it shows what's happening now and charts players online, rooms, matches, tick time, late ticks, bandwidth and browser errors over the last hour to 90 days, with restarts marked. The server keeps a sample every minute in `BONK_METRICS_DB` (`/data/metrics.db` on Fly, next to the accounts; without it, history lasts only until the server restarts, and there are gaps while the machine is stopped). The page only works once `BONK_METRICS_TOKEN` is set, and an address that keeps guessing wrong tokens has to wait a minute.
+- **Staging**: every merge to `main` deploys to `https://bonk-game-staging.fly.dev` (`.github/workflows/deploy.yml`), and a smoke test checks it.
+- **Production**: Actions → deploy → Run workflow → `production`. It deploys `main` only if its tests passed on that commit.
+- **No dropped matches**: on SIGTERM the server stops taking connections, lets running matches finish (up to `BONK_DRAIN_SECONDS`, 120), then exits. Open tabs reconnect and get their room back. Tabs running the old client are told to refresh.
+- **Check any deploy**: `python -m bonk_game.server.smoke https://your-server` loads the page, plays a few seconds against a bot, and prints the ping.
 
-The server limits how much any one visitor can use. Each limit can be changed with an environment variable:
+Set up once: make the staging app (`./deploy/fly.sh bonk-game-staging iad` plus its volume), then add a deploy token (`fly tokens create org`) as the repository secret `FLY_API_TOKEN`.
+
+### Watching it
+
+- **`/admin`**: paste the metrics token and see what's happening now (players, rooms, matches, tick time, bandwidth) and charts for the last hour to 90 days, with restarts marked. It's sampled every minute into `BONK_METRICS_DB`.
+- **`/metrics`**: the same numbers in Prometheus format (`?format=json` for JSON), with `Authorization: Bearer <token>`.
+- **Logs**: one JSON object per line (rooms, matches, errors with tracebacks, sign-ins, reports). `fly logs -a <app>`.
+- **Player reports** at `/api/reports`, and **playtest reports** at `/api/playtest` (both with the token). See [Playtesting](#playtesting-with-friends).
+
+### Settings
 
 | Variable | Default | |
 |---|---|---|
+| `BONK_METRICS_TOKEN` | (none) | protects `/metrics`, `/admin` and the report endpoints. Make it long and random (`fly.sh` does). |
+| `BONK_METRICS_DB` | in memory | where `/admin`'s history is kept (`/data/metrics.db` on Fly) |
+| `BONK_TRUST_PROXY` | off | `1` behind a proxy, so limits see each visitor's real IP |
 | `BONK_MAX_ROOMS` | 500 | rooms open at once |
 | `BONK_ROOMS_PER_IP` | 10 | new rooms per IP per minute |
 | `BONK_MAX_MEMBERS` | 16 | people in a room, players and watchers |
 | `BONK_CONNECTIONS_PER_IP` | 20 | open connections per IP |
-| `BONK_MESSAGES_PER_SECOND` / `BONK_MESSAGE_BURST` | 60 / 120 | messages per connection; a connection that keeps going over is closed |
-| `BONK_WS_COMPRESS` | 1 | compress WebSocket messages (see below) |
-| `BONK_PLAYTEST` | 1 | collect playtest reports (see below); 0 turns them off |
-
-Behind a proxy (Fly, Render, nginx), set `BONK_TRUST_PROXY=1` so the limits see each visitor's real IP rather than the proxy's.
+| `BONK_MESSAGES_PER_SECOND` / `BONK_MESSAGE_BURST` | 60 / 120 | messages per connection; one that keeps going over is closed |
+| `BONK_WS_COMPRESS` | 1 | compress WebSocket messages (0: 25% less CPU, 3x the bandwidth) |
+| `BONK_DRAIN_SECONDS` | 120 | how long a restart waits for matches to finish |
+| `BONK_PLAYTEST` | 1 | collect playtest reports |
 
 ### Accounts (sign in with Google)
-Optional: without these settings the server runs with guests only. With them, people can sign in with Google (`auth.py`), and accounts, sign-ins and profiles are kept in a SQLite file (`accounts.py`). Nothing else is needed: no passwords. The sign-in itself (OpenID Connect with PKCE and a nonce) is [Authlib](https://authlib.org)'s OAuth client, and Google's ID token is checked against Google's published signing keys with joserfc (Authlib's JOSE library).
 
-| Variable | | |
-|---|---|---|
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | (none) | from Google (below). Both set turns accounts on. Keep the secret a secret (`fly secrets set`). |
-| `BONK_DB` | `bonk.db` | the SQLite file. It must outlive deploys: `fly.toml` puts it on a volume (`/data/bonk.db`). |
-| `BONK_PUBLIC_URL` | (from the request) | the site's address, e.g. `https://bonk-game.fly.dev`, if the server can't tell it from the request |
-| `BONK_CONTACT` | (none) | an email address for the privacy page's "contact" line (Google's review wants one) |
-| `BONK_GOOGLE_SITE_VERIFICATION` | (none) | proves to Google you own the site: Search Console's "HTML tag" code (just the `content="..."` part) |
+Optional: without these the server runs with guests only.
 
-**Getting the Google client** (once, about 10 minutes, at [console.cloud.google.com](https://console.cloud.google.com)):
-1. Make a project (any name, e.g. "bonk").
-2. **APIs & Services → OAuth consent screen** (or **Google Auth Platform → Branding**): user type **External**, app name "bonk", your email as the support and developer contact, `https://<your-site>/privacy` as the privacy policy and `https://<your-site>/terms` as the terms of service. Scopes: `openid`, `email` and `profile` (the basic ones; Google doesn't review them). While it's in **Testing**, only the test users you add can sign in; **Publish** it to let anyone.
-3. **Credentials → Create credentials → OAuth client ID**, type **Web application**. Authorised redirect URI: `https://<your-site>/auth/google/callback` (for trying it locally, also `http://localhost:8000/auth/google/callback`).
-4. Copy the client ID and secret into the server's environment. On Fly: `fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... -a <app>`.
-5. To publish with your app's name (Google's brand verification): the home page links to the privacy policy already; set `BONK_CONTACT` to an email for it, and prove you own the site in [Search Console](https://search.google.com/search-console) (add a **URL prefix** property for `https://<your-site>/`, pick **HTML tag**, set `BONK_GOOGLE_SITE_VERIFICATION` to its code, deploy, then press Verify). Google re-checks within a day or so.
+| Variable | |
+|---|---|
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | both set turns accounts on. Keep the secret in `fly secrets set`. |
+| `BONK_DB` | the SQLite file (`/data/bonk.db` on Fly, on the volume) |
+| `BONK_PUBLIC_URL` | the site's address, e.g. `https://bonk-game.fly.dev` (recommended: sign-in then always returns there) |
+| `BONK_CONTACT` | an email for the privacy page (Google's review wants one) |
+| `BONK_GOOGLE_SITE_VERIFICATION` | Search Console's "HTML tag" code, to prove you own the site |
 
-**On Fly**, accounts need the volume `fly.toml` mounts at `/data`. Make it once, in the app's region, before deploying this version: `fly volumes create bonk_data --size 1 --region iad -a <app>` (1 GB is far more than enough). A volume lives on one machine, which suits the single machine rooms already need. Fly snapshots volumes daily.
+Getting the Google client (once, about 10 minutes, at [console.cloud.google.com](https://console.cloud.google.com)):
+
+1. Make a project.
+2. **OAuth consent screen** (or **Google Auth Platform → Branding**): External, app name "bonk", your email as contact, `https://<site>/privacy` and `https://<site>/terms`. Scopes `openid`, `email`, `profile`. In **Testing** only listed test users can sign in; **Publish** to open it up.
+3. **Credentials → OAuth client ID**, type Web application, redirect URI `https://<site>/auth/google/callback` (and `http://localhost:8000/auth/google/callback` for local).
+4. `fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... -a <app>`.
+5. For your app's name on Google's screen: set `BONK_CONTACT`, add a URL-prefix property in [Search Console](https://search.google.com/search-console), pick HTML tag, set `BONK_GOOGLE_SITE_VERIFICATION`, deploy, then Verify.
+
+For staging, add its callback URL to the client and set the same secrets on `bonk-game-staging`.
+
+### Security checklist
+
+The server is built to be left running (see [Security](#11-security-what-stops-people-breaking-it) for how). What's left to you:
+
+- [ ] `BONK_METRICS_TOKEN` is long and random, on every app (`python3 -c 'import secrets; print(secrets.token_urlsafe(24))'`).
+- [ ] `GOOGLE_CLIENT_SECRET` and `FLY_API_TOKEN` are only in Fly secrets and GitHub secrets, never in the repo.
+- [ ] GitHub → Settings → Code security: turn on **Dependabot alerts** and **Dependabot security updates**, so you hear about (and get fix PRs for) vulnerable dependencies while you're away.
+- [ ] `main` requires the `merge-ready` check, and only you can push or run the production deploy.
+- [ ] Glance at `/admin` and `/api/reports` now and then.
 
 ### Playtesting with friends
-After every match each browser sends the server a short report: its ping (median, p95 and jitter), how many states arrived late (over 100 ms after the last), how far its own ball had to be corrected when the server's answer came back (rubber-banding: corrections over 6 px, over 20 px and the worst), its frame rate, whether it lost connection, and the device (browser, screen size, network type, touch or controller). The results screen asks **How did that match feel?** (Smooth, OK, Laggy, Unplayable, and a note), sent along with the report. JavaScript errors are sent as they happen. Nothing else is collected; the reports carry the player's name but no IP address. They're logged (`"event": "playtest"` and `"client_error"`), and the latest 500 are at `GET /api/playtest` (same token as `/metrics`).
+
+After every match each browser sends a short report: its ping, late states, how far its own ball was corrected (rubber-banding), frame rate, lost connections, the device, and how the match felt (Smooth, OK, Laggy, Unplayable, plus a note). JavaScript errors are sent as they happen. No IP addresses are kept.
 
 ```
 python -m bonk_game.server.playtest_report https://bonk-yourname.fly.dev --token <metrics token>
 fly logs -a bonk-yourname --no-tail | python -m bonk_game.server.playtest_report -
 ```
 
-writes them up in Markdown: a row per report, medians by device, how matches felt with everyone's notes, errors grouped, and a list of things to look at (ping p95 over 150 ms, late states, more than 3 corrections over 6 px a minute, any over 20 px, under 45 fps, lost connections, matches that felt laggy). The in-memory list starts again after a deploy, so write it up before deploying, or use the logs.
+That writes them up in Markdown: a row per report, medians by device, everyone's notes, errors grouped, and a list of things to look at. The in-memory list is lost on deploy, so write it up first (or use the logs).
 
-A playtest session:
-1. Deploy, run the smoke test, and send the link to 3–6 friends: on different networks (home Wi-Fi, a phone on mobile data, someone far away) and devices (a laptop, a phone, a tablet, a controller).
-2. Play a few full matches on different maps and modes, with and without bots and power-ups. Try a phone in portrait and landscape, and walk away from the Wi-Fi.
-3. Ask everyone to pick how each match felt, and to say in the note anything that felt wrong: controls slow to respond, your ball jumping back (rubber-banding), others' balls stuttering, buttons hard to hit.
-4. Write it up with `playtest_report` and add it, with what people said, to the tuning issue.
+A good session: 3–6 friends on different networks (home Wi-Fi, a phone on mobile data, someone far away) and devices, a few full matches across maps and modes, everyone rating each match, then the write-up.
 
-### Simulating bad networks
-To see how the game plays on a worse connection without leaving your desk, add `?net=` to the page address:
+---
+
+## Learn how it works
+
+bonk is small enough to read in an afternoon but does most of what a real online game has to. Each topic below says what the problem is, how bonk solves it, where to read, and something to try. They roughly build on each other.
+
+```
+ browser (60 fps)                                   server (30 steps/s)
+ ┌──────────────────────────────┐   WebSocket   ┌─────────────────────────────┐
+ │ input.js   keys → {"input"}  │ ────────────▶ │ web.py   one socket per tab │
+ │                              │               │ room.py  lobby, chat, rules │
+ │ net.js     predict your ball │               │          the tick loop:     │
+ │ physics.js (planck.js)       │               │ match.py   step Box2D world │
+ │                              │ ◀──────────── │ delta.py   state → changes  │
+ │ clock.js   when to draw      │  state / "d"  │                             │
+ │ draw.js    blend + render    │   30 per s    │ accounts.py, auth.py (SQLite│
+ └──────────────────────────────┘               │  + Google sign-in)          │
+                                                └─────────────────────────────┘
+```
+
+### 1. The server is in charge
+
+**Problem.** If each browser decided where its own ball went, anyone could cheat by editing their copy, and two browsers would disagree about who hit whom.
+
+**How bonk does it.** The server is *authoritative*: it runs the only real copy of every match. Browsers send only which buttons are held (`{"type": "input", "b": [0,1,0,0,0]}`), and only when they change. Each room runs an asyncio loop (`Room.run_match`) that steps the Box2D world 30 times a second (each step is 4 smaller Box2D steps, so fast balls don't pass through things), snapshots it, and sends it to everyone. If the loop falls badly behind, it skips ahead rather than trying to catch up, so a hiccup doesn't turn into a fast-forward.
+
+**Read.** `bonk_game/server/room.py` (`run_match`, `handle`), `match.py`, `envs/utils/world.py` and `stepping.py`.
+
+**Compare.** This is how .io games (agar.io, slither.io) and most competitive games work. The alternative, *peer-to-peer lockstep* (everyone simulates and only inputs are shared), suits RTS games but breaks down with physics that must match bit for bit.
+
+### 2. The protocol: what goes over the wire
+
+**Problem.** 30 full snapshots a second to every player adds up, and JSON is wordy.
+
+**How bonk does it.** One WebSocket per tab, JSON text messages:
+
+- The first message is `hello`: the client version, a random **token** (kept in localStorage, so a refresh rejoins as the same person), name and password. The server answers `welcome`, the lobby and the chat so far.
+- During a match the server sends a full `state` every 3 seconds (a *keyframe*) and a **delta** (`"d"`) in between with only what changed: typically the balls and nothing else. A browser that missed something waits for the next keyframe. This cut the JSON by about 4x.
+- The state is turned into JSON **once** and the same text goes to everyone; each player's copy gets only their own ball's speeds appended (`"you"`), which prediction needs.
+- WebSocket compression (permessage-deflate) shrinks what's left to about 40%. A full room of 10 costs about 2 KB/s per player, 17 kbit/s.
+- `ping` / `pong` every second measures the round trip.
+
+**Read.** `web.py` (`websocket`, and the protocol at the top of the file), `delta.py` and `static/delta.js` (the same algorithm twice; `tests/test_delta.py` checks they rebuild every state identically).
+
+**Compare.** Big .io games use **binary** messages (positions packed into a few bytes) and send each player only what's **near them**, because they have thousands of objects on a huge map. bonk's arena fits on one screen with at most 10 balls, so JSON plus deltas plus compression is small enough and much easier to debug.
+
+### 3. Smooth motion from 30 updates a second
+
+**Problem.** States arrive 30 times a second, unevenly (the network adds *jitter*), but the screen draws at 60 or more. Drawing each state as it lands looks jerky.
+
+**How bonk does it.** *Interpolation*: the browser draws the match slightly **in the past**, blending between the two states either side of that moment. How far in the past is a trade-off: too little and a late state leaves nothing to blend toward (everything freezes); too much and everything lags. So `clock.js` measures how late states arrive and picks the moment by which 95% of the last 10 seconds of states had arrived, plus a tick. A steady connection draws about 40 ms behind; a jittery one waits longer (up to 250 ms more). The clock changes speed by at most 6% to reach a new delay, so nothing visibly jumps. If a state is later than even that, `draw.js` *extrapolates* for up to 0.1 s along the way things were moving, then waits.
+
+**Read.** `static/clock.js` (the long comment at the top is the design), `static/js/draw.js`. Tests: `tests/test_clock.py`, `tests/test_interp.py`.
+
+**Try.** Open the game with `?net=bad`, which pretends you're on a poor connection, and watch the other balls stay smooth.
+
+### 4. Predicting your own ball
+
+**Problem.** Interpolation works for everyone else, but your own ball would only react once your key press had gone to the server and the result had come back: a full round trip, 100 ms or more. Controls would feel like steering through mud.
+
+**How bonk does it.** *Client-side prediction*. The browser keeps the same physics the server runs (Box2D, as planck.js) and, every frame:
+
+1. takes the latest state from the server, which is a little old;
+2. replays the buttons you've pressed since then, which the server hasn't used yet (`net.inputs` remembers when they changed);
+3. draws your ball where that ends up.
+
+The whole level is in the prediction: slopes, bumpers, moving platforms, and the other balls moving on as they were, so riding the slider or bumping someone is predicted too. When the next server state arrives and disagrees (say a bot shoved you in a way your browser couldn't know), the difference is **faded out over 0.1 s** instead of snapping (*reconciliation*). A big jump, like a respawn, is treated as a teleport and taken straight away.
+
+**Read.** `static/js/net.js` (`predictFrom`, `ownPosition`), `static/physics.js`. `tests/test_predict.py` replays recorded matches through the browser's physics and checks it lands where the server did.
+
+**Try.** `?net=far` (200 ms round trip) feels almost local. Then add `&predict=0` to turn prediction off and feel the difference.
+
+**Compare.** Many .io games skip this: their slow, mouse-steered movement hides the lag. Fighting and shooting games predict, and some also *rewind* the server to judge hits from each player's point of view (lag compensation). bonk doesn't rewind: the server's view of a bump is final.
+
+### 5. Living with bad networks
+
+**Problem.** WebSockets run on TCP, which delivers everything in order. When a packet is lost, everything behind it waits for the resend (*head-of-line blocking*), so a lost packet looks like a stall followed by a burst.
+
+**How bonk does it.** The playback clock (3) absorbs stalls, prediction (4) keeps your own ball responsive, and the server keeps only the latest input you sent, so a burst of old ones does no harm. To develop against this without a bad connection, `static/netsim.js` fakes one inside the browser:
 
 | `?net=` | round trip added | jitter | stalls | like |
 |---|---|---|---|---|
@@ -136,81 +273,154 @@ To see how the game plays on a worse connection without leaving your desk, add `
 | `far` | 180 ms | ±10 ms | none | another continent, wired |
 | `bad` | 150 ms | ±80 ms | 800 ms, every ~8 s | weak signal |
 
-Or set each part yourself: `?lag=150&jitter=40&stall=400&stall_every=10` (`?seed=7` gives the same "random" network every time). Messages stay in order, as over a real WebSocket: in a stall nothing arrives, then everything held up arrives at once, which is what a lost packet does. The page says what it's simulating in the top right corner, and playtest reports say so too.
+Or set each part: `?lag=150&jitter=40&stall=400&stall_every=10` (`&seed=7` repeats the same "random" network). `node tests/web/network.js` plays a match in a real browser on each and prints what the playtest report saw. On `bad`, for example, frames where everything froze went from 35.5% with a fixed 50 ms delay to 2.4% with the adaptive clock.
 
-`node tests/web/network.js` plays a match in a real browser on each of these and prints what the playtest report saw (it needs Playwright, as the browser test does). Against two Hard bots on Platform, 40 s each:
+**Compare.** Games that need the lowest latency use UDP (WebRTC data channels or WebTransport in browsers), where a lost packet is just skipped. That's a lot more machinery; few browser games bother.
 
-| network | ping median / p95 | late states /min | worst gap | frames frozen (before → now) | frames guessed | drawn behind (before → now) | your ball corrected >6 px /min | >20 px /min | worst correction |
-|---|---|---|---|---|---|---|---|---|---|
-| normal | 1 / 1 ms | 0.0 | 58 ms | 0.0% → 0.0% | 0.0% | 50 → 41 ms | 32.9 | 18.0 | 103 px |
-| `wifi` | 58 / 86 ms | 0.0 | 83 ms | 1.8% → 0.0% | 0.6% | 50 → 66 ms | 74.3 | 8.9 | 107 px |
-| `mobile` | 132 / 186 ms | 33.9 | 152 ms | 12.1% → 0.0% | 1.4% | 50 → 107 ms | 224.2 | 67.8 | 234 px |
-| `far` | 198 / 218 ms | 0.0 | 66 ms | 0.3% → 0.0% | 0.0% | 50 → 61 ms | 87.8 | 23.8 | 316 px |
-| `bad` | 269 / 816 ms | 137.6 | 726 ms | 35.5% → 2.4% | 2.4% | 50 → 219 ms | 224.9 | 127.3 | 629 px |
+### 6. Reconnects, restarts and deploys
 
-- **Drawn behind**: the browser draws the match a little in the past, blending between states, so motion is smooth although states come only 30 times a second. It used to be a fixed 50 ms; now it's measured for each connection (`static/clock.js`): the moment by which 95 % of the last 10 s of states had arrived, plus a tick. A steady connection draws closer behind than before; a jittery one waits as long as it needs (up to 250 ms more), and the clock speeds up or slows down by at most 6 % to get there, so nothing jumps.
-- **Frames frozen** is how often everything stood still because the next state hadn't arrived. **Frames guessed** is how often a state was late and the browser carried on along the way things were moving instead (for up to 0.1 s), which is hard to notice. Before, a fixed 50 ms wasn't enough for jitter and stalls, and on jittery connections the match sometimes ran backwards for a frame.
-- **Corrections** are how far your own ball had to be moved when the server's answer came back (small ones fade in over 0.1 s). With no lag at all, they're bots bumping you in ways your browser didn't see coming; more lag means each bump is found out later and is bigger. (They vary a lot from run to run: the bots don't play the same way twice.) The table is from before the browser ran Box2D too (planck.js); it now predicts the other balls as well, moving on as they were. Replaying recorded bot matches through the prediction (Floating Platform and Grand Stage, 3 bots), its error after 10 steps of lag went from about 7.5 px to under 5 on average, and it was more than 20 px off a third as often (`tests/test_predict.py` checks it against the server).
+**Problem.** People refresh, phones drop Wi-Fi, and the server has to be updated, all without wrecking matches.
 
-### How big a server?
-`python -m bonk_game.server.load_test --sockets` runs more and more rooms of 10 at once over real WebSockets until the server can't keep up, and prints what it used. The "browsers" ask for compression, as real ones do. Below: a 4-core cloud VM (the server is one process, so it uses one core), bots playing all 10 balls on Grand Stage.
+**How bonk does it.**
 
-| rooms of 10 | CPU (1 core) | tick avg / p99 | ticks per second | JSON per room | on the wire per room | keeps up |
-|---|---|---|---|---|---|---|
-| 1 | 4% | 0.53 / 1.06 ms | 30.1 | 51 KB/s | 20 KB/s (0.16 Mbit/s) | yes |
-| 10 | 33% | 0.44 / 1.07 ms | 30.0 | 55 KB/s | 22 KB/s (0.17 Mbit/s) | yes |
-| 20 | 58% | 0.38 / 0.86 ms | 30.1 | 55 KB/s | 22 KB/s (0.17 Mbit/s) | yes |
-| 30 | 82% | 0.32 / 0.78 ms | 30.1 | 55 KB/s | 21 KB/s (0.17 Mbit/s) | yes, barely (event loop up to 37 ms late) |
-| 40 | 89% | 0.25 / 0.64 ms | 28.4 | 54 KB/s | 21 KB/s (0.17 Mbit/s) | no |
+- **Refresh or drop-out**: your token gets your seat back, and a Medium bot plays for you meanwhile. After 30 s away your place goes.
+- **Server restart**: on SIGTERM the server drains: no new connections, running matches finish (up to 120 s), then everyone is told it's restarting. Their tabs reconnect to the new server with `reopen`, and the room is rebuilt with the same code, host and settings.
+- **New client code**: every file URL ends in `?v=<hash of the client files>`, so browsers can cache them forever and still pick up a new version after a deploy. A tab running old code is told to refresh by its `hello`'s version check.
 
-Sending the whole state every tick instead (`--full`, how it worked before) takes about 214 KB/s of JSON per room, which compresses to 25 KB/s on the wire. With people instead of bots (`--players people`), 30 rooms use 70% of the core.
+**Read.** `room.py` (`join`, `disconnect`, `drain`), `web.py` (`client_version`, `_shutdown`). The browser test kills and restarts the server mid-session to check all of this.
 
-What that means:
-- **The physics moved to Box2D after this table was made.** Side by side on one (slower) machine, the old physics and Box2D kept up with the same number of rooms (20 of 10, not 30), with Box2D using about 10% more CPU per room (48% against 43% of a core for 10 rooms).
-- **CPU is what runs out first.** A room of 10 uses about 3% of a core. About a quarter of that is compressing messages, once for each connection. A small shared-CPU machine (1 vCPU, slower than this one: plan on half) runs about 10 full rooms, 100 people. Private rooms with friends are mostly 2-6 people, which costs less.
-- **Bandwidth is cheap.** A player gets about 2 KB/s (17 kbit/s), so a full room sends 0.17 Mbit/s, and a 6-person hour is about 45 MB.
-- `BONK_WS_COMPRESS=0` turns compression off: about 25% less CPU, but nearly 3 times the bandwidth (0.47 Mbit/s per full room).
+### 7. How much can one server take?
 
-## The desktop game (for training)
-`python3 main.py` opens a local window, used for training and testing agents: try a map, and watch trained agents play against each other, the bots, or you. Pick a map, choose 2 to 10 players (you, a bot at Easy, Medium or Hard, or any agents trained for that map) and how many points win. Esc pauses.
+**Problem.** Knowing when you'll run out, and of what.
 
-## Maps
-You pick a map in the lobby (or when you run `main.py`). Agents are trained separately for each map.
+**How bonk does it.** `python -m bonk_game.server.load_test --sockets` runs more and more rooms of 10 bots over real WebSockets until the server can't keep up. On one core of a cloud VM:
 
-Each map says how many players it's for (below), and the lobby holds to it. Bots past a map's limit sit that match out (they're back on a bigger map), and so do people, who watch instead.
+| rooms of 10 | CPU (1 core) | tick avg / p99 | on the wire per room | keeps up |
+|---|---|---|---|---|
+| 1 | 4% | 0.53 / 1.06 ms | 20 KB/s | yes |
+| 10 | 33% | 0.44 / 1.07 ms | 22 KB/s | yes |
+| 20 | 58% | 0.38 / 0.86 ms | 22 KB/s | yes |
+| 30 | 82% | 0.32 / 0.78 ms | 21 KB/s | barely |
+| 40 | 89% | 0.25 / 0.64 ms | 21 KB/s | no |
 
-| Map | Players |
-|---|---|
-| Classic | 2-8 |
-| Floating Platform, Sliding Platform, Sinking Swing | 2-6 |
-| Ramp Rumble | 2-8 |
-| Grand Stage, Double Decker | 4-10 |
+**What it means.** CPU runs out first, not bandwidth: a room of 10 uses about 3% of a core, a quarter of it compressing messages. Python runs everything on one event loop, one core. A small shared machine runs about 10 full rooms (100 people). The next step up would be more processes, each owning some rooms. (This table predates the move to Box2D, which costs about 10% more CPU per room.)
 
-**Classic**: a box with a bouncy floor and ceiling and deadly side walls. "Up" is a thrust, so you can fly. Push someone into a wall to score: the point goes to whoever last hit them (with two players, always the other player), and only the player who died respawns. First to 100 wins.
+**Watch it live.** The late-ticks chart on `/admin` shows a server falling behind.
 
-The other maps float in open space, bonk-style. There are no walls: you die if you fall off the bottom, go off the left or right of the screen, or get launched way above the top. You can't fly on them either: "up" is a small hop off whatever you're standing on, and held in the air it hovers, cancelling most of gravity but never all of it, so you float and fall slowly but can't climb (a tap hops ~30 px, a held jump ~120 px). Steering is gentle: it takes about a second to get up to speed, so you commit to a direction. Balls bounce off each other with 85% of the speed they hit at. These numbers were measured from a recording of bonk.io (`arena.OPEN_PUSH`, `arena.OPEN_HOVER`, `OpenMap.jump_speed`, `world.PLAYER_BOUNCE`). Sinking Swing keeps the original big jump, since it's built around jumping into the swing. If you die you're out until the next round. The last ball standing scores and a new round starts; the first to 5 wins.
+### 8. Watching a running server
 
-**Floating Platform**: one platform, nothing else. Knock your opponent off.
+**Problem.** When it's live and you're not looking, how do you know it's healthy, and why it wasn't?
 
-**Sliding Platform**: a platform with an outward-leaning bumper post at each end that slides left and right on a rail. Every hit and every roll shoves it, so you can rock it back and forth to build momentum and fling your opponent. Going heavy shoves it much harder. Jump over a post to leave (or get thrown over one).
+**How bonk does it.**
 
-**Ramp Rumble**: a halfpipe with springy bumpers overhead, made from a map file (see "Making maps" below). Ride the ramps and bounce in from above.
+- **Structured logs**: one JSON object per line (`metrics.event`), so a log viewer can filter `"event": "match_ended"` or find every error with its traceback.
+- **Metrics**: counters and gauges (`metrics.Stats`), including tick-time p99 and bytes on the wire (counted *after* compression by wrapping the socket's `write`). Served as Prometheus text for real monitoring tools, and as JSON.
+- **History**: a sample every minute in SQLite (`metrics.History`), bucketed for charts. Counters restart at 0 when the server does, so the bucketing detects restarts and counts across them.
+- **From the players' side**: playtest reports measure what the server can't see, like rubber-banding and frame rate.
 
-**Grand Stage**: a wide stage built for a crowd, with a small ledge in the middle and springy bumpers up in the corners.
+**Read.** `metrics.py`, `admin/admin.js` (hand-drawn SVG charts, no chart library), `playtest.py`, `static/js/report.js`.
 
-**Double Decker**: a short upper deck above a long lower one with outward-leaning posts at its ends. Hold the top, or drop down and fight it out below.
+### 9. Signing in without passwords
 
-**Sinking Swing**: a floor with a hole in the middle, a launch pad at the bottom of the hole, and a swing hanging above it all.
-- After about 5 seconds the floor (with the hole and pad) starts sinking, and eventually drops off the screen.
-- Fall through the hole and the pad fires you back up.
-- Jump into the swing to survive once the floor is gone. Kick the swing (going heavy kicks much harder) or jump out and knock your opponent off it.
+**Problem.** Keeping accounts means keeping secrets safe. Passwords are the riskiest thing to store.
 
-**Round timer**: rounds last 45 seconds. On Classic, which has no rounds, you get 30 seconds to score. When time runs out it's **sudden death**: red walls close in from both sides, and touching one kills you. Whoever gets pushed into a wall first loses. Change the limit with `round_time` on the map class (0 turns it off).
+**How bonk does it.** It stores none: you sign in with Google using **OpenID Connect**, the *authorization code flow with PKCE*:
+
+1. `/auth/google` sends you to Google with a random `state` (so the reply can't be forged by another site), a `nonce` (so a token can't be replayed), and a PKCE challenge (so a stolen code is useless without the secret verifier), all remembered in a short-lived cookie.
+2. Google sends you back with a code. The server swaps it (with its client secret and the verifier) for an **ID token**, and checks its signature against Google's published keys, that it's for this app, current, and carries our nonce.
+3. The server starts a **session**: a random cookie that's `HttpOnly` (scripts can't read it), `SameSite=Lax` (other sites can't send it with their requests) and `Secure`. Only a **hash** of it is stored, so a leaked database doesn't let anyone sign in.
+
+Guests come first: your profile lives in your browser, and signing in merges it into your account. Changes to an account (PUT, POST, DELETE) are refused unless the `Origin` header is this site.
+
+**Read.** `auth.py` (the docstring walks the flow), `accounts.py`, `profiles.py` and `static/profile.js` (the same validation twice; `tests/test_profile.py` checks they agree).
+
+### 10. Keeping a chat room civil
+
+**Problem.** Any game with names and chat gets abuse.
+
+**How bonk does it.** One filter for names and chat (`moderation.py`): a profanity list with look-alike spellings, minus words games need ("kill", "noob"), plus our own list for slurs hidden in longer words or spelled f.u.c.k. Offensive names are replaced, offensive words are starred out. Players can mute (on their screen only) and report; reports are kept with what happened in the room lately. Hosts can remove people, and a removed signed-in player can't come back on any device. Others see you only by a public id, never your seat's token.
+
+### 11. Security: what stops people breaking it
+
+**The threat model.** Anyone on the internet can open the site, run their own client, and send whatever they like. Nothing they send can be trusted.
+
+| Attack | Defence | Where |
+|---|---|---|
+| Cheating by editing the client | the server runs the game; clients only send buttons | `room.py`, `match.py` |
+| Malformed or oversized messages | 4 KB message limit; every field type- and range-checked; unknown fields ignored | `web.py`, `room.py`, `lobby.py` |
+| Flooding | per-connection message rate (60/s), per-IP connection and room limits, chat and report limits | `limits.py` |
+| Code injection in names or chat (XSS) | user text is only ever set as `textContent`, never HTML; a Content-Security-Policy allows only this site's scripts | `static/js/*`, `web.py` |
+| Clickjacking (framing the site to trick clicks) | `X-Frame-Options: DENY` and `frame-ancestors 'none'` | `web.py` |
+| Cross-site requests acting as you (CSRF) | `SameSite` cookies and an `Origin` check on every change | `auth.py` |
+| Another site's page opening a WebSocket as you | the account cookie only counts from this site's own pages | `web.py` |
+| Stolen session database | only hashes of session tokens are stored | `accounts.py` |
+| SQL injection | every query uses parameters | `accounts.py` |
+| Guessing room passwords or the metrics token | constant-time comparison; 10 wrong guesses a minute per IP | `room.py`, `web.py` |
+| Downgrading to HTTP | Fly forces HTTPS; HSTS tells browsers to stay on it | `fly.toml`, `web.py` |
+| A vulnerable dependency | exact versions pinned; Dependabot opens update PRs | `constraints.txt`, `.github/dependabot.yml` |
+| A malicious pull request stealing deploy secrets | PR checks run without secrets; deploys only from `main`; workflow tokens are read-only | `.github/workflows/` |
+
+**Known limits.** Right after a restart, the first person back can claim a room's host. Players can inflate their own stats by uploading an edited profile (cheating, not a break-in). The container runs as root inside Fly's isolated VM.
+
+### 12. Bots and AI agents
+
+**The built-in bot** (`bonk_game/ui/bot.py`) doesn't learn: it gets "inside" its target (between them and the middle), shoves outward, goes heavy just before impact, and heads for the swing when the floor sinks. Easy, Medium and Hard differ in how quickly it reacts, how well it aims, and how often it goes heavy; Hard also braces for heavy hits.
+
+**Trained agents.** Every map is a Gymnasium env (`bonk_game/bonk-<map>-v0`), so any reinforcement-learning library can train on it. `main.py --train <map>` trains PPO, A2C, DQN and ARS agents with Stable Baselines 3, against a mix of the built-in bots, a weak "bad" agent and snapshots of themselves (*self-play*). Because the server runs the same physics, a trained agent can take a seat in an online match.
+
+**Read.** `bonk_game/envs/training_env.py`, `testing_env.py`, and [Training](#training-agents) below.
+
+### 13. Managing the codebase
+
+A few habits keep a project like this working as it grows:
+
+- **One source of truth, checked twice.** Where the browser and the server must agree (physics, deltas, profile validation, the playback clock), the tests run both, Python and JavaScript, and compare: `test_predict.py`, `test_delta.py`, `test_profile.py`, `test_clock.py`.
+- **Real-browser tests.** `tests/web/e2e.js` drives two Chromium windows through Playwright: a full match, a reload mid-match, a phone-sized lobby, a server restart, and no page errors.
+- **No build step.** The client is plain scripts sharing one global scope. To still catch typos, `eslint.config.js` reads the names each file declares and complains only about names nobody declares.
+- **Pinned versions.** Requirements give ranges; `constraints.txt` and `package-lock.json` pin exact versions, so a new release can't break anything until someone bumps it and CI checks the bump.
+- **Optimistic CI.** A pull request needs only lint (about a minute) to merge; the slower jobs run alongside as a heads-up and in full on `main`. If `main` goes red, production deploys refuse it.
+- **Staging first.** Every merge goes to a staging app automatically; production is a deliberate button.
+
+---
+
+## Develop
+
+### Tests and lint
+
+```
+pip install -r requirements-test.txt -c constraints.txt
+python -m pytest                      # the Python tests
+
+npm ci && npx playwright install chromium
+node tests/web/e2e.js                 # the browser test
+node tests/web/network.js             # a match on each simulated network
+
+ruff check .                          # Python lint (rules in pyproject.toml)
+npm run lint                          # browser lint (eslint.config.js)
+```
+
+**CI** (`.github/workflows/tests.yml`) runs `lint` on every pull request (the `merge-ready` check `main` requires), plus whichever of `test` (pytest), `web` (the browser test) and `training` (a moment of real training) the change touches. Everything runs on `main` after each merge; add the `full-ci` label to a pull request to run it all first.
+
+### The desktop game and training
+
+The desktop game is for training and testing agents, not for playing online.
+
+1. Install Python 3.10 or newer, clone the repo, and in it run:
+   ```
+   python3 -m venv venv && source venv/bin/activate
+   pip install -r requirements.txt && pip install -e .
+   python3 main.py
+   ```
+   (On macOS, `defaults write org.python.python ApplePersistenceIgnoreState NO` once stops a warning.)
+2. Pick a map and 2 to 10 players: you, bots at Easy, Medium or Hard, or trained agents. Esc pauses. `--terminal` gives the old text menus.
+
+<a id="training-agents"></a>**Training agents.** `python3 main.py --train <map>` (classic, platform, slider, swing, ramps, or any map file) takes 10-15 minutes per map; add `--steps 20000` for a quick, weak try, or `--opponents bad` to train only against the weak "bad" agent. Agents are saved to `agents/` (Classic) or `agents/<map>/`, show up as players in the desktop game, and join online matches if the server has stable-baselines3 installed. To retrain from scratch, delete the map's agent folder. `python -m bonk_game.envs.check_env` runs SB3's env checker on every map. On maps with moving parts, agents also see a few map values (for Sinking Swing, how far the floor has sunk and the swing's angle and speed).
 
 ### Making maps
-Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `maps/` folder next to where you run the game, or in any folder listed in the `BONK_MAPS` environment variable is loaded at startup. It shows up in the menu, in `main.py --train <name>`, and as the gym env `bonk_game/bonk-<name>-v0`. A file with a mistake is skipped with a message saying exactly what's wrong. To check one yourself, run `python -m bonk_game.check_map my_map.json`.
 
-`bonk_game/maps/ramps.json` is a complete example. The screen is 680 x 480, with y pointing down, and players are 40 px across.
+Maps can be JSON files. Every `*.json` in `bonk_game/maps/`, in a `maps/` folder where you run the game, or in a folder listed in `BONK_MAPS` is loaded at startup and shows up in the lobby, in `main.py --train <name>`, and as the env `bonk_game/bonk-<name>-v0`. A file with a mistake is skipped with a message saying what's wrong; `python -m bonk_game.check_map my_map.json` checks one.
+
+`bonk_game/maps/ramps.json` is a complete example. The screen is 680 x 480, y points down, and players are 40 px across.
 
 ```json
 {
@@ -230,84 +440,54 @@ Maps can be plain JSON files. Every `*.json` file in `bonk_game/maps/`, in a `ma
 }
 ```
 
+(The comments are only there to explain it; JSON files can't have comments.)
+
 | Piece | Shape keys |
 |---|---|
 | `block` | `"rect": [left, top, right, bottom]` |
-| `slope` | `"center": [x, y], "size": [w, h], "angle": degrees` (positive is clockwise, so the surface rises to the left) |
+| `slope` | `"center": [x, y], "size": [w, h], "angle": degrees` (positive is clockwise) |
 | `post` | `"foot": [x, y], "size": [w, h], "lean": degrees` (positive leans right) |
 | `bumper` | `"center": [x, y], "radius": r` |
 | `swing` | `"pivot": [x, y], "length": 245, "seat_width": 96` |
-| `slider` | `"travel": 140, "mass": 6, "rail": true, "pieces": [blocks, slopes, posts, bumpers that move together]` |
+| `slider` | `"travel": 140, "mass": 6, "rail": true, "pieces": [pieces that move together]` |
 
-`block`, `slope`, `post` and `bumper` also take these options:
-- `"bounce"` (0-1.5, default 0.3) and `"friction"` (0-1, default 0.04: how much grip it has; a ball standing on it slows down over it, and a moving piece carries what's on it);
-- `"launch"`: a speed. Pads fire you out of their top face; bumpers fire you away from their centre, like pinball;
-- `"kill": true`;
-- `"color"`: one of `platform`, `post`, `pad`, `pit`, `wood`, `hazard`, `rail`, or `[r, g, b]`.
+`block`, `slope`, `post` and `bumper` also take `"bounce"` (0-1.5, default 0.3), `"friction"` (0-1, default 0.04), `"launch"` (a speed: pads fire you out of their top, bumpers away from their centre), `"kill": true`, and `"color"` (`platform`, `post`, `pad`, `pit`, `wood`, `hazard`, `rail`, or `[r, g, b]`).
 
-The comments in the example above are only there to explain it; JSON files can't contain comments.
+Players are spread over the spawn box, one per ball-sized cell; a box 220 x 88 px or bigger fits all 10. For things a file can't describe (like Sinking Swing's sinking floor), subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS`.
 
-Matches have up to 10 players. Each round they're spread over the spawn box, one per ball-sized cell; if the box is too small for everyone, the rest drop in from just above it. A box 220 x 88 px or bigger fits all 10 inside it.
-
-For things a file can't describe (like Sinking Swing's sinking floor), subclass `OpenMap` (or `Map` for a walled arena) in `bonk_game/envs/utils/maps.py` and add it to `MAPS` at the bottom of that file. The pieces live in `bonk_game/envs/utils/bodies.py`.
-## To run
-1. Install Python 3.10 or newer
-2. Clone repo (if you're unfamiliar, click the green button above and download the zip. Then click the zip to open the files once you download it.)
-3. Open terminal, navigate to the working directory (bonk_game-main), and run "python3 -m venv ./venv" to create a virtual environment to install our dependencies.
-4. Run "source ./venv/bin/activate"
-5. Run "pip install -r requirements.txt"
-6. Run "pip install -e ." to make the gym environment
-7. Run "defaults write org.python.python ApplePersistenceIgnoreState NO" if on macOS.
-8. Run "python3 main.py" to play. You can play against the built-in Bot straight away.
-9. To play against AI agents, train them for a map with "python3 main.py --train <map>" (maps: classic, platform, slider, swing, ramps, plus any map files you add). It takes 10-15 minutes per map. They then show up as players in the game. For a quick try, add "--steps 20000" (the agents will be weak). Agents train against a mix of opponents: the built-in bot at all three difficulties, the map's "bad" agent and snapshots of themselves (self-play). Add "--opponents bad" to train only against the bad agent, as older versions did.
-
-The old text menus are still available with "python3 main.py --terminal".
-
-To retrain from scratch, delete the map's agent folder (`agents` for Classic, `agents/<map>` for the others) and run `python3 main.py` again. Agents trained before the physics moved to Box2D still load and play, but they learned slightly different physics: retrain them for their best.
-
-## How training works
-Every map is a [Gymnasium](https://gymnasium.farama.org/) env: `gymnasium.make("bonk_game/bonk-v0")` for Classic and `bonk_game/bonk-<map>-v0` for the others. `python -m bonk_game.envs.check_env` runs Stable Baselines 3's env checker on all of them.
-
-A weak PPO "bad" agent is trained first. The PPO, A2C, DQN and ARS agents are then each trained against it (it controls the blue player in `BonkEnv`). Agents are saved to `./agents/<name>.zip` (Classic) or `./agents/<map>/<name>.zip` (other maps).
-
-On maps with extra moving parts, agents also see a few map values: for Sinking Swing, how far the floor has sunk and the swing's angle and speed.
-
-## Tests
-The tests only need a few packages:
+### Code layout
 
 ```
-pip install -r requirements-test.txt
-python -m pytest
+bonk_game/
+  envs/                    the game itself, as Gymnasium envs
+    utils/world.py           each map's Box2D world, and bonk's rules on top (grip, jumping, launch pads, what kills)
+    utils/stepping.py        one 1/30 s step: 4 Box2D steps
+    utils/maps.py, bodies.py the maps and the pieces they're made of
+    utils/arena.py           arena size, actions, spawning
+    training_env.py          the env agents train on
+    testing_env.py           the 2-10 player env matches are played in
+  maps/                    map files (JSON)
+  ui/                      the desktop game (pygame) and the built-in bot (bot.py)
+  server/                  the web server
+    web.py                   routes, the WebSocket, security headers, /admin
+    room.py                  a room: members, lobby, chat, the match loop
+    lobby.py, modes.py       settings, seats, teams, colours; the game modes
+    match.py, powerups.py    running a match; pickups
+    delta.py, scene.py       sending only what changed; the world as shapes for the browser
+    auth.py, accounts.py     Google sign-in; accounts and sessions (SQLite)
+    profiles.py, cosmetics.py  profiles and stats; what you can wear
+    moderation.py            the word filter and player reports
+    limits.py                rate and size limits
+    metrics.py               logs, /metrics, and its history
+    playtest.py, playtest_report.py, smoke.py, load_test.py   checking how it plays and holds up
+    admin/                   the /admin page
+    static/                  the browser client (no build step)
+      index.html, style.css
+      physics.js             the browser's copy of the physics (on vendor/planck.min.js)
+      clock.js, netsim.js, delta.js, profile.js   shared with the Python tests
+      js/                    the client's scripts, listed at the top of js/core.js
+tests/                     pytest, plus tests/web/ (Playwright)
+deploy/fly.sh, fly.toml, Dockerfile   hosting
+.github/                   CI, deploys, Dependabot
+main.py                    the desktop game and training
 ```
-
-CI also plays the web version in a real browser (two players, a full match, a reload mid-match, a phone-sized lobby, a server restart):
-
-```
-npm ci && npx playwright install chromium
-node tests/web/e2e.js
-```
-
-**Linting:** `ruff check .` for the Python (rules in `pyproject.toml`) and `npm run lint` for the browser client (ESLint, `eslint.config.js`). The client's scripts share one global scope, so the ESLint config reads the names each file declares and only complains about names nobody declares, or ones declared and never used.
-
-**Versions:** the requirements files give ranges; `constraints.txt` pins exact versions for CI and the Docker image (`pip install -r requirements-test.txt -c constraints.txt`), and `package-lock.json` does the same for the Node tools. A new release of a dependency can't break anything until someone bumps it there, and CI checks the bump.
-
-**CI** (GitHub Actions) is optimistic: a pull request needs only the quick `lint` job (ruff and eslint, about a minute) to merge, through the `merge-ready` check `main` requires. The rest runs after the merge, on `main`, and the **main** badge at the top of this page says whether it's passing: `test` (pytest), `web` (the browser test) and `training` (installs the full training stack and trains for a moment, the slowest). On a pull request, the jobs its changes need still run as a heads-up without holding the merge up (a server or browser change runs `test` and `web`; physics, maps or bots run all three; just the README runs none), and the `done` check sums them up. Add the `full-ci` label to a pull request to run everything on it first. If `main` goes red, fix it next: production deploys refuse a commit whose tests didn't pass.
-
-**Staging and deploys** (`.github/workflows/deploy.yml`). Every merge to `main` deploys straight to a staging app (`https://bonk-game-staging.fly.dev`), at the same time as the tests run, so you can try a change a few minutes after merging; the **staging** badge says whether the last deploy worked, and a smoke test checks it. Production is a button: Actions → deploy → Run workflow → `production`, which deploys `main` only if its tests passed on that commit. Set it up once:
-
-1. Make the staging app and its volume: `./deploy/fly.sh bonk-game-staging iad`, then `fly volumes create bonk_data --size 1 --region iad -a bonk-game-staging` (or another name: set the repository variable `STAGING_APP`; `PRODUCTION_APP` is `bonk-game` unless set).
-2. Make a deploy token, `fly tokens create org`, and add it to the repository as the secret `FLY_API_TOKEN` (Settings → Secrets and variables → Actions). Until it's there, deploys skip with a note rather than fail.
-3. Optional: Google sign-in on staging. Add `https://bonk-game-staging.fly.dev/auth/google/callback` to the OAuth client's redirect URIs and `fly secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... -a bonk-game-staging`. Without them staging runs with guests only.
-
-## Code layout
-- `bonk_game/ui/`: the game window: screens and HUD (`app.py`), the visual style (`painter.py`, `theme.py`), sound effects (`sound.py`) and the built-in Bot (`bot.py`)
-- `bonk_game/envs/utils/arena.py`: arena size, action table and spawning shared by every env
-- `bonk_game/envs/utils/maps.py`: the maps
-- `bonk_game/envs/utils/world.py`: the physics: each map's Box2D world, and bonk's rules on top of it (grip, jumping off what you stand on, launch pads, the speed cap, what kills)
-- `bonk_game/envs/utils/bodies.py`: the pieces maps are made of (blocks, slopes, posts, bumpers) and the moving parts (the sliding platform on its rail, the swing on its rope, a sinking floor)
-- `bonk_game/envs/utils/stepping.py`: how a step moves: the world moves everything in 4 Box2D steps per 1/30 s step
-- `bonk_game/envs/training_env.py`: the gym env agents train on
-- `bonk_game/envs/testing_env.py`: the 2-10 player free-for-all env used for playing matches
-- `bonk_game/envs/utils/controls.py`: player inputs (an agent's action or a set of held buttons)
-- `Dockerfile`, `fly.toml`, `deploy/fly.sh`: hosting the web server (on Fly.io, or anywhere that runs Docker)
-- `bonk_game/server/`: the web server: rooms and the WebSocket protocol (`room.py`, `web.py`), the lobby's rules: settings, seats, teams and colours (`lobby.py`), the name filter and player reports (`moderation.py`, and `static/js/people.js` for the game browser (public and private games, New game), mute and report), logs, `/metrics` and its history (`metrics.py`), the `/admin` page (`admin/`), the load test (`load_test.py`), playtest reports and their write-up (`playtest.py`, `playtest_report.py`, and `static/js/report.js`), checking a deployed server (`smoke.py`), the killcam (`static/js/replay.js`), profiles and match history (`profiles.py`, the same rules as `static/profile.js` in the browser), optional accounts and signing in with Google (`accounts.py`, `auth.py`, `static/js/account.js`, and `static/privacy.html`), pretending the network is worse (`static/netsim.js`, measured by `tests/web/network.js`), what moment of the match to draw (`static/clock.js`), sending just what changed each tick (`delta.py`, and `static/delta.js` in the browser), running a match (`match.py`), the game modes (`modes.py`), power-ups (`powerups.py`), turning the world into shapes for the browser (`scene.py`), and the browser client (`static/`: `index.html`, `style.css`, `physics.js` (the browser's copy of the physics, on planck.js in `static/vendor/`: `npm run vendor` copies it there from `node_modules` after a version bump), and the scripts in `js/`, listed at the top of `js/core.js`)
