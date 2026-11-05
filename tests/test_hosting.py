@@ -262,6 +262,26 @@ def test_the_admin_page_needs_the_token(monkeypatch):
     run(with_client(go))
 
 
+def test_every_response_has_security_headers(monkeypatch):
+    async def go(client):
+        for path in ("/", "/privacy", "/api/public", "/static/style.css", "/nope"):
+            r = await client.get(path)
+            assert r.headers["X-Content-Type-Options"] == "nosniff", path
+            assert r.headers["X-Frame-Options"] == "DENY", path
+            assert "Strict-Transport-Security" not in r.headers  # (plain HTTP here)
+        page = await client.get("/")
+        csp = page.headers["Content-Security-Policy"]
+        assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
+        # The admin page keeps its own, stricter one
+        admin = await client.get("/admin")
+        assert "style-src 'self';" in admin.headers["Content-Security-Policy"]
+        # Behind Fly's proxy, over HTTPS: browsers are told to stick to HTTPS
+        monkeypatch.setattr(web.limits, "TRUST_PROXY", True)
+        r = await client.get("/", headers={"X-Forwarded-Proto": "https"})
+        assert r.headers["Strict-Transport-Security"].startswith("max-age=")
+    run(with_client(go))
+
+
 def test_tick_stats():
     s = metrics.Stats()
     assert s.tick_ms() == (0.0, 0.0)

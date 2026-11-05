@@ -1,0 +1,31 @@
+# Security updates for what the site runs on: GitHub opens a pull request
+# when a dependency has a known vulnerability (turn on "Dependabot security
+# updates" in the repository's Settings -> Code security). Routine version
+# bumps are monthly and grouped, so they don't pile up.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

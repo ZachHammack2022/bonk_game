@@ -185,3 +185,11 @@ def test_the_page_knows_map_and_mode_names():
     page = web.render_index("v1")
     names = json.loads(page.split('<script id="bonk-names" type="application/json">')[1].split("</script>")[0])
     assert names["maps"]["swing"] == "Sinking Swing" and names["modes"]["ffa"] == "Free-for-all"
+
+
+def test_settings_are_kept_but_not_without_limit():
+    p = profiles.empty("p1")
+    p["prefs"] = {"volume": 0.5}
+    assert profiles.validate(p)["prefs"] == {"volume": 0.5}
+    p["prefs"] = {"junk": "x" * profiles.PREFS_MAX}
+    assert profiles.validate(p)["prefs"] == {}
