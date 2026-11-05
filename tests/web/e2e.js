@@ -57,8 +57,11 @@ function check(cond, what) {
   try {
     await waitForServer(base, server);
     browser = await chromium.launch();
-    const open = async (name, opts = { viewport: { width: 1000, height: 720 } }) => {
-      const page = await (await browser.newContext(opts)).newPage();
+    // csp: keep the page's Content-Security-Policy. Most pages bypass it,
+    // as waitForFunction polls with eval, which the policy forbids; the
+    // "strict" page below plays with it on.
+    const open = async (name, opts = { viewport: { width: 1000, height: 720 } }, csp = false) => {
+      const page = await (await browser.newContext({ ...opts, bypassCSP: !csp })).newPage();
       page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
       page.on("console", (m) => {
         if (m.type() !== "error") return;
@@ -523,6 +526,32 @@ function check(cond, what) {
     check(moved.p.name === "Olga" && moved.p.color === 4 && moved.p.pattern === "dots" && moved.muted && !moved.shake
       && moved.p.prefs.keys.heavy === "KeyJ" && moved.left === null && (await old.inputValue("#name")) === "Olga",
       "settings saved before profiles move into the profile");
+
+    // The page's Content-Security-Policy blocks nothing the game uses: a
+    // match against a bot with it on (no waitForFunction here: it needs eval)
+    const strict = await open("strict", undefined, true);
+    const violations = [];
+    strict.on("console", (m) => { if (/Content Security Policy/i.test(m.text())) violations.push(m.text()); });
+    await strict.goto(base + "/");
+    check(/script-src 'self'/.test((await strict.evaluate(async () => (await fetch("/")).headers.get("content-security-policy"))) || ""),
+      "the page is served with a Content-Security-Policy");
+    await strict.fill("#name", "Cass");
+    await strict.click("#find");
+    await strict.waitForSelector("#browse:not(.hidden)");
+    await strict.click("#new-game");
+    await strict.click('#new-privacy [data-private="0"]');
+    await strict.click("#new-create");
+    await strict.waitForSelector("#lobby:not(.hidden)");
+    await strict.click("#add-bot");
+    await strict.waitForSelector("#seats .seat >> nth=1");
+    await strict.click("#start");
+    await strict.waitForSelector("#game:not(.hidden)", { timeout: 8000 });
+    await strict.keyboard.down("ArrowLeft");
+    await strict.waitForTimeout(1500);
+    await strict.keyboard.up("ArrowLeft");
+    check(await strict.evaluate(() => bonkDebug.app.states.length > 0 && bonkDebug.net.rtt !== null),
+      "with the Content-Security-Policy on, the game connects, plays and gets states");
+    check(violations.length === 0, "the policy blocks nothing" + (violations.length ? ": " + violations.join(" | ") : ""));
 
     check(errors.length === 0, "no page errors" + (errors.length ? ": " + errors.join(" | ") : ""));
   } finally {
