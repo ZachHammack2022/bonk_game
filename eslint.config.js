@@ -54,6 +54,12 @@ module.exports = [
     rules,
   },
   {
+    // The admin page (web.py's /admin): a script of its own
+    files: ["bonk_game/server/admin/*.js"],
+    languageOptions: { ecmaVersion: 2022, sourceType: "script", globals: { ...globals.browser } },
+    rules,
+  },
+  {
     files: ["tests/**/*.js", "eslint.config.js"],
     languageOptions: { ecmaVersion: 2022, sourceType: "commonjs", globals: { ...globals.node } },
     rules,

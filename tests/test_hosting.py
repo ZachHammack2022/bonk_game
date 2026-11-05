@@ -176,6 +176,92 @@ def test_metrics_can_need_a_token(monkeypatch):
     run(with_client(go))
 
 
+# ---------------------------------------------------------------------------
+# /admin: the metrics page and its history
+# ---------------------------------------------------------------------------
+class Clock:
+    def __init__(self, t=1_000_000):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+def sample(uptime, players, started, version="v1"):
+    return {"uptime_seconds": uptime, "members_connected": players,
+            "matches_started_total": started, "version": version, "draining": False}
+
+
+def test_history_counts_across_restarts_and_gaps():
+    clock = Clock()
+    h = metrics.History(clock=clock)
+    # 10 minutes running, then stopped for 5, then a new version from 0
+    for k, (players, started) in enumerate([(2, 0), (4, 3), (6, 5), (3, 5)]):
+        clock.t = 1_000_000 + 60 * k
+        h.add(sample(60 * k, players, started))
+    clock.t = 1_000_000 + 60 * 9
+    h.add(sample(5, 1, 2, version="v2"))  # restarted: counters began again
+    clock.t = 1_000_000 + 60 * 10
+    s = h.series(600, points=10)
+    assert s["step"] == 60 and len(s["t"]) == 10
+    assert s["gauges"]["members_connected"]["max"][:4] == [2, 4, 6, 3]
+    assert s["counts"]["matches_started_total"][:4] == [0, 3, 2, 0]
+    assert s["gauges"]["members_connected"]["max"][4:9] == [None] * 5  # stopped
+    assert s["counts"]["matches_started_total"][4:9] == [None] * 5
+    assert s["counts"]["matches_started_total"][9] == 2  # 0 -> 2 since the restart
+    assert s["restarts"] == [1_000_000 + 540] and s["deploys"] == [[1_000_000 + 540, "v2"]]
+    assert "version" not in s["gauges"] and "draining" not in s["gauges"]
+    # Wider buckets: averages and peaks of what's in each
+    s = h.series(600, points=2)
+    assert s["step"] == 300
+    assert s["gauges"]["members_connected"]["avg"][0] == pytest.approx(15 / 4)
+    assert s["gauges"]["members_connected"]["max"] == [6, 1]
+    assert s["counts"]["matches_started_total"] == [5, 2]
+
+
+def test_history_forgets_old_samples(tmp_path):
+    clock = Clock()
+    path = str(tmp_path / "metrics.db")
+    h = metrics.History(path, clock=clock)
+    h.add(sample(1, 1, 0))
+    clock.t += h.KEEP_DAYS * 86400 + 60
+    h.add(sample(2, 1, 0))
+    h.prune()
+    again = metrics.History(path, clock=clock)  # (kept in the file)
+    assert len(again.samples(0)) == 1
+
+
+def test_the_admin_page_needs_the_token(monkeypatch):
+    async def go(client):
+        page = await client.get("/admin")
+        assert page.status == 200 and "Metrics token" in await page.text()
+        assert page.headers["X-Robots-Tag"].startswith("noindex")
+        assert "frame-ancestors 'none'" in page.headers["Content-Security-Policy"]
+        assert page.headers["Cache-Control"] == "no-store"
+        assert (await client.get("/admin/admin.js")).status == 200
+        assert (await client.get("/admin/web.py")).status == 404
+        # No token set on the server: the numbers aren't open to anyone
+        monkeypatch.setattr(web, "METRICS_TOKEN", "")
+        assert (await client.get("/api/admin/metrics")).status == 503
+        monkeypatch.setattr(web, "METRICS_TOKEN", "s3cret")
+        assert (await client.get("/api/admin/metrics")).status == 401
+        ok = await client.get("/api/admin/metrics?range=3600",
+                              headers={"Authorization": "Bearer s3cret"})
+        assert ok.status == 200 and ok.headers["Cache-Control"] == "no-store"
+        body = await ok.json()
+        assert body["now"]["version"] == web.VERSION and body["range"] == 3600
+        assert body["history"]["gauges"]["members_connected"]["max"][-1] == 0  # sampled at start
+        assert (await (await client.get("/api/admin/metrics?range=999999999", headers={
+            "Authorization": "Bearer s3cret"})).json())["range"] == 90 * 86400
+        # Guessing: a few wrong tries, then wait (the right token still works)
+        codes = [(await client.get("/api/admin/metrics", headers={"Authorization": f"Bearer x{k}"})).status
+                 for k in range(web.WRONG_TOKENS + 2)]
+        assert 401 in codes and codes[-1] == 429
+        assert (await client.get("/metrics", headers={"Authorization": "Bearer nope"})).status == 429
+        assert (await client.get("/api/admin/metrics", headers={"Authorization": "Bearer s3cret"})).status == 200
+    run(with_client(go))
+
+
 def test_tick_stats():
     s = metrics.Stats()
     assert s.tick_ms() == (0.0, 0.0)
