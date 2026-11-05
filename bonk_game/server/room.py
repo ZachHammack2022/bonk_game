@@ -379,6 +379,8 @@ class Room:
 
     # --- messages in --------------------------------------------------------
     async def handle(self, token, msg):
+        if token not in self.members:
+            return  # removed by the host (or gone), with the connection still open
         kind = msg.get("type")
         if kind == "input":
             if self.match is not None and token in self.match_tokens:

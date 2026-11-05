@@ -28,6 +28,11 @@ concurrency:
   group: deploy-${{ github.event.inputs.target || 'staging' }}
   cancel-in-progress: false
 
+# Read-only: the deploy uses FLY_API_TOKEN, not GitHub's token
+permissions:
+  contents: read
+  actions: read   # (tests' results on main, for production)
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

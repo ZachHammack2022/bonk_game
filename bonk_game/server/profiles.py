@@ -10,6 +10,7 @@ Each match's results carry a "summaries" list (match.py): one entry per
 slot with how that player did, ready for record() after adding the match's
 id, time, mode and map (history_entry).
 """
+import json
 import math
 import re
 
@@ -18,6 +19,7 @@ from bonk_game.server import moderation
 FORMAT = "bonk-profile"
 VERSION = 1
 HISTORY = 50
+PREFS_MAX = 8192  # bytes of settings (JSON) an account keeps
 COUNTS = ("matches", "wins", "kos", "falls", "deaths", "pickups")
 ENTRY_COUNTS = ("place", "of", "kos", "falls", "deaths", "pickups", "players", "people")
 MAX = 10 ** 9
@@ -100,7 +102,9 @@ def validate(p):
     for k, d in (("trail", "none"), ("hat", "none"), ("ko", "pop")):
         out[k] = _text(p.get(k), 16) or d
     out["muted"] = p.get("muted") is True
-    out["prefs"] = p["prefs"] if isinstance(p.get("prefs"), dict) else {}
+    prefs = p.get("prefs")
+    # (Kept as they are, but not a dumping ground: a few hundred bytes in use)
+    out["prefs"] = prefs if isinstance(prefs, dict) and len(json.dumps(prefs)) <= PREFS_MAX else {}
     s = p.get("stats") if isinstance(p.get("stats"), dict) else {}
     st = out["stats"]
     for k in COUNTS:

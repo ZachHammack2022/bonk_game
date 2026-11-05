@@ -433,6 +433,11 @@ def test_host_can_remove_someone_for_good():
         assert b.last("error")["fatal"]
         with pytest.raises(room_mod.RoomFull, match="removed"):
             await room.join("b", "Bob", Inbox())
+        # A connection left open after being removed changes nothing
+        for msg in ({"type": "name", "name": "Bobby"}, {"type": "chat", "text": "hi"},
+                    {"type": "report_player", "id": pa}, {"type": "color", "color": 3}):
+            await room.handle("b", msg)
+        assert "b" not in room.members and not [m for m in a.msgs if m.get("text") == "hi"]
     run(go())
 
 

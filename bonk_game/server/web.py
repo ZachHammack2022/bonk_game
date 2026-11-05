@@ -234,6 +234,51 @@ async def index(request):
                         headers={"Cache-Control": "no-cache"})
 
 
+# Every response: no guessing content types, no other site framing ours
+# (clickjacking), no full addresses sent to other sites, HTTPS only from
+# now on (once a browser has been here over HTTPS)
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+HSTS = "max-age=31536000"
+# The game's pages run only this site's own scripts and talk only to this
+# site, so injected markup couldn't run code or send anything elsewhere.
+# (wss: for browsers whose 'self' doesn't cover WebSockets yet)
+PAGE_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; connect-src 'self' wss:; object-src 'none'; "
+            "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+
+
+def _https(request):
+    if request.scheme == "https":
+        return True
+    return limits.TRUST_PROXY and request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https"
+
+
+@web.middleware
+async def security_headers(request, handler):
+    try:
+        response = await handler(request)
+    except web.HTTPException as e:
+        response = e
+        _add_security_headers(request, response)
+        raise
+    _add_security_headers(request, response)
+    return response
+
+
+def _add_security_headers(request, response):
+    h = response.headers
+    for k, v in SECURITY_HEADERS.items():
+        h.setdefault(k, v)
+    if _https(request):
+        h.setdefault("Strict-Transport-Security", HSTS)
+    if (response.content_type or "").startswith("text/html"):
+        h.setdefault("Content-Security-Policy", PAGE_CSP)
+
+
 @web.middleware
 async def cache_headers(request, handler):
     """Versioned client files are cached for good; anything else is checked
@@ -560,7 +605,7 @@ async def terms(request):
 def make_app(rooms=None, auth_config=None, accounts=None, history=None):
     """auth_config, accounts, history: for tests (normally from the
     environment: auth.Config, BONK_METRICS_DB)."""
-    app = web.Application(middlewares=[cache_headers])
+    app = web.Application(middlewares=[security_headers, cache_headers])
     app[ROOMS] = rooms or RoomManager(AgentStore())
     app[ROOM_LIMIT] = limits.PerKey(limits.ROOMS_PER_IP / 60, limits.ROOMS_PER_IP)
     app[GUESS_LIMIT] = limits.PerKey(WRONG_PASSWORDS / 60, WRONG_PASSWORDS)
