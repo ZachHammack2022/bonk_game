@@ -271,6 +271,20 @@ function backToMatch() {
   sendInput(true);
 }
 $("go-lobby").addEventListener("click", goToLobby);
+
+// The host ends the match early (say, to change the map): everyone goes back
+// to the lobby, with no results. Asks first if other people are playing.
+function endMatch() {
+  if (!app.match || !isHost()) return;
+  // People playing who are still in the room (not someone who's left: a bot has their ball)
+  const here = new Set((app.lobby ? app.lobby.seats : []).map((x) => x.id));
+  const others = app.match.slots.filter((x) => x.kind === "human" && x.id !== me.id && here.has(x.id)).length;
+  if (others && !confirm(`End the match for everyone? ${others === 1 ? "1 other person is" : others + " other people are"} playing.`)) return;
+  send({ type: "end_match" });
+}
+for (const id of ["end-match", "end-match-lobby"]) {
+  $(id).addEventListener("click", (e) => { e.currentTarget.blur(); endMatch(); });
+}
 $("back-to-match").addEventListener("click", backToMatch);
 
 function removeButton(title, onClick) {

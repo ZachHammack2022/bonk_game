@@ -523,3 +523,29 @@ def test_going_to_the_lobby_mid_match_hands_your_ball_to_a_bot_until_you_come_ba
         assert "b" not in room.members and 1 in room.match.stand_ins
         await room.stop()
     run(go())
+
+
+def test_the_host_can_end_a_match_early():
+    async def go():
+        room = Room("ABCD")
+        a, b = Inbox(), Inbox()
+        await room.join("a", "Ann", a)
+        await room.join("b", "Bob", b)
+        await room.handle("a", {"type": "settings", "bots": ["bot:medium"] * 3})
+        await room.start()
+        await room.handle("b", {"type": "end_match"})   # not the host
+        assert room.match is not None and "Only the host" in b.last("error")["message"]
+        await room.handle("a", {"type": "end_match"})
+        await room.task
+        # Back to the lobby: no results, nothing counted, and the room says why
+        assert room.match is None and room.results is None and room.ending is None
+        assert a.last("lobby")["phase"] == "lobby"
+        assert not any(m["type"] == "results" for m in a.msgs + b.msgs)
+        assert b.last("chat")["text"] == "Ann ended the match"
+        # The map can change now, and the next match starts as usual
+        await room.handle("a", {"type": "settings", "map": "classic"})
+        assert room.settings["map"] == "classic"
+        await room.start()
+        assert room.match is not None
+        await room.stop()
+    run(go())

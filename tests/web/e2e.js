@@ -499,6 +499,12 @@ function check(cond, what) {
     await q2.click("#leave");
     await q2.waitForSelector("#home:not(.hidden)");
     check(true, "and leave the room from there");
+    // The host, now alone with bots, ends the match to change the map
+    check(await q2.isHidden("#end-match"), "only the host can end a match");
+    await q1.click("#end-match");
+    await q1.waitForSelector("#lobby:not(.hidden)");
+    check(await q1.isHidden("#results") && await q1.isEnabled("#start") &&
+      (await q1.textContent("#chat-log")).includes("ended the match"), "the host can end a match early: back to the lobby, no results");
     await q1.close(); await q2.close();
 
     // Saved before profiles: the old settings come along
