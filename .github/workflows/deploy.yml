@@ -41,7 +41,7 @@ jobs:
       name: ${{ github.event.inputs.target || 'staging' }}
       url: https://${{ steps.app.outputs.name }}.fly.dev
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - id: app
         env:
@@ -76,7 +76,7 @@ jobs:
             exit 1
           fi
 
-      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      - uses: superfly/flyctl-actions/setup-flyctl@1.6
         if: steps.app.outputs.skip != 'true'
 
       - name: Deploy
@@ -89,7 +89,7 @@ jobs:
           flyctl deploy --remote-only -a "$APP" --ha=false
           flyctl scale count 1 -a "$APP" --yes
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.app.outputs.skip != 'true'
         with:
           python-version: "3.12"

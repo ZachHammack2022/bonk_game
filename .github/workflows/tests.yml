@@ -33,7 +33,7 @@ jobs:
       web: ${{ steps.pick.outputs.web }}
       training: ${{ steps.pick.outputs.training }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -67,9 +67,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -78,7 +78,7 @@ jobs:
           pip install "ruff==$(grep -Po '^ruff==\K.*' constraints.txt)"
           ruff check .
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
@@ -99,9 +99,9 @@ jobs:
       SDL_AUDIODRIVER: dummy
       PYGAME_HIDE_SUPPORT_PROMPT: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -114,7 +114,7 @@ jobs:
 
       # planck.js, so the tests can check the browser's copy of the physics
       # against the server's (tests/test_predict.py)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
@@ -136,9 +136,9 @@ jobs:
       SDL_AUDIODRIVER: dummy
       PYGAME_HIDE_SUPPORT_PROMPT: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -147,7 +147,7 @@ jobs:
             constraints.txt
 
       # The installed packages themselves (PyTorch is most of the time)
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ env.pythonLocation }}
           key: training-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('requirements.txt', 'setup.py', 'constraints.txt') }}
@@ -180,9 +180,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -193,12 +193,12 @@ jobs:
       - name: Install the server (no pygame, no training stack)
         run: pip install -r requirements-server.txt -c constraints.txt
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-1.48.2-${{ runner.os }}
@@ -213,7 +213,7 @@ jobs:
         env:
           E2E_SHOTS: e2e-shots
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-screenshots
