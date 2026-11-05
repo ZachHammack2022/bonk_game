@@ -145,8 +145,11 @@ function check(cond, what) {
     await host.click("#game-settings-done");
     check((await host.textContent("#sum-map")) === "Classic" && (await host.textContent("#sum-rest")).includes("First to 1"),
       "the lobby sums up the settings");
-    await host.click("#add-bot");
-    await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length === 4);
+    // Just the two of them, no bots: nobody scores (and ends this first-to-1
+    // match) until the guest rolls into a wall on purpose, after the checks
+    // that need the match on
+    await host.click('#seats [aria-label="Remove bot"]');
+    await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length === 2);
     await guest.waitForFunction(() => document.querySelector("#map").value === "classic");
     check(true, "settings reach the guest");
     await host.setViewportSize({ width: 1000, height: 585 });
@@ -165,12 +168,10 @@ function check(cond, what) {
     await guest.waitForSelector("#game:not(.hidden)");
     check(true, "both players go to the match");
     await host.waitForTimeout(2200);
-    await guest.keyboard.down("ArrowRight");
     await guest.keyboard.press("Digit2");
     await host.waitForFunction(() => bonkDebug.fx.emotes.some((e) => e.slot === 1 && e.id === 1), null, { timeout: 3000 });
     check(true, "an emote reaches the other player");
     // Chat over the match: Enter opens the box; typing doesn't move your ball
-    await guest.keyboard.up("ArrowRight");
     await guest.keyboard.press("Enter");
     await guest.waitForSelector("#chat-game-input:focus");
     await guest.keyboard.type("wasd nice");
@@ -178,10 +179,7 @@ function check(cond, what) {
     await guest.keyboard.press("Enter");
     await host.waitForFunction(() => document.querySelector("#chat-feed").textContent.includes("wasd nice"));
     check(await guest.isHidden("#chat-game-form"), "match chat shows over the game, and the box closes after sending");
-    await guest.keyboard.down("ArrowRight");
-    await host.waitForTimeout(150);
     await shot(guest, "match");
-    await guest.keyboard.up("ArrowRight");
 
     // A controller: push the stick left, then let go
     await guest.bringToFront();
@@ -211,7 +209,10 @@ function check(cond, what) {
     // (the match may already have ended; then they land on results/lobby)
     check(back || (await guest.isVisible("#lobby")), "a reload puts the guest back in the room");
 
+    // The guest rolls into the deadly right wall (Classic): the host scores, and it's over
+    await guest.keyboard.down("ArrowRight");
     await host.waitForSelector("#results:not(.hidden)", { timeout: 120000 });
+    await guest.keyboard.up("ArrowRight");
     const winner = await host.textContent("#winner");
     check(/wins?!|Draw!/.test(winner), `results show a winner (${winner.trim()})`);
     await shot(host, "results");
@@ -267,7 +268,9 @@ function check(cond, what) {
       `each player's report reaches the server (${reports.length}: ping, states, frame rate, device)`);
     check(reports.some((r) => r.name === "Bob" && r.feel === "laggy" && r.note === "a test note"), "with how it felt");
     check(items.some((i) => i.event === "client_error" && i.message === "e2e test error"), "browser errors reach the server too");
+    await guest.keyboard.down("ArrowRight");  // (into the wall again, to end the rematch)
     await host.waitForSelector("#results:not(.hidden)", { timeout: 120000 });
+    await guest.keyboard.up("ArrowRight");
     await host.click("#to-lobby");
     await host.waitForSelector("#lobby:not(.hidden)");
     await guest.waitForSelector("#lobby:not(.hidden)");
@@ -362,7 +365,7 @@ function check(cond, what) {
     await waitForServer(base, server);
     await host.waitForFunction(() => document.querySelector("#status").classList.contains("hidden"), null, { timeout: 30000 });
     await guest.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 2, null, { timeout: 30000 });
-    await host.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 3);
+    await host.waitForFunction(() => bonkDebug.app.lobby.seats.filter((x) => x.kind === "human").length === 2);
     const after = await host.evaluate(() => bonkDebug.app.lobby);
     check(after.room === code && after.host === (await host.evaluate(() => bonkDebug.app.welcome.you)), "after a restart the room comes back, with the same host");
     check(JSON.stringify(after.settings) === JSON.stringify(settings), "and the same settings");
