@@ -504,7 +504,7 @@ class HowToScene(Scene):
         ui.panel((30, 226, 620, 180))
         rules = [
             ("Knock the others out.", "Off the screen on open maps, into the red walls on Classic. Last ball standing scores."),
-            ("Go heavy to hit harder.", "You get knocked around less but move slower, and it takes a moment to recharge."),
+            ("Go heavy to hit harder.", "Hold it as long as you like: you get knocked around less, but move much more slowly."),
             ("On open maps, up is a jump.", "It only works while you're standing on something. On Classic you can fly."),
             ("Esc pauses the game.", "M toggles sound."),
         ]
