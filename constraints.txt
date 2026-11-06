@@ -29,8 +29,8 @@ joserfc==1.8.0
 cryptography==50.0.2
 cffi==2.1.1
 pycparser==3.12
-httpx2==2.13.1
-httpcore2==2.13.1
+httpx2==2.14.0
+httpcore2==2.14.0
 h11==0.16.0
 anyio==4.16.0
 truststore==0.10.5
@@ -50,4 +50,4 @@ tqdm==4.70.1
 rich==15.0.0
 
 # Linting
-ruff==0.16.9
+ruff==0.17.3

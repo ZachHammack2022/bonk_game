@@ -9,6 +9,6 @@ aiohttp>=3.9
 # signing in with Google: OAuth and ID tokens (Authlib, and httpx2, the
 # HTTP client its OAuth client uses)
 authlib>=1.9
-httpx2>=2.13
+httpx2>=2.14.0
 # the swear-word list for chat and names (moderation.py)
 better-profanity>=0.7
