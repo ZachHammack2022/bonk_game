@@ -64,19 +64,40 @@ def test_running_takes_longer_to_get_up_to_speed():
     assert run(0.75, 16) == pytest.approx(run(1.0, 12), rel=0.05)
 
 
-def test_heavy_lasts_longer_in_slow_motion():
-    def heavy_ticks(time_scale):
-        env = TestEnv("human", "human", map_name="platform", time_scale=time_scale)
-        env.reset()
-        p = env.players[0]
-        p.make_heavy()
-        t = 0
-        while p.m > p.min_m:
-            env.step()
-            t += 1
-        return t
+HEAVY_RIGHT = Buttons(False, False, False, True, True)
 
-    assert heavy_ticks(0.5) == pytest.approx(2 * heavy_ticks(1.0), abs=2)
+
+def sprint(buttons, ticks=65):
+    """Run right along Grand Stage's long floor at normal speed: (top speed
+    in px a second, px slid after letting go)."""
+    env = TestEnv("human", "human", map_name="grand", time_scale=stepping.TIME_SCALE)
+    env.reset()
+    env.timer.limit = 0
+    a, b = env.players
+    a.x, a.y = 115, 340
+    b.dies()
+    for _ in range(15):
+        env.step()
+    top = 0
+    for _ in range(ticks):
+        env.step([buttons, None])
+        top = max(top, a.x_v * env.time_scale * 30)
+    x = a.x
+    for _ in range(60):
+        env.step()
+    return top, a.x - x
+
+
+def test_running_on_a_platform_is_quick_and_stops_short():
+    top, slide = sprint(RIGHT)
+    assert top > 180       # (it was under 50 px/s: the ground gripped like glue)
+    assert slide < 2.5 * 20  # let go, and you stop within about a ball's width
+
+
+def test_heavy_is_way_slower():
+    light, _ = sprint(RIGHT)
+    heavy, _ = sprint(HEAVY_RIGHT)
+    assert heavy < light / 4
 
 
 def test_speed_setting_in_a_room():

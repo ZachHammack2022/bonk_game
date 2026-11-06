@@ -58,6 +58,7 @@ class PowerUps:
             p.gravity_mult = k["gravity"] if k else 1.0
             if k and k.get("pin_heavy"):
                 p.m = p.max_m
+                p.heavy_held = True  # (so the step ends heavy too: player.end_step)
                 p.force_mult *= p.max_m / p.min_m  # heavy, but moves as if it weren't
 
     def step(self, info):

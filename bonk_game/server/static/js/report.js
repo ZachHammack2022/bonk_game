@@ -92,26 +92,13 @@ const playtest = {
                 net: conn.effectiveType || "", touch: "ontouchstart" in window || navigator.maxTouchPoints > 0,
                 pad: [...(navigator.getGamepads ? navigator.getGamepads() : [])].some(Boolean) },
     };
-    this.showFeel();
   },
-  // Send the last match's report, with how it felt if you said
+  // Send the last match's report
   flush() {
-    $("feel-note").blur();  // (so the next match's keys aren't typed into it)
     const r = this.pending;
     this.pending = null;
     if (!r || !app.ws || app.ws.readyState !== WebSocket.OPEN) return;
-    const picked = document.querySelector("#feel button.picked");
-    if (picked) r.feel = picked.dataset.feel;
-    const note = $("feel-note").value.trim();
-    if (note) r.note = note.slice(0, 500);
     send(r);
-  },
-
-  showFeel() {
-    for (const b of document.querySelectorAll("#feel button")) b.classList.remove("picked");
-    $("feel-note").value = "";
-    $("feel-thanks").classList.add("hidden");
-    $("feel").classList.toggle("hidden", !this.pending || this.pending.watching);
   },
 
   error(message, where) {
@@ -136,10 +123,3 @@ window.addEventListener("unhandledrejection", (e) => {
 // Closing the tab on the results screen: send what we have
 window.addEventListener("pagehide", () => { try { playtest.flush(); } catch (e) { /* closing anyway */ } });
 
-// "How did that match feel?" on the results screen
-for (const b of document.querySelectorAll("#feel button")) {
-  b.addEventListener("click", () => {
-    for (const o of document.querySelectorAll("#feel button")) o.classList.toggle("picked", o === b && !o.classList.contains("picked"));
-    $("feel-thanks").classList.toggle("hidden", !document.querySelector("#feel button.picked"));
-  });
-}

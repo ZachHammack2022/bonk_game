@@ -224,12 +224,10 @@ function check(cond, what) {
     const shown = await host.$$eval("#awards li", (els) => els.length);
     check(shown === res.awards.length, `the awards are on the results screen (${shown})`);
 
-    // Playtest reports: how did it feel? (sent when the next match starts)
+    // Playtest reports go by themselves (sent when the next match starts):
+    // nobody is asked how the match felt
     await guest.waitForSelector("#results:not(.hidden)");
-    check(await host.isVisible("#feel"), "players are asked how the match felt");
-    await guest.click('#feel button[data-feel="laggy"]');
-    await guest.fill("#feel-note", "a test note");
-    check(await guest.isVisible("#feel-thanks"), "and can say");
+    check(!(await host.$("#feel")), "the results screen doesn't ask how the match felt");
     await guest.evaluate(() => playtest.error("e2e test error", "e2e.js:1"));
 
     // The killcam plays the final knockout in slow motion; the match can be downloaded
@@ -269,7 +267,6 @@ function check(cond, what) {
     if (!full || reports.length !== 2) console.log(JSON.stringify(reports));
     check(reports.length === 2 && full && reports.every((r) => r.states.n > 0 && r.device.ua),
       `each player's report reaches the server (${reports.length}: ping, states, frame rate, device)`);
-    check(reports.some((r) => r.name === "Bob" && r.feel === "laggy" && r.note === "a test note"), "with how it felt");
     check(items.some((i) => i.event === "client_error" && i.message === "e2e test error"), "browser errors reach the server too");
     await guest.keyboard.down("ArrowRight");  // (into the wall again, to end the rematch)
     await host.waitForSelector("#results:not(.hidden)", { timeout: 120000 });
