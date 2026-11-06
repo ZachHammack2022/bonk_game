@@ -68,14 +68,12 @@ class player():
         self.reset()
         self.normalize_obs()
 
-    def update_mass(self):
-        if self.m > self.min_m:
-            self.m = max(self.m - 0.1 * self.time_scale, self.min_m)
-
     def make_heavy(self):
-        # Can only go heavy again once the previous heavy has fully worn off
-        if self.m == self.min_m:
-            self.m = self.max_m
+        """Heavy for as long as the button's held: from now to the end of
+        this step (end_step lets go unless it's pressed again). Pushes are
+        divided by your mass, so you move 5x more slowly while heavy."""
+        self.m = self.max_m
+        self.heavy_held = True
 
 
     def normalize_obs(self):
@@ -96,10 +94,14 @@ class player():
             self.update_jump()
 
     def end_step(self):
-        """Once a step, at the end: heavy wears off, and a remembered "up"
-        press counts down (it lasts the whole step: landing partway through
-        one fires it, world.World.step)."""
-        self.update_mass()
+        """Once a step, at the end: let go of heavy if it wasn't held this
+        step, forget which way we ran, and a remembered "up" press counts
+        down (it lasts the whole step: landing partway through one fires
+        it, world.World.step)."""
+        if not self.heavy_held:
+            self.m = self.min_m
+        self.heavy_held = False
+        self.run_dir = 0
         if self.jump_buffer:
             self.jump_buffer -= 1
 
@@ -118,6 +120,10 @@ class player():
         self.y_v = 0
         self.y_a = 0
         self.m = self.min_m
+        self.heavy_held = False  # heavy pressed this step (make_heavy)
+        # Which way the input pushed this step (-1 left, 1 right, 0 neither):
+        # running the way you're going, the ground grips less (world.grip)
+        self.run_dir = 0
         self.grounded = False
         self.jump_buffer = 0
         self.air_steps = COYOTE_TIME + 1
@@ -178,9 +184,11 @@ class player():
 
     def move_left(self,force):
         self.x_v -= force*self.force_mult*self.time_scale/self.m
+        self.run_dir -= int(force > 0) - int(force < 0)
 
     def move_right(self,force):
         self.x_v += force*self.force_mult*self.time_scale/self.m
+        self.run_dir += int(force > 0) - int(force < 0)
 
     def normalize(self,low,high,val):
         return ((val - low)/(high-low)-0.5)*2

@@ -40,8 +40,12 @@ GRAVITY = 1.5              # px per step per step: what a ball feels with no pow
 #   friction * GRIP per second (grip() below). That's what stops a ball when
 #   you let go and sets how fast you can run on it, as on bonk's original
 #   surfaces. In the air nothing slows you.
+#   Running (pushing the way you're already going) it grips GRIP_RUNNING
+#   instead: you get up to a decent speed, and still stop short when you let
+#   go or turn round.
 FRICTION_SCALE = 0.5
 GRIP = 150.0
+GRIP_RUNNING = 30.0
 # Moving up faster than this (px per step), a ball has left the ground: grip
 # stops at once, so it doesn't take anything off a jump
 LIFT_OFF = 2.0
@@ -334,7 +338,8 @@ def grip(p, surface, normal, body, dt):
     v = body.linearVelocity
     svx, svy = speed_from_b2(v.x), speed_from_b2(v.y)
     vt = (p.x_v - svx) * tx + (p.y_v - svy) * ty
-    dv = vt * (1 - math.exp(-surface.friction * GRIP * dt))
+    g = GRIP_RUNNING if p.run_dir * tx * vt > 0 else GRIP
+    dv = vt * (1 - math.exp(-surface.friction * g * dt))
     p.x_v -= dv * tx
     p.y_v -= dv * ty
     if body.type == b2.dynamicBody:

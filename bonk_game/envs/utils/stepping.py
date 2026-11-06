@@ -11,7 +11,7 @@ A step, for the players still in play:
             play area, during the last step)
     begin_step (jumping, which needs to know who's standing on something)
     Box2D step, bonk's rules, Box2D step, rules, ... (SUBSTEPS times)
-    end_step (heavy wears off)
+    end_step (heavy lets go unless held)
 
 static/physics.js runs the same scheme in the browser (it's sent SUBSTEPS
 with the rest of the physics).

@@ -456,7 +456,7 @@ function onMessage(msg) {
         if (isHost()) send({ type: "settings", ...settings });
         app.restoring = null;
       }
-      if (msg.phase === "lobby") { app.away = false; replayer.stop(); $("killcam").classList.add("hidden"); playtest.flush(); $("feel").classList.add("hidden"); app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
+      if (msg.phase === "lobby") { app.away = false; replayer.stop(); $("killcam").classList.add("hidden"); playtest.flush(); app.match = null; app.results = null; show("lobby"); $("results").classList.add("hidden"); }
       break;
     case "match":
       app.away = false;
