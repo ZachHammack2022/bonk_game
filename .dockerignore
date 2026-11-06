@@ -1,6 +1,9 @@
-.git
+# What `docker build` (and `fly deploy`) uploads to the builder. An
+# allowlist: only what the Dockerfile copies, so virtualenvs, node_modules,
+# agents, test output and anything else lying around never get sent.
+*
+!requirements-server.txt
+!constraints.txt
+!bonk_game
 **/__pycache__
-.pytest_cache
-venv
-agents
-tests
+**/*.pyc
