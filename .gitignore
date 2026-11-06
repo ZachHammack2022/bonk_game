@@ -82,8 +82,10 @@ docs/_build/
 ehthumbs.db
 Thumbs.db
 
-# venv
+# venv (any name: venv, venv-test, .venv...)
 venv
+venv*/
+.venv/
 # Node (browser test)
 node_modules/
 
