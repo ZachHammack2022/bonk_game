@@ -19,6 +19,7 @@ import numpy as np
 from bonk_game.envs.testing_env import TestEnv
 from bonk_game.envs.utils import arena, stepping, world
 from bonk_game.envs.utils.controls import NO_BUTTONS, Buttons
+from bonk_game.envs.utils.player import POGO
 from bonk_game.server import modes, powerups
 from bonk_game.server.scene import level_shapes, player_motion, player_state
 from bonk_game.ui import theme
@@ -310,6 +311,7 @@ class Match:
             "max_speed": p.v_range,
             "can_fly": p.can_fly,
             "jump_speed": p.jump_speed,
+            "pogo": POGO,  # a jump on landing keeps this share of the landing speed
             "min_m": p.min_m,
             "max_m": p.max_m,
             "substeps": stepping.SUBSTEPS,  # Box2D steps per physics step

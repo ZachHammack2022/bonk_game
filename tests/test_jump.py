@@ -1,6 +1,7 @@
 """Jump buffering and coyote time on the jump maps (issue #7)."""
 import pytest
 
+from bonk_game.envs.utils import player as player_mod
 from bonk_game.envs.utils.maps import make_map
 from bonk_game.envs.utils.player import COYOTE_TIME, JUMP_BUFFER
 from physics_helpers import tick
@@ -185,3 +186,64 @@ def test_players_bounce_off_each_other_a_little_softer_than_elastic():
     assert b.x_v - a.x_v == pytest.approx(PLAYER_BOUNCE * 4, abs=0.01)
     assert a.x_v + b.x_v == pytest.approx(4, abs=0.01)
     assert 0.7 <= PLAYER_BOUNCE < 1
+
+
+def pogo_height(m, p, down_steps):
+    """Jump, hold down for `down_steps` on the way down, then hold up through
+    the landing: how high the bounce after it goes (px above the ground)."""
+    settle(m, p)
+    ground = p.y
+    step(m, p, up=True)
+    while p.y_v < 0:
+        step(m, p)
+    for _ in range(down_steps):
+        p.move_down(p.push)
+        step(m, p)
+    for _ in range(40):  # up through the landing, until we're going up again
+        step(m, p, up=True)
+        if p.y_v < 0 and ground - p.y > 5:
+            break
+    top = p.y
+    while p.y_v < 0:
+        step(m, p)
+        top = min(top, p.y)
+    return ground - top
+
+
+def test_a_pogo_bounces_higher_than_a_jump():
+    m, p = setup()
+    p.hover = 0
+    settle(m, p)
+    ground = p.y
+    step(m, p, up=True)
+    top = p.y
+    while p.y_v < 0:
+        step(m, p)
+        top = min(top, p.y)
+    jump = ground - top
+    m, p = setup()
+    p.hover = 0
+    soft = pogo_height(m, p, 0)
+    m, p = setup()
+    p.hover = 0
+    hard = pogo_height(m, p, 5)
+    assert soft > jump * 1.5        # jumping as you land keeps some of the fall
+    assert hard > soft             # coming down harder bounces higher
+    assert hard > jump * 2
+
+
+def test_a_standing_jump_is_unchanged(monkeypatch):
+    def height():
+        m, p = setup()
+        settle(m, p)
+        ground = p.y
+        step(m, p, up=True)
+        top = p.y
+        while p.y_v < 0:
+            step(m, p)
+            top = min(top, p.y)
+        return ground - top
+
+    with_pogo = height()
+    monkeypatch.setattr(player_mod, "POGO", 0.0)
+    assert with_pogo == pytest.approx(height())  # (only a jump on landing pogos)

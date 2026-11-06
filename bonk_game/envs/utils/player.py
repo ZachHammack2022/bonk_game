@@ -4,6 +4,11 @@ import numpy as np
 # On jump maps, forgiving jump timing (in physics steps, 30 per second):
 JUMP_BUFFER = 4  # an "up" press is remembered this long, then jumps on landing
 COYOTE_TIME = 4  # you can still jump this long after leaving the ground
+# Pogo: jump as you land and you keep this share of the speed you landed
+# with, on top of a normal jump. Up, down (to land hard), then up again
+# just before you touch down bounces you far higher; keep it going and
+# each bounce climbs, up to the speed cap.
+POGO = 0.7
 
 def new_rng(seed=None):
     """Random numbers for one env and its players (where they spawn).
@@ -158,9 +163,13 @@ class player():
             return True
         return not self.jump_used and self.air_steps <= COYOTE_TIME
 
-    def try_jump(self):
-        if self.jump_buffer and self.can_jump():
-            self.y_v = min(self.y_v, -self.jump_speed)
+    def try_jump(self, landing=None):
+        """Jump, if "up" was pressed lately and we can. landing: the speed
+        (px per step, downwards) we just hit the ground with, when this is
+        a jump on landing (World._rules): it always can, and pogos."""
+        if self.jump_buffer and (landing is not None or self.can_jump()):
+            boost = POGO * max(0.0, landing or 0.0)
+            self.y_v = min(self.y_v, -(self.jump_speed + boost))
             self.grounded = False
             self.jump_used = True
             self.jump_buffer = 0
