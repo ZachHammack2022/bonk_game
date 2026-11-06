@@ -18,6 +18,7 @@ HAVE_PLANCK = (ROOT / "node_modules" / "planck").is_dir()
 pytestmark = pytest.mark.skipif(NODE is None or not HAVE_PLANCK, reason="needs node and npm ci (planck)")
 
 R, L, U, H = [0, 0, 0, 1, 0], [0, 1, 0, 0, 0], [1, 0, 0, 0, 0], [0, 0, 0, 0, 1]
+D, HR = [0, 0, 1, 0, 0], [0, 0, 0, 1, 1]
 NONE = [0, 0, 0, 0, 0]
 
 
@@ -85,6 +86,9 @@ CASES = {
     "jump and hover": ("platform", [U] * 30, put(340, 270), None),
     "hover on the way down": ("platform", [NONE] * 3 + [U] * 12, put(340, 150), None),
     "heavy then move": ("platform", [H] + [L] * 10, put(380, 270), None),
+    "run holding heavy": ("platform", [HR] * 12, put(280, 270), None),
+    # Up, down to land hard, up again as you land: a pogo bounce
+    "pogo": ("platform", [U] + [NONE] * 4 + [D] * 8 + [U] * 10 + [NONE] * 10, put(340, 270), None),
     # (Box2D and planck.js bounce a fast landing on a moving part a little
     # differently: within a few px, which js/net.js smooths out)
     "fall onto the slider": ("slider", [NONE] * 10, put(380, 220), None, 3),

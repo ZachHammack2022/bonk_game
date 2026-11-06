@@ -153,9 +153,12 @@
     return !s.jumpUsed && s.airSteps <= COYOTE_TIME;
   }
 
-  function tryJump(s) {
-    if (s.jumpBuffer && canJump(s)) {
-      s.vy = Math.min(s.vy, -s.ph.jump_speed);
+  // landing: how fast you just hit the ground (a jump on landing: rules());
+  // it always can, and pogos (player.try_jump)
+  function tryJump(s, landing) {
+    if (s.jumpBuffer && (landing != null || canJump(s))) {
+      const boost = (s.ph.pogo || 0) * Math.max(0, landing || 0);
+      s.vy = Math.min(s.vy, -(s.ph.jump_speed + boost));
       s.grounded = false;
       s.jumpUsed = true;
       s.jumpBuffer = 0;
@@ -295,7 +298,7 @@
     }
     if (ground && ground[0].f && s.vy >= -B.lift_off) grip(sim, s, ...ground, dt);
     // "Up" pressed just before landing: jump the moment you land
-    if (s.grounded && s.jumpBuffer && !s.ph.can_fly) tryJump(s);
+    if (s.grounded && s.jumpBuffer && !s.ph.can_fly) tryJump(s, s.fall);
     const cap = s.ph.max_speed;
     s.vx = Math.max(-cap, Math.min(cap, s.vx));
     s.vy = Math.max(-cap, Math.min(cap, s.vy));
@@ -319,6 +322,7 @@
     const dt = ts * sim.B.step_seconds / n;
     for (let k = 0; k < n; k++) {
       const before = sim.parts.map((pt) => pt.vx);
+      for (const s of sim.balls) s.fall = s.vy;  // (for a pogo on landing)
       sim.world.step(dt, sim.B.velocity_iterations, sim.B.position_iterations);
       sim.parts.forEach((pt, j) => partRules(sim, pt, before[j]));
       for (const s of sim.balls) rules(sim, s, dt);

@@ -366,6 +366,9 @@ function check(cond, what) {
     await host.waitForFunction(() => document.querySelector("#status").classList.contains("hidden"), null, { timeout: 30000 });
     await guest.waitForFunction(() => document.querySelectorAll("#seats .seat").length >= 2, null, { timeout: 30000 });
     await host.waitForFunction(() => bonkDebug.app.lobby.seats.filter((x) => x.kind === "human").length === 2);
+    // (The host's tab puts the settings back just after it's in: wait for them)
+    await host.waitForFunction((want) => JSON.stringify(bonkDebug.app.lobby.settings) === want,
+      JSON.stringify(settings), { timeout: 10000 }).catch(() => {});
     const after = await host.evaluate(() => bonkDebug.app.lobby);
     check(after.room === code && after.host === (await host.evaluate(() => bonkDebug.app.welcome.you)), "after a restart the room comes back, with the same host");
     check(JSON.stringify(after.settings) === JSON.stringify(settings), "and the same settings");

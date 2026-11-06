@@ -505,7 +505,7 @@ class HowToScene(Scene):
         rules = [
             ("Knock the others out.", "Off the screen on open maps, into the red walls on Classic. Last ball standing scores."),
             ("Go heavy to hit harder.", "Hold it as long as you like: you get knocked around less, but move much more slowly."),
-            ("On open maps, up is a jump.", "It only works while you're standing on something. On Classic you can fly."),
+            ("On open maps, up is a jump.", "Jump again as you land (after pushing down) to pogo up. On Classic you can fly."),
             ("Esc pauses the game.", "M toggles sound."),
         ]
         y = 248

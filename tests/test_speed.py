@@ -24,8 +24,12 @@ def jump(time_scale):
         env.step()
     y0 = best = a.y
     top = 0
+    falling = False
     for t in range(120):
         env.step([UP, None])  # (held: a hovering jump, for a longer arc)
+        if falling and a.y_v < 0:
+            break  # landed (just the one jump: held, it pogos on landing)
+        falling = a.y_v > 0
         if a.y < best:
             best, top = a.y, t
     return y0 - best, top

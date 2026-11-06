@@ -59,6 +59,8 @@ The host can also set the **round time** (when the sudden-death walls close in),
 | Gamepad | left stick or d-pad; A jumps | B, X, a bumper or a trigger |
 | Touch | drag anywhere on the left half (pushing up jumps) | touch the right half |
 
+**Pogo** for big bounces: jump, hold down on the way down to land hard, then press jump again just as you touch down. You keep a share of the speed you landed with on top of a normal jump, so each bounce climbs higher (a plain jump goes about 40 px; a few pogos in a row take you over 200 px).
+
 Hold **heavy** for as long as you like: you're 5x heavier, so you hit harder and get knocked around less, but you move far more slowly (about a sixth of your running speed). Let go and you're light again at once. On a gamepad, Y waves, Start opens settings, and A votes for a rematch. Press 1-4 for emotes, Enter or T to chat, Esc for settings, M to mute.
 
 ### Your profile

@@ -126,6 +126,7 @@ class Ball:
                                       userData=self)
         self.mass = None
         self.hits = []  # what it hit in the last Box2D step (see _Contacts.PostSolve)
+        self.fall = 0.0  # its downward speed going into this Box2D step (a pogo's landing)
         self.at = None  # (x, y) last read back from Box2D, to spot balls moved by hand
 
     def push(self, active):
@@ -277,6 +278,7 @@ class World:
             before = [part.before_substep() for part in self.parts]
             for b in balls:
                 b.hits.clear()
+                b.fall = b.p.y_v  # (how fast it's coming down, for a pogo on landing)
             self.b2.Step(dt, VELOCITY_ITERATIONS, POSITION_ITERATIONS)
             for part, prev in zip(self.parts, before):
                 part.after_substep(prev)
@@ -314,8 +316,9 @@ class World:
             grip(p, *ground, dt)
         if p.grounded and p.jump_buffer and not p.can_fly:
             # "Up" pressed just before landing: jump the moment you land
-            # (even if the landing bounces you straight back off)
-            p.try_jump()
+            # (even if the landing bounces you straight back off), with a
+            # pogo from how hard you came down
+            p.try_jump(landing=ball.fall)
         cap = p.v_range * p.speed_mult
         p.x_v = max(-cap, min(cap, p.x_v))
         p.y_v = max(-cap, min(cap, p.y_v))
