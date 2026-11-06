@@ -64,17 +64,19 @@ def test_hovering_slows_a_fall_but_never_lifts_you():
 
 def test_sideways_pushes_are_gentle():
     m, p = setup()
+    p.x = 225  # (the platform's left end: room to run)
     assert p.push == pytest.approx(0.5)
     settle(m, p)
     x0 = p.x
     for _ in range(30):
         p.move_right(p.push)
         step(m, p)
-    # Grip on the ground holds a run to ~2-3 px a step: a second of running
-    # from a stand covers ~60 px here (at full speed; ~40 px at the game's
-    # default speed), where Classic's full-strength push would go far further
-    assert 40 < p.x - x0 < 90
-    assert 1.5 < p.x_v < 3.5
+    # Running, the ground grips lightly (world.GRIP_RUNNING): a second of
+    # running from a stand covers ~150 px here (at full speed), at ~8 px a
+    # step and still speeding up, where Classic's full-strength push would
+    # go far further
+    assert 110 < p.x - x0 < 200
+    assert 6 < p.x_v < 11
 
 
 @pytest.mark.parametrize("early", range(1, JUMP_BUFFER + 1))

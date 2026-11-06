@@ -31,7 +31,6 @@ OVER_PAUSE = 1.4      # seconds showing the final point before results
 
 BOT_KINDS = tuple(f"bot:{level}" for level in LEVEL_NAMES)
 STAND_IN = "bot:medium"  # plays for a human who drops out mid-match
-MASS_DECAY = 0.1   # player.update_mass
 
 
 def bot_level(kind):
@@ -313,16 +312,16 @@ class Match:
             "jump_speed": p.jump_speed,
             "min_m": p.min_m,
             "max_m": p.max_m,
-            "mass_decay": MASS_DECAY,
             "substeps": stepping.SUBSTEPS,  # Box2D steps per physics step
-            # How fast the world runs: scales moves, gravity, pushes and heavy
+            # How fast the world runs: scales moves, gravity and pushes
             "time_scale": self.env.time_scale,
             "tick_ms": 1000 / TICK_HZ,
             # Classic never lets you sink below its floor (player.clamp_bottom)
             "clamp_bottom": p.bottom if p.clamp_bottom else None,
             "box2d": {
                 "ppm": world.PPM, "step_seconds": world.STEP_SECONDS, "base_gravity": world.GRAVITY,
-                "friction_scale": world.FRICTION_SCALE, "grip": world.GRIP, "lift_off": world.LIFT_OFF,
+                "friction_scale": world.FRICTION_SCALE, "grip": world.GRIP,
+                "grip_running": world.GRIP_RUNNING, "lift_off": world.LIFT_OFF,
                 "player_bounce": world.PLAYER_BOUNCE,
                 "velocity_iterations": world.VELOCITY_ITERATIONS,
                 "position_iterations": world.POSITION_ITERATIONS,

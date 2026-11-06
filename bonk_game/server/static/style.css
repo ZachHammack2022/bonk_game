@@ -615,15 +615,6 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 .awards .title { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
 .awards .who { font-size: 13px; overflow-wrap: anywhere; }
 @media (max-width: 420px) { .awards { grid-template-columns: 1fr; } }
-.feel { margin: 0; padding-top: 12px; border-top: 1px solid var(--line); }
-.feel p { margin: 0 0 8px; }
-.feel-buttons { display: inline-flex; padding: 3px; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 8px; }
-.feel-buttons button { min-height: 30px; padding: 0 12px; font-size: 13px; font-weight: 500; white-space: nowrap;
-                       background: transparent; border: 0; border-radius: var(--r-s); color: var(--dim); }
-.feel-buttons button:hover { color: var(--text); background: var(--surface-2); }
-.feel-buttons button.picked { background: var(--surface-3); color: var(--text); box-shadow: none; }
-#feel-note { width: 100%; min-height: 36px; font-size: 14px; }
-@media (max-width: 420px) { .feel-buttons { display: grid; grid-template-columns: 1fr 1fr; } }
 .results-watch { display: flex; gap: 4px; justify-content: center; }
 .results-watch button { min-height: 34px; font-size: 14px; padding: 0 12px; }
 .results-more { display: flex; gap: 8px; }
