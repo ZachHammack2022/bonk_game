@@ -89,11 +89,11 @@ def test_collision_conserves_momentum_and_separates_players():
     w, a, b = free_balls()
     a.x, a.y, a.x_v, a.y_v = 300, 300, 5, 0
     b.x, b.y, b.x_v, b.y_v = 345, 300, -5, 0
-    b.m = 3
-    before = a.m * a.x_v + b.m * b.x_v
+    b.m = mb = 3  # (as heavy as it is during the step: the step's end lets go)
+    before = a.m * a.x_v + mb * b.x_v
     contacts = []
     w.step([a, b], on_contact=lambda i, j: contacts.append((i, j)))
-    after = a.m * a.x_v + b.m * b.x_v
+    after = a.m * a.x_v + mb * b.x_v
     assert contacts and contacts[0] == (0, 1)
     assert after == pytest.approx(before, rel=0.01)
     assert a.x_v < 0  # lighter player bounces back
@@ -110,14 +110,16 @@ def test_separating_players_are_not_pulled_back_together():
     assert a.x_v == pytest.approx(-5, abs=1e-3) and b.x_v == pytest.approx(5, abs=1e-3)
 
 
-def test_heavy_wears_off_and_can_be_reused():
+def test_heavy_lasts_as_long_as_its_held():
     p, _ = arena.make_players()
-    p.make_heavy()
-    assert p.m == p.max_m
-    for _ in range(100):
-        p.update_mass()
+    for _ in range(100):  # (no timer: held for as long as you like)
+        p.make_heavy()
+        assert p.m == p.max_m
+        p.end_step()
+        assert p.m == p.max_m
+    p.end_step()  # let go: light again straight away
     assert p.m == p.min_m
-    p.make_heavy()
+    p.make_heavy()  # and heavy again whenever
     assert p.m == p.max_m
 
 

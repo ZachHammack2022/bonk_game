@@ -59,7 +59,7 @@ The host can also set the **round time** (when the sudden-death walls close in),
 | Gamepad | left stick or d-pad; A jumps | B, X, a bumper or a trigger |
 | Touch | drag anywhere on the left half (pushing up jumps) | touch the right half |
 
-Going **heavy** makes you 5x heavier for a moment: you hit harder and get knocked around less, but move more slowly. On a gamepad, Y waves, Start opens settings, and A votes for a rematch. Press 1-4 for emotes, Enter or T to chat, Esc for settings, M to mute.
+Hold **heavy** for as long as you like: you're 5x heavier, so you hit harder and get knocked around less, but you move far more slowly (about a sixth of your running speed). Let go and you're light again at once. On a gamepad, Y waves, Start opens settings, and A votes for a rematch. Press 1-4 for emotes, Enter or T to chat, Esc for settings, M to mute.
 
 ### Your profile
 
@@ -175,16 +175,16 @@ The server is built to be left running (see [Security](#11-security-what-stops-p
 
 ### Playtesting with friends
 
-After every match each browser sends a short report: its ping, late states, how far its own ball was corrected (rubber-banding), frame rate, lost connections, the device, and how the match felt (Smooth, OK, Laggy, Unplayable, plus a note). JavaScript errors are sent as they happen. No IP addresses are kept.
+After every match each browser sends a short report: its ping, late states, how far its own ball was corrected (rubber-banding), frame rate, lost connections and the device. Nobody is asked anything: it's sent by itself. JavaScript errors are sent as they happen. No IP addresses are kept.
 
 ```
 python -m bonk_game.server.playtest_report https://bonk-yourname.fly.dev --token <metrics token>
 fly logs -a bonk-yourname --no-tail | python -m bonk_game.server.playtest_report -
 ```
 
-That writes them up in Markdown: a row per report, medians by device, everyone's notes, errors grouped, and a list of things to look at. The in-memory list is lost on deploy, so write it up first (or use the logs).
+That writes them up in Markdown: a row per report, medians by device, errors grouped, and a list of things to look at. The in-memory list is lost on deploy, so write it up first (or use the logs).
 
-A good session: 3–6 friends on different networks (home Wi-Fi, a phone on mobile data, someone far away) and devices, a few full matches across maps and modes, everyone rating each match, then the write-up.
+A good session: 3–6 friends on different networks (home Wi-Fi, a phone on mobile data, someone far away) and devices, a few full matches across maps and modes, then the write-up, alongside what people tell you.
 
 ---
 

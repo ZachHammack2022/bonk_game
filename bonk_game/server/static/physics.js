@@ -139,6 +139,7 @@
       x: p[0], y: p[1], vx: motion[0], vy: motion[1],
       m: ph.min_m + p[2] * (ph.max_m - ph.min_m),
       ph, grounded,
+      heavyHeld: false, runDir: 0,
       jumpBuffer: 0, airSteps: grounded ? 0 : COYOTE_TIME + 1, jumpUsed: !grounded,
       body: world.createBody({ type: "dynamic", position: planck.Vec2(u.m(p[0]), u.m(p[1])), fixedRotation: true, bullet: true }),
     };
@@ -168,6 +169,7 @@
     const F = ph.force * ts;  // sideways and down (player.push)
     if (b[3]) s.vx += F / s.m;
     if (b[1]) s.vx -= F / s.m;
+    s.runDir = (b[3] ? 1 : 0) - (b[1] ? 1 : 0);  // (player.run_dir: grip() grips less running)
     if (b[2]) s.vy += F / s.m;
     if (b[0]) {
       // Flying up is full thrust; on jump maps "up" jumps, and hovers in the
@@ -178,7 +180,8 @@
         s.jumpBuffer = JUMP_BUFFER; tryJump(s);
       }
     }
-    if (b[4] && s.m === ph.min_m) s.m = ph.max_m;
+    // Heavy while the button's held (player.make_heavy)
+    if (b[4]) { s.m = ph.max_m; s.heavyHeld = true; }
   }
 
   // player.begin_step: jumping
@@ -189,13 +192,17 @@
     if (s.jumpBuffer) tryJump(s);
   }
 
-  // player.end_step: heavy wears off (the Iron power-up keeps you heavy),
-  // and a remembered "up" press counts down
+  // player.end_step: let go of heavy unless it was held (the Iron power-up
+  // keeps you heavy), forget which way you ran, and a remembered "up" press
+  // counts down. The other balls' buttons aren't known: they stay as heavy
+  // as they were.
   function endStep(s) {
     const ph = s.ph;
     if (s.jumpBuffer) s.jumpBuffer -= 1;
     if (ph.pin_heavy) s.m = ph.max_m;
-    else if (s.m > ph.min_m) s.m = Math.max(s.m - ph.mass_decay * (ph.time_scale ?? 1), ph.min_m);
+    else if (s.controlled && !s.heavyHeld) s.m = ph.min_m;
+    s.heavyHeld = false;
+    s.runDir = 0;
   }
 
   // Ball.push
@@ -251,7 +258,9 @@
     const tx = -ny, ty = nx;
     const sv = other.getLinearVelocity();
     const vt = (s.vx - u.fromV(sv.x)) * tx + (s.vy - u.fromV(sv.y)) * ty;
-    const dv = vt * (1 - Math.exp(-spec.f * B.grip * dt));
+    // Running the way you're going, it grips less (world.GRIP_RUNNING)
+    const g = s.runDir * tx * vt > 0 ? B.grip_running : B.grip;
+    const dv = vt * (1 - Math.exp(-spec.f * g * dt));
     s.vx -= dv * tx; s.vy -= dv * ty;
     if (other.isDynamic()) {
       other.applyLinearImpulse(planck.Vec2(u.toV(dv * tx) * s.m, u.toV(dv * ty) * s.m), other.getWorldCenter(), true);
@@ -334,6 +343,7 @@
       if (!p[3] || (S.held && S.held[j])) return;
       if (j === i) {
         me = makeBall(sim, p, you, phys, r);
+        me.controlled = true;
       } else {
         const v = (others && others[j]) || [0, 0];
         makeBall(sim, p, [v[0], v[1], 0], base, r);
