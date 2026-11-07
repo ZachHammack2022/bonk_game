@@ -34,6 +34,7 @@ Open the page, pick a name and press **Play**. You'll see every game going: join
 - **Joining mid-match**: you take over a bot's seat, keeping its colour and score (straight away in Lives, Knockouts and Crown; at the next round otherwise), or watch until the next match.
 - **← Lobby** during a match steps out while a bot plays for you; **← Leave** leaves the room. If you refresh or lose connection, you get your seat back; after 30 seconds away you leave.
 - After a match everyone can vote to play again, and **Killcam** replays the final knockout in slow motion.
+- **The look**: pastel "squishy critters". Every ball has a face: its eyes follow where it's going, it frowns when heavy, winces when bumped, panics when falling fast, blinks, and squashes and stretches (only how it's drawn; the physics stays round).
 - **On a phone**: the home page offers **Add bonk to your home screen** (Android and Chrome ask with their own prompt; on iPhone it shows how: Share, then Add to Home Screen). Opened from there it's full screen, like an app, and keeps clear of the notch.
 
 ### Modes
@@ -502,6 +503,8 @@ bonk_game/
       physics.js             the browser's copy of the physics (on vendor/planck.min.js)
       clock.js, netsim.js, delta.js, profile.js   shared with the Python tests
       js/                    the client's scripts, listed at the top of js/core.js
+                             (js/critter.js: the balls' faces, moods and squash and stretch)
+      fonts/                 Fredoka, the rounded font (SIL Open Font License)
 tests/                     pytest, plus tests/web/ (Playwright)
 deploy/fly.sh, fly.toml, Dockerfile   hosting
 .github/                   CI, deploys, Dependabot

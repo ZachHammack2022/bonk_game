@@ -17,6 +17,7 @@
 //   net.js       network timing and predicting your own ball (physics.js, with planck.js)
 //   replay.js    the killcam
 //   draw.js      drawing the match
+//   critter.js   the balls: faces, moods, squash and stretch
 //   looks.js     trails, hats, knockout effects, and how balls look on your screen
 //   super.js     the attack plane (the super power-up): its cutscene, bombs and blasts
 //   people.js    the game browser (public and private games, New game); muting and reporting people
@@ -30,11 +31,14 @@
 // Colours (same as bonk_game/ui/theme.py)
 // ---------------------------------------------------------------------------
 const T = {
-  bgTop: "#182134", bgBottom: "#2e4060",
-  text: "#f1f5f9", dim: "#a0aec6", faint: "#6e7c96", accent: "#ffd166",
-  panel: "rgba(19,27,43,0.78)", danger: "#ef5350",
-  rope: "#b08e68", rail: "#7888aa", hazard: "#ef5350",
+  bgTop: "#bfe3ff", bgBottom: "#ffe6f2",
+  text: "#3b2c52", dim: "#6b5d85", faint: "#a99bbd", accent: "#ffc21a",
+  panel: "rgba(255,255,255,0.88)", danger: "#ef5350",
+  rope: "#b08e68", rail: "#b9a9d6", hazard: "#ff7a7a",
+  font: "Fredoka, ui-rounded, \"Nunito\", system-ui, sans-serif",
 };
+// The canvas draws with Fredoka too: make sure it's loaded
+try { document.fonts.load(`600 16px Fredoka`); } catch (e) { /* old browser: the fallback font */ }
 // Ball colours, in the server's order (bonk_game/ui/theme.py PLAYER_COLORS;
 // tests/test_profile.py checks they match)
 const PALETTE = [

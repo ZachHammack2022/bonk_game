@@ -152,7 +152,7 @@ function knockoutEffect(x, y, color, ko) {
       break;
     default:  // pop
       fx.burst(x, y, color, 34, 9);
-      fx.burst(x, y, T.text, 10, 5, 3);
+      fx.burst(x, y, "#ffffff", 10, 5, 3);
   }
 }
 

@@ -136,8 +136,8 @@ function drawSuperScene(st, now) {
 
   ctx.save();
   // Dim everything
-  ctx.globalAlpha = 0.6 * a;
-  ctx.fillStyle = "#05070d";
+  ctx.globalAlpha = 0.5 * a;
+  ctx.fillStyle = "#2a1d40";
   ctx.fillRect(0, 0, W, H);
   ctx.globalAlpha = a;
 
@@ -317,7 +317,7 @@ function drawHoleBall(h, x, y, R, slot, heavy, now) {
   const reach = (h.near || 60) * 1.6;
   if (h.w > 0) {
     const open = clamp(1 - h.w / warning, 0, 1);
-    drawPlayer(x, y, R, heavy, slot.color, slot.pattern, slot.hat);
+    drawPlayer(x, y, R, heavy, slot.color, slot.pattern, slot.hat, critterFace(h.i, x, y, heavy, now));
     ctx.save();
     ctx.setLineDash([8, 8]);
     ctx.lineDashOffset = -now / 30;
@@ -330,7 +330,7 @@ function drawHoleBall(h, x, y, R, slot, heavy, now) {
     return;
   }
   const fade = clamp(h.t / 0.4, 0, 1);  // (turning back into a ball at the end)
-  if (fade < 1) drawPlayer(x, y, R, heavy, slot.color, slot.pattern, slot.hat);
+  if (fade < 1) drawPlayer(x, y, R, heavy, slot.color, slot.pattern, slot.hat, critterFace(h.i, x, y, heavy, now));
   drawHoleAt(x, y, R * 1.6 * (0.4 + 0.6 * fade), now, fade);
   ctx.globalAlpha = fade;
   ctx.beginPath(); ctx.arc(x, y, R + 1, 0, Math.PI * 2);
@@ -341,13 +341,14 @@ function drawHoleBall(h, x, y, R, slot, heavy, now) {
 // --- swarm copies ---------------------------------------------------------------
 // st.copies: [[owner, x, y, heavy]]: they look just like their owner
 function drawCopies(st, R) {
-  for (const [o, x, y, heavy] of st.copies || []) {
+  const now = performance.now();
+  (st.copies || []).forEach(([o, x, y, heavy], k) => {
     const slot = app.match.slots[o];
-    if (!slot) continue;
+    if (!slot) return;
     ctx.globalAlpha = 0.88;
-    drawPlayer(x, y, R, heavy, slot.color, slot.pattern, "none");
+    drawPlayer(x, y, R, heavy, slot.color, slot.pattern, "none", critterFace(`copy${k}`, x, y, heavy, now));
     ctx.globalAlpha = 1;
-  }
+  });
 }
 
 // A bomb going off: a flash, a blast ring as big as what it knocks out,

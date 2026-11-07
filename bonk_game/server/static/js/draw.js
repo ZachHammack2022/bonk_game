@@ -61,21 +61,28 @@ function line(a, b, color, width) {
   ctx.stroke();
 }
 
+// The sky: a pastel gradient, drifting clouds and soft hills far below
+const CLOUDS = [[90, 70, 1], [330, 40, 0.8], [600, 95, 1.15], [820, 55, 0.9]];
 function drawBackground() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, T.bgTop);
   g.addColorStop(1, T.bgBottom);
   ctx.fillStyle = g;
   ctx.fillRect(-50, -50, W + 100, H + 100);
-  const r = ctx.createRadialGradient(W / 2, H * 0.3, 0, W / 2, H * 0.3, W * 0.5);
-  r.addColorStop(0, "rgba(255,255,255,0.11)");
-  r.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = r;
-  ctx.fillRect(0, 0, W, H);
+  const t = performance.now() / 1000;
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  for (const [cx, cy, s] of CLOUDS) {
+    const x = ((cx + t * 6 * s + 120) % (W + 240)) - 120;
+    for (const [dx, dy, r] of [[0, 0, 20], [22, -10, 26], [48, 0, 19], [24, 7, 21]]) {
+      ctx.beginPath(); ctx.arc(x + dx * s, cy + dy * s, r * s, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.fillStyle = "rgba(160,215,170,0.45)";
+  for (let k = -1; k < 9; k++) { ctx.beginPath(); ctx.arc(k * 120 + 40, H + 70, 110, 0, Math.PI * 2); ctx.fill(); }
 }
 
 function drawEdges() {
-  const t = 18, c = "rgba(239,83,80,0.24)", z = "rgba(239,83,80,0)";
+  const t = 22, c = "rgba(255,110,140,0.22)", z = "rgba(255,110,140,0)";
   let g = ctx.createLinearGradient(0, 0, t, 0);
   g.addColorStop(0, c); g.addColorStop(1, z);
   ctx.fillStyle = g; ctx.fillRect(0, 0, t, H);
@@ -87,34 +94,64 @@ function drawEdges() {
   ctx.fillStyle = g; ctx.fillRect(0, H - t, W, t);
 }
 
+// What a piece of the level is made of, for the critter look: grass on
+// earth (platforms), stone (posts), wood, a springy pad, or a hazard
+const MATERIALS = {
+  grass: { body: "#e0b089", deep: "#c4916a", top: "#8fd694", shine: "#bdf0bd" },
+  stone: { body: "#cfc7e3", deep: "#ada3c8", top: "#e6e0f3", shine: "#f6f3fb" },
+  wood: { body: "#f0c08a", deep: "#d09a5e", top: "#f7d3a6", shine: "#fbe6c8" },
+  pad: { body: "#b9ec6e", deep: "#8fcf45", top: "#d6f7a0", shine: "#effcd6" },
+  hazard: { body: "#ff8a8a", deep: "#e65c6c", top: "#ffb0b0", shine: "#ffd6d6" },
+};
+const POST_HEX = "#68789c";
+function materialOf(s) {
+  if (s.k === "hazard") return MATERIALS.hazard;
+  if (s.k === "pad") return MATERIALS.pad;
+  if (s.k === "wood") return MATERIALS.wood;
+  if (String(s.c).toLowerCase() === POST_HEX) return MATERIALS.stone;
+  return MATERIALS.grass;
+}
+const SHADOW = "rgba(90,60,130,0.14)";
+
 function drawRect(s) {
   const [x1, y1, x2, y2] = s.r;
   const x = Math.min(x1, x2), y = Math.min(y1, y2), w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
-  const rad = Math.min(5, h / 2, w / 2), lip = Math.min(3, h / 3);
-  ctx.fillStyle = "rgba(0,0,0,0.235)";
-  roundRect(x, y + 4, w, h, rad); ctx.fill();
-  ctx.fillStyle = darken(s.c, 0.28);
+  const m = materialOf(s);
+  const rad = Math.min(14, h / 2, w / 2);
+  ctx.fillStyle = SHADOW;
+  roundRect(x + 4, y + 7, w, h, rad); ctx.fill();
+  ctx.fillStyle = m.deep;
   roundRect(x, y, w, h, rad); ctx.fill();
-  ctx.fillStyle = s.c;
-  roundRect(x, y, w, h - lip, rad); ctx.fill();
-
+  ctx.fillStyle = m.body;
+  roundRect(x, y, w, h - Math.min(4, h / 4), rad); ctx.fill();
   ctx.save();
   roundRect(x, y, w, h, rad); ctx.clip();
+  const cap = Math.min(12, Math.max(4, h * 0.45));
   if (s.k === "hazard") {
-    ctx.fillStyle = darken(s.c, 0.18);
-    for (let sx = x - h; sx < x + w + h; sx += 24) poly([[sx, y + h], [sx + 12, y + h], [sx + 12 + h, y], [sx + h, y]], ctx.fillStyle);
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    for (let sx = x - h; sx < x + w + h; sx += 22) poly([[sx, y + h], [sx + 10, y + h], [sx + 10 + h, y], [sx + h, y]], ctx.fillStyle);
   } else if (s.k === "pad") {
     const size = Math.max(2, Math.min(h / 2, 5)), cy = y + h / 2;
-    ctx.strokeStyle = darken(s.c, 0.25);
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
     for (let cx = x + size * 2; cx < x + w - size; cx += size * 4) {
-      ctx.beginPath();
-      ctx.moveTo(cx - size, cy + size / 2); ctx.lineTo(cx, cy - size / 2); ctx.lineTo(cx + size, cy + size / 2);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - size, cy + size / 2); ctx.lineTo(cx, cy - size / 2); ctx.lineTo(cx + size, cy + size / 2); ctx.stroke();
+    }
+  } else if (m === MATERIALS.wood) {
+    ctx.strokeStyle = m.deep; ctx.lineWidth = 1.5;
+    for (let px = x + 36; px < x + w - 8; px += 44) { ctx.beginPath(); ctx.moveTo(px, y + 3); ctx.lineTo(px, y + h - 3); ctx.stroke(); }
+  } else {
+    ctx.fillStyle = m.top;
+    roundRect(x, y - 2, w, cap + 2, Math.min(rad, cap / 2 + 1)); ctx.fill();
+    if (h > cap + 6) {
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      for (let px = x + 20; px < x + w - 10; px += 38) { ctx.beginPath(); ctx.arc(px + (px % 7), y + cap + (h - cap) * 0.55, 2.5, 0, Math.PI * 2); ctx.fill(); }
     }
   }
   ctx.restore();
-  if (w > 2 * rad + 2 && h > 4) line([x + rad, y + 1], [x + w - rad - 1, y + 1], lighten(s.c, 0.4), 1.5);
+  if (w > 2 * rad + 8 && h > 4) {
+    ctx.fillStyle = m.shine;
+    roundRect(x + Math.max(rad, 8), y + 1.5, w - 2 * Math.max(rad, 8), Math.min(4, h / 4), 2); ctx.fill();
+  }
 }
 
 // A slab's face: its corners, with the bottom two moved up by the lip
@@ -128,38 +165,43 @@ function polyFace(p, lip) {
 }
 
 function drawPoly(shape) {
-  const s = { ...shape, f: polyFace(shape.p, shape.l) };
-  poly(s.p.map(([x, y]) => [x, y + 4]), "rgba(0,0,0,0.235)");
-  poly(s.p, darken(s.c, 0.28));
-  poly(s.f, s.c);
-  if (s.k === "hazard") {
-    ctx.beginPath(); s.f.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
-    ctx.strokeStyle = darken(s.c, 0.18); ctx.lineWidth = 2; ctx.stroke();
-  } else if (s.k === "pad") {
-    const mid = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t)];
-    const l = mid(s.f[0], s.f[3], 0.5), r = mid(s.f[1], s.f[2], 0.5);
-    line(mid(l, r, 0.2), mid(l, r, 0.8), darken(s.c, 0.25), 2);
+  const m = materialOf(shape);
+  const p = shape.p, f = polyFace(p, shape.l);
+  poly(p.map(([x, y]) => [x + 4, y + 7]), SHADOW);
+  poly(p, m.deep);
+  poly(f, m.body);
+  // The top edge (p0 -> p1) gets the grass or frosting, as thick as fits
+  const side = Math.hypot(p[3][0] - p[0][0], p[3][1] - p[0][1]) || 1;
+  const cap = Math.min(10, side * 0.45);
+  const n = [(p[3][0] - p[0][0]) / side * cap, (p[3][1] - p[0][1]) / side * cap];
+  if (shape.k === "hazard") {
+    ctx.beginPath(); f.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.stroke(); ctx.setLineDash([]);
+  } else if (m !== MATERIALS.wood) {
+    poly([p[0], p[1], [p[1][0] + n[0], p[1][1] + n[1]], [p[0][0] + n[0], p[0][1] + n[1]]], m.top);
   }
-  line(s.f[0], s.f[1], lighten(s.c, 0.4), 1.5);
+  line(p[0], p[1], m.shine, 2);
 }
 
 function drawBumper(s) {
-  circle(s.x, s.y + 4, s.r, "rgba(0,0,0,0.235)");
-  circle(s.x, s.y, s.r, darken(s.c, 0.28));
-  circle(s.x, s.y - 1.5, s.r - 1.5, s.c);
+  const m = materialOf(s);
+  circle(s.x + 3, s.y + 6, s.r, SHADOW);
+  circle(s.x, s.y, s.r, m.deep);
+  circle(s.x, s.y - 1.5, s.r - 2, m === MATERIALS.grass ? MATERIALS.stone.body : m.body);
   if (s.k === "pad") {
-    circle(s.x, s.y - 1.5, s.r * 0.62, darken(s.c, 0.22));
-    circle(s.x, s.y - 1.5, s.r * 0.42, s.c);
+    circle(s.x, s.y - 1.5, s.r * 0.62, m.deep);
+    circle(s.x, s.y - 1.5, s.r * 0.42, m.top);
   } else if (s.k === "hazard") {
-    circle(s.x, s.y - 1.5, s.r * 0.5, darken(s.c, 0.2));
+    circle(s.x, s.y - 1.5, s.r * 0.5, "rgba(255,255,255,0.55)");
   }
-  circle(s.x - s.r * 0.35, s.y - s.r * 0.4, Math.max(1, s.r * 0.2), lighten(s.c, 0.5));
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.beginPath(); ctx.ellipse(s.x - s.r * 0.35, s.y - s.r * 0.45, s.r * 0.26, s.r * 0.15, -0.5, 0, Math.PI * 2); ctx.fill();
 }
 
 function drawRail(s) {
-  line([s.x1, s.y], [s.x2, s.y], darken(T.rail, 0.3), 5);
-  line([s.x1, s.y], [s.x2, s.y], T.rail, 3);
-  for (const x of [s.x1, s.x2]) { circle(x, s.y, 5, T.rail); circle(x, s.y, 2, darken(T.rail, 0.4)); }
+  line([s.x1, s.y], [s.x2, s.y], darken(T.rail, 0.25), 6);
+  line([s.x1, s.y], [s.x2, s.y], T.rail, 3.5);
+  for (const x of [s.x1, s.x2]) { circle(x, s.y, 6, "#ffffff"); circle(x, s.y, 3, darken(T.rail, 0.2)); }
 }
 
 function drawShape(s) {
@@ -178,35 +220,20 @@ function drawWalls(walls, t) {
   if (!walls) return;
   const [left, right] = walls;
   const pulse = 0.5 + 0.5 * Math.sin(t * 8);
-  ctx.fillStyle = `rgba(239,83,80,${(70 + 30 * pulse) / 255})`;
+  ctx.fillStyle = `rgba(255,110,140,${(60 + 30 * pulse) / 255})`;
   if (left > -40) ctx.fillRect(-40, -40, left + 40, H + 80);
   if (right < W + 40) ctx.fillRect(right, -40, W + 40 - right, H + 80);
   for (const x of [left, right]) line([x, -40], [x, H + 40], lighten(T.danger, 0.25 + 0.25 * pulse), 3);
 }
 
-function drawPlayer(x, y, r, heavy, color, pattern, hat) {
-  drawBall(ctx, x, y, r, heavy, color, pattern, true, hat);
+function drawPlayer(x, y, r, heavy, color, pattern, hat, face = null) {
+  drawBall(ctx, x, y, r, heavy, color, pattern, true, hat, face);
 }
 
-// A ball on any canvas context `g`: rim, fill, pattern, shine (and a hat: looks.js)
-function drawBall(g, x, y, r, heavy, color, pattern = "plain", shadow = true, hat = "none") {
-  const dot = (cx, cy, rr, c) => { g.beginPath(); g.arc(cx, cy, Math.max(0.5, rr), 0, Math.PI * 2); g.fillStyle = c; g.fill(); };
-  if (shadow) dot(x, y + 4, r, "rgba(0,0,0,0.215)");
-  else r -= 1;
-  const rim = darken(color, 0.5);
-  const fill = mix(color, darken(color, 0.3), heavy);
-  const rimW = Math.max(1.5, r * 0.18) + heavy * r * 0.35;
-  dot(x, y, r, rim);
-  const ri = r - rimW;
-  dot(x, y, ri, fill);
-  if (pattern && pattern !== "plain") {
-    g.save();
-    g.beginPath(); g.arc(x, y, ri, 0, Math.PI * 2); g.clip();
-    drawPattern(g, x, y, ri, pattern, fill);
-    g.restore();
-  }
-  if (pattern !== "eyes" && pattern !== "smile") dot(x - r * 0.32, y - r * 0.34, Math.max(1, r * 0.22), lighten(fill, 0.55));
-  if (hat && hat !== "none") drawHat(g, x, y, r, hat);
+// A ball on any canvas context `g`: a critter with a face (critter.js), its
+// pattern, and a hat (looks.js)
+function drawBall(g, x, y, r, heavy, color, pattern = "plain", shadow = true, hat = "none", face = null) {
+  drawCritter(g, x, y, r, heavy, color, pattern, shadow, hat, face);
 }
 
 function drawPattern(g, x, y, r, pattern, fill) {
@@ -340,11 +367,12 @@ function drawPattern(g, x, y, r, pattern, fill) {
 }
 
 function drawYouMarker(x, y, r, color) {
-  const tx = x, ty = y - r - 9, s = 5;
+  // A little bouncing arrow in your colour, outlined so it shows on the sky
+  const tx = x, ty = y - r - 11 + Math.sin(performance.now() / 180) * 1.5, s = 6;
   const pts = [[tx, ty + s], [tx - s, ty - s * 0.6], [tx + s, ty - s * 0.6]];
-  poly(pts, "#ffffff");
   ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath();
-  ctx.strokeStyle = darken(color, 0.5); ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.lineJoin = "round"; ctx.strokeStyle = CRITTER_INK; ctx.lineWidth = 3.5; ctx.stroke();
+  ctx.fillStyle = color; ctx.fill();
 }
 
 function drawOffscreen(x, y, r, color) {
@@ -354,21 +382,33 @@ function drawOffscreen(x, y, r, color) {
 }
 
 function text(str, size, color, x, y, opts = {}) {
-  ctx.font = `${opts.weight || 800} ${size}px ui-rounded, "Nunito", "Avenir Next", "Segoe UI", system-ui, sans-serif`;
+  ctx.font = `${Math.min(700, opts.weight || 700)} ${size}px ${T.font}`;
   ctx.textAlign = opts.align || "center";
   ctx.textBaseline = "middle";
   ctx.globalAlpha = opts.alpha ?? 1;
   if (opts.shadow !== false) {
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
-    ctx.fillText(str, x, y + Math.max(1, size / 14));
+    // An outline that stands out on the sky: dark round light text, white round dark
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(3, size / 6);
+    ctx.strokeStyle = isLight(color) ? "rgba(59,44,82,0.9)" : "rgba(255,255,255,0.92)";
+    ctx.strokeText(str, x, y);
   }
   ctx.fillStyle = color;
   ctx.fillText(str, x, y);
   ctx.globalAlpha = 1;
 }
 
+// Is this colour (#rrggbb or rgb()/rgba()) light? (For text outlines)
+function isLight(color) {
+  const c = String(color);
+  const v = c.startsWith("#") ? rgb(c) : (c.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+  return (0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2]) / 255 > 0.6;
+}
+
 function pill(x, y, w, h, alpha = 0.78, border = null) {
-  ctx.fillStyle = `rgba(19,27,43,${alpha})`;
+  ctx.fillStyle = `rgba(90,60,130,${0.12 * alpha})`;
+  roundRect(x, y + 3, w, h, h / 2); ctx.fill();
+  ctx.fillStyle = `rgba(255,255,255,${Math.min(1, alpha + 0.15)})`;
   roundRect(x, y, w, h, h / 2); ctx.fill();
   if (border) { ctx.strokeStyle = border; ctx.lineWidth = 2; roundRect(x, y, w, h, h / 2); ctx.stroke(); }
 }
@@ -447,7 +487,7 @@ function drawTeamScores(st) {
     pill(x, 8, chipW, 30, 0.78, mine && mine.team === t ? T.accent : M.team_colors[t]);
     text(M.team_names[t], 12, M.team_colors[t], x + 14, 23, { align: "left", shadow: false });
     const members = M.slots.map((s, i) => [s, i]).filter(([s]) => s.team === t);
-    members.forEach(([s, i], k) => circle(x + 92 + k * 13, 23, 5, st.players[i][3] ? s.color : darken(s.color, 0.55)));
+    members.forEach(([s, i], k) => circle(x + 92 + k * 13, 23, 5, st.players[i][3] ? s.color : mix(s.color, "#e4dcef", 0.7)));
     text(String(st.team_scores[t]), 16, T.text, x + chipW - 16, 23, { shadow: false });
   });
 }
@@ -474,7 +514,7 @@ function drawHud(st, now) {
     const out = !p[3];
     const x = x0 + i * (chipW + 4);
     pill(x, 8, chipW, 30, out ? 0.45 : 0.78, slot.id === me.id ? T.accent : null);
-    circle(x + 15, 23, 8, out ? darken(slot.color, 0.55) : slot.color);
+    circle(x + 15, 23, 8, out ? mix(slot.color, "#e4dcef", 0.7) : slot.color);
     if (n <= 4) {
       const name = slot.id === me.id ? "You" : slot.name;
       ctx.save();
@@ -495,7 +535,7 @@ function drawHud(st, now) {
   else if (st.timer !== null && st.timer !== undefined) clockLabel = st.walls ? ["SUDDEN DEATH", T.danger] : clock(st.timer);
   if (clockLabel) {
     const [label, color] = clockLabel;
-    ctx.font = `800 13px system-ui`;
+    ctx.font = `700 13px ${T.font}`;
     const w = ctx.measureText(label).width + 28;
     pill(W / 2 - w / 2, H - 36, w, 24);
     text(label, 13, color, W / 2, H - 24, { shadow: false });
@@ -587,7 +627,7 @@ function frame(now) {
     ctx.globalAlpha = 0.25 + 0.1 * Math.sin(now / 200);
     circle(x, y + bob, 16, c);
     ctx.globalAlpha = 1;
-    circle(x, y + bob, 11, "rgba(19,27,43,0.85)");
+    circle(x, y + bob, 11, "#ffffff");
     ctx.beginPath(); ctx.arc(x, y + bob, 11, 0, Math.PI * 2); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
     text(POWER_ICONS[k] || "?", 12, T.text, x, y + bob + 1, { shadow: false });
   }
@@ -633,7 +673,7 @@ function frame(now) {
     const held = st.held && st.held[i];
     if (held) ctx.globalAlpha = 0.5 + 0.15 * Math.sin(now / 90);  // see-through, flickering
     else if (eff && eff[0] === "ghost") ctx.globalAlpha = 0.38 + 0.08 * Math.sin(now / 150);  // see-through
-    drawPlayer(p[0], p[1], Ri, p[2], slot.color, slot.pattern, slot.hat);
+    drawPlayer(p[0], p[1], Ri, p[2], slot.color, slot.pattern, slot.hat, critterFace(i, p[0], p[1], p[2], now));
     ctx.globalAlpha = 1;
     if (held) drawHold(p[0], p[1], Ri, held, slot);
   });
@@ -647,7 +687,7 @@ function frame(now) {
     const up = slot.hat && slot.hat !== "none" ? Ri * 0.8 : 0;
     if (st.crown === i) drawCrown(p[0], p[1] - up, Ri);
     if (slot.id === me.id) drawYouMarker(p[0], p[1] - up - (st.crown === i ? 8 : 0), Ri, slot.color);
-    else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 10, "rgba(241,245,249,0.75)", p[0], p[1] - up - Ri - 9, { weight: 700 });
+    else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 11, "#ffffff", p[0], p[1] - up - Ri - 10, { weight: 600 });
     drawOffscreen(p[0], p[1], Ri, slot.color);
   });
   // Emote bubbles over balls
@@ -659,7 +699,7 @@ function frame(now) {
     const pop = easeOutBack(age * 5);
     const x = clamp(p[0], 20, W - 20), y = Math.max(22, p[1] - R - 30);
     ctx.globalAlpha = clamp((2 - age) * 3, 0, 1);
-    ctx.fillStyle = "rgba(241,245,249,0.95)";
+    ctx.fillStyle = "rgba(255,255,255,0.97)";
     roundRect(x - 17 * pop, y - 15 * pop, 34 * pop, 30 * pop, 12 * pop); ctx.fill();
     ctx.globalAlpha = 1;
     text(EMOTES[e.id] || "?", 18 * pop, T.text, x, y + 1, { shadow: false, alpha: clamp((2 - age) * 3, 0, 1) });

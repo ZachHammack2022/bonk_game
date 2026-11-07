@@ -4,32 +4,41 @@
    (the yellow) for the single most important action on a screen, a neutral
    UI font with the rounded one kept for the logo, and three kinds of
    button (primary, secondary, ghost). Sizes come from the scales below. */
+/* Fredoka (SIL Open Font License: fonts/OFL.txt), the rounded critter font */
+@font-face {
+  font-family: "Fredoka";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/static/fonts/fredoka-latin.woff2") format("woff2");
+}
 :root {
   /* Surfaces, darkest to lightest */
-  --bg: #0d1220;
-  --surface: #141a29;
-  --surface-2: #1a2133;
-  --surface-3: #222b40;
-  --line: rgba(148, 163, 190, 0.14);
-  --line-strong: rgba(148, 163, 190, 0.28);
+  --bg: #fdf1f7;
+  --surface: #ffffff;
+  --surface-2: #f7f1fc;
+  --surface-3: #ede3f8;
+  --line: rgba(90, 60, 130, 0.12);
+  --line-strong: rgba(90, 60, 130, 0.22);
   /* Text */
-  --text: #e9eef6;
-  --dim: #9ba6ba;
-  --faint: #6c7890;
+  --text: #3b2c52;
+  --dim: #6b5d85;
+  --faint: #9a8db0;
   /* Colour */
-  --accent: #ffd166;
-  --accent-ink: #1d1704;
-  --accent-soft: rgba(255, 209, 102, 0.12);
-  --ok: #7ed6aa;
-  --danger: #f06262;
+  --accent: #ffd23f;
+  --accent-deep: #e0a800;
+  --accent-ink: #4a3300;
+  --accent-soft: rgba(255, 210, 63, 0.22);
+  --ok: #2f9e64;
+  --danger: #e5484d;
   /* Shape */
-  --r-s: 6px;
-  --r: 10px;
-  --r-l: 14px;
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px rgba(0, 0, 0, 0.28);
-  /* Type */
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-brand: ui-rounded, "SF Pro Rounded", "Nunito", "Avenir Next", var(--font);
+  --r-s: 8px;
+  --r: 14px;
+  --r-l: 22px;
+  --shadow: 0 6px 0 rgba(90, 60, 130, 0.07), 0 14px 30px rgba(90, 60, 130, 0.1);
+  /* Type: the rounded critter font for everything */
+  --font: "Fredoka", ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-brand: var(--font);
   --control-h: 40px;
 
   /* (Older names, still used by the scripts' inline styles) */
@@ -45,9 +54,7 @@ html { background: var(--bg); }
 html, body { margin: 0; min-height: 100%; }
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(1100px 520px at 50% -180px, rgba(84, 110, 170, 0.22), transparent 70%),
-    var(--bg);
+  background: linear-gradient(#cfe9ff, #fdf1f7 520px) no-repeat, var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: 15px;
@@ -60,7 +67,7 @@ body {
 .hidden { display: none !important; }
 .dim { color: var(--dim); }
 .small { font-size: 13px; }
-h1, h2, h3 { font-weight: 650; letter-spacing: -0.01em; line-height: 1.2; }
+h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }
 
 /* Icons from the sprite in index.html */
 .i {
@@ -94,7 +101,7 @@ select {
   appearance: none;
   -webkit-appearance: none;
   padding-right: 34px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ba6ba' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b5d85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 16px;
@@ -106,6 +113,7 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   outline-offset: 2px;
 }
 input:focus, select:focus { border-color: var(--dim); }
+input, select { background-color: var(--surface-2); }
 
 button {
   cursor: pointer;
@@ -125,8 +133,11 @@ button.primary {
   color: var(--accent-ink);
   min-height: 46px;
   font-size: 16px;
+  box-shadow: 0 4px 0 var(--accent-deep);
+  margin-bottom: 4px;
 }
-button.primary:hover { background: #ffdc85; border-color: #ffdc85; }
+button.primary:hover { background: #ffdb5c; border-color: #ffdb5c; }
+button.primary:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-deep); }
 button.ghost, .link-button {
   background: transparent;
   border-color: transparent;
@@ -176,8 +187,8 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
 
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(6, 9, 16, 0.72);
-  backdrop-filter: blur(3px);
+  background: rgba(70, 45, 105, 0.35);
+  backdrop-filter: blur(4px);
   display: flex;
   padding: 16px;
   overflow-y: auto;  /* a pop-up taller than the screen scrolls, rather than being cut off */
@@ -193,7 +204,9 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
 /* --- home ---------------------------------------------------------------- */
 .logo {
   font-family: var(--font-brand);
-  font-weight: 800;
+  font-weight: 700;
+  color: #ff7aa2;
+  text-shadow: 0 5px 0 #c9507a;
   font-size: clamp(64px, 14vw, 96px);
   margin: 5vh 0 0;
   letter-spacing: -0.03em;
@@ -207,9 +220,9 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
   height: 0.56em;
   margin: 0.08em 0.04em 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 32% 30%, #ffc4c4 0 18%, #ff6b6b 20% 86%, #803636 88%);
   animation: bob 1.8s ease-in-out infinite;
 }
+.logo-ball canvas { display: block; }
 @keyframes bob { 50% { transform: translateY(-5px); } }
 @media (prefers-reduced-motion: reduce) { .logo-ball { animation: none; } }
 .tagline { color: var(--dim); margin: 10px 0 28px; font-size: 16px; }
@@ -416,14 +429,14 @@ button.big { width: 100%; min-height: 56px; font-size: 19px; }
                 gap: 6px; pointer-events: none; z-index: 5; }
 .chat-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; line-height: 1.35;
              overflow-wrap: anywhere; }
-.chat-feed li { align-self: flex-start; max-width: 100%; padding: 3px 9px; border-radius: 8px; background: rgba(13, 18, 32, 0.55);
-                color: var(--text); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); animation: chat-fade 10s linear forwards; }
+.chat-feed li { align-self: flex-start; max-width: 100%; padding: 3px 9px; border-radius: 8px; background: rgba(255, 255, 255, 0.85);
+                color: var(--text); box-shadow: 0 2px 6px rgba(90, 60, 130, 0.12); animation: chat-fade 10s linear forwards; }
 .chat-overlay.open .chat-feed li { animation: none; opacity: 1; }
 .chat-overlay.open .chat-feed { max-height: 40vh; overflow-y: auto; pointer-events: auto; }
 .chat-feed .chat-system { color: var(--dim); }
 @keyframes chat-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
 .chat-game-form { pointer-events: auto; }
-.chat-game-form input { width: 100%; min-height: 36px; background: rgba(13, 18, 32, 0.88); font-size: 14px; }
+.chat-game-form input { width: 100%; min-height: 36px; background: rgba(255, 255, 255, 0.95); font-size: 14px; }
 body.touch .chat-overlay { bottom: auto; top: 60px; flex-direction: column-reverse; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; }
 .card-head #switch-team { min-height: 32px; font-size: 14px; }
@@ -550,7 +563,7 @@ body.is-host .guest-only { display: none !important; }
 .match-on button { width: auto; flex: none; min-height: var(--control-h); font-size: 15px; }
 
 /* --- game ---------------------------------------------------------------- */
-#game { padding: 0; justify-content: center; height: 100%; }
+#game { padding: 0; justify-content: center; height: 100%; background: linear-gradient(#bfe3ff, #ffe6f2); }
 #stage { width: 100vw; height: 100vh; height: 100dvh; display: flex; align-items: center; justify-content: center; }
 #canvas { display: block; touch-action: none; }
 
@@ -566,8 +579,8 @@ body.is-host .guest-only { display: none !important; }
   margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
   left: 50%; top: 82%;   /* (portrait: in the space under the game) */
   border-radius: 50%;
-  background: rgba(241, 245, 249, 0.07);
-  border: 2px solid rgba(241, 245, 249, 0.28);
+  background: rgba(90, 60, 130, 0.08);
+  border: 2px solid rgba(90, 60, 130, 0.3);
   opacity: 0.55; transition: opacity 0.15s;
   pointer-events: none;
 }
@@ -575,16 +588,16 @@ body.is-host .guest-only { display: none !important; }
 .stick .knob {
   position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
   border-radius: 50%;
-  background: rgba(241, 245, 249, 0.32);
-  border: 2px solid rgba(241, 245, 249, 0.5);
+  background: rgba(90, 60, 130, 0.22);
+  border: 2px solid rgba(90, 60, 130, 0.45);
 }
 .heavy-btn {
   position: absolute; right: 45%; top: 82%; width: 96px; height: 96px; margin: -48px -48px 0 0;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font: 700 13px var(--font); letter-spacing: 0.1em; color: rgba(241, 245, 249, 0.8);
-  background: rgba(241, 245, 249, 0.07);
-  border: 2px solid rgba(241, 245, 249, 0.28);
+  font: 700 13px var(--font); letter-spacing: 0.1em; color: rgba(59, 44, 82, 0.75);
+  background: rgba(90, 60, 130, 0.08);
+  border: 2px solid rgba(90, 60, 130, 0.3);
   opacity: 0.55; transition: opacity 0.15s, transform 0.08s;
   pointer-events: none;
 }
@@ -595,18 +608,18 @@ body.is-host .guest-only { display: none !important; }
   .heavy-btn { top: 68%; right: 22%; }
 }
 
-/* The buttons over the game: dark glass, out of the way */
+/* The buttons over the game: frosted white, out of the way */
 .game-bar { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 6px; }
 .game-gear, #emotes button {
-  min-height: 38px; background: rgba(13, 18, 32, 0.62); border-color: rgba(148, 163, 190, 0.22);
+  min-height: 38px; background: rgba(255, 255, 255, 0.8); border-color: rgba(90, 60, 130, 0.16);
   color: var(--dim); backdrop-filter: blur(4px);
 }
 .game-gear { width: 38px; padding: 0; }
-.game-gear:hover, #emotes button:hover { color: var(--text); background: rgba(26, 33, 51, 0.85); }
+.game-gear:hover, #emotes button:hover { color: var(--text); background: #ffffff; }
 .game-gear.lobby-button { width: auto; padding: 0 12px 0 8px; font-size: 14px; gap: 4px; }
 #emotes { display: flex; gap: 6px; }
 #emotes button { width: 42px; padding: 0; font-size: 19px; }
-body.touch .game-bar { bottom: auto; top: 12px; }
+body.touch .game-bar { bottom: auto; top: 12px; opacity: 0.7; }
 
 /* Results */
 .results-card { align-items: stretch; text-align: center; max-width: 420px; gap: 14px; }
@@ -633,7 +646,7 @@ body.touch .game-bar { bottom: auto; top: 12px; }
   position: fixed; left: 50%; transform: translateX(-50%);
   background: var(--surface-2); border: 1px solid var(--line-strong);
   border-radius: var(--r); padding: 9px 16px; font-size: 14px; font-weight: 500;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 24px rgba(90, 60, 130, 0.18);
   max-width: calc(100% - 32px);
   z-index: 30;  /* over pop-ups */
 }
@@ -654,7 +667,7 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 
 /* --- your ball ----------------------------------------------------------- */
 .picker { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; background: var(--surface-2); border-radius: var(--r); }
-.swatch { width: 30px; height: 30px; min-height: 30px; padding: 0; border-radius: 50%; border: 2px solid rgba(0, 0, 0, 0.35); }
+.swatch { width: 30px; height: 30px; min-height: 30px; padding: 0; border-radius: 50%; border: 2px solid rgba(59, 44, 82, 0.3); }
 .swatch.on { outline: 2px solid var(--accent); outline-offset: 2px; }
 .swatch:disabled { opacity: 0.2; }
 .swatch.any { color: var(--dim); font-size: 16px; }
@@ -703,7 +716,7 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 /* Killcam */
 /* Covers the match while it plays: click anywhere to skip */
 .killcam { position: fixed; inset: 0; padding-top: 112px; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
-.killcam b { color: var(--danger); letter-spacing: 0.4em; font-size: 20px; font-weight: 700; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); }
+.killcam b { color: var(--danger); letter-spacing: 0.4em; font-size: 20px; font-weight: 700; text-shadow: 0 2px 0 #fff; }
 
 /* --- Add to Home Screen (install.js) --------------------------------------- */
 .install {
