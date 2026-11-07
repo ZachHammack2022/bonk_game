@@ -101,6 +101,7 @@ function renderLobby() {
   $("speed").disabled = !host;
   $("power-ups").checked = !!s.power_ups;
   $("power-ups").disabled = !host;
+  drawPowerKinds(Wm.power_kinds || [], s, host);
   $("game-settings-done").textContent = host ? "Done" : "Close";
   $("game-settings-title").textContent = host ? "Game settings" : "Game settings (the host picks them)";
 
@@ -113,7 +114,7 @@ function renderLobby() {
   if (mode.round_time) rest.push(`Round time ${roundTimeLabel(s.round_time, mapInfo)}`);
   if (s.gravity !== "normal") rest.push(`${s.gravity[0].toUpperCase() + s.gravity.slice(1)} gravity`);
   if ((s.speed || "normal") !== "normal") rest.push(`${s.speed[0].toUpperCase() + s.speed.slice(1)} speed`);
-  rest.push(s.power_ups ? "Power-ups on" : "Power-ups off");
+  rest.push(powerSummary(Wm.power_kinds || [], s));
   $("sum-rest").textContent = rest.join(" · ");
   $("open-game-settings-text").textContent = host ? "Change map, mode & rules" : "See all settings";
   const teams = s.mode === "teams";
@@ -494,6 +495,47 @@ $("round-time").addEventListener("change", () => send({ type: "settings", round_
 $("gravity").addEventListener("change", () => send({ type: "settings", gravity: $("gravity").value }));
 $("speed").addEventListener("change", () => send({ type: "settings", speed: $("speed").value }));
 $("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
+
+// Which power-ups can turn up: a chip each (the room needs at least one)
+function chosenKinds(all, s) {
+  return s.power_kinds || all.map((k) => k.id);
+}
+
+function drawPowerKinds(all, s, host) {
+  const box = $("power-kinds");
+  const chosen = chosenKinds(all, s);
+  box.classList.toggle("off", !s.power_ups);
+  if (box.children.length !== all.length) {
+    box.replaceChildren(...all.map((k) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.kind = k.id;
+      b.className = k.super ? "super" : "";
+      b.title = POWER_HINTS[k.id] || k.title;
+      b.append(`${POWER_ICONS[k.id] || ""} ${k.title}`);
+      if (k.super) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "SUPER"; b.append(t); }
+      b.addEventListener("click", () => {
+        const now = chosenKinds(all, app.lobby.settings);
+        const next = now.includes(k.id) ? now.filter((x) => x !== k.id) : [...now, k.id];
+        if (!next.length) { toast("Keep at least one power-up"); return; }
+        send({ type: "settings", power_kinds: next });
+      });
+      return b;
+    }));
+  }
+  for (const b of box.children) {
+    b.setAttribute("aria-pressed", String(chosen.includes(b.dataset.kind)));
+    b.disabled = !host || !s.power_ups;
+  }
+}
+
+// "Power-ups off", "Power-ups on", or the ones picked ("Power-ups ⚡ ✈️")
+function powerSummary(all, s) {
+  if (!s.power_ups) return "Power-ups off";
+  const chosen = chosenKinds(all, s);
+  if (!all.length || chosen.length === all.length) return "Power-ups on";
+  return `Power-ups ${chosen.map((k) => POWER_ICONS[k] || k).join(" ")}`;
+}
 $("room-name-input").addEventListener("change", () => send({ type: "settings", name: $("room-name-input").value.trim() || null }));
 $("room-name-input").addEventListener("input", (e) => { e.target.size = Math.max(6, e.target.value.length + 1); });
 $("room-name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });

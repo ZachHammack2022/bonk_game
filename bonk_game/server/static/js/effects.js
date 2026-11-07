@@ -44,6 +44,11 @@ const sound = {
       case "death": return this.tone(300, 0.35, "sawtooth", 0.08, 0.3);
       case "point": return this.tone(660, 0.18, "sine", 0.12, 1.5);
       case "win": [523, 659, 784].forEach((f, i) => setTimeout(() => this.tone(f, 0.25, "triangle", 0.12), i * 120)); return;
+      case "super": [392, 523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.tone(f, 0.3, "square", 0.06), i * 90)); return;
+      case "bomb": return this.tone(1400, 0.9, "sine", 0.06, 0.25);  // a falling whistle
+      case "boom":
+        this.tone(90, 0.7, "sawtooth", 0.2, 0.4);
+        return this.tone(55, 0.9, "square", 0.12, 0.5);
     }
   },
 };
@@ -54,8 +59,8 @@ window.addEventListener("keydown", () => sound.unlock());
 // Effects: particles, rings, screen shake, banners
 // ---------------------------------------------------------------------------
 const fx = {
-  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [], feed: [], trails: {},
-  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; this.feed = []; this.trails = {}; },
+  parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [], feed: [], trails: {}, booms: [],
+  reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; this.feed = []; this.trails = {}; this.booms = []; },
   // shape: how each particle is drawn (looks.js: drawPart)
   burst(x, y, color, n = 26, speed = 7, size = 4.5, life = 0.7, gravity = true, shape = null) {
     for (let i = 0; i < n; i++) {
@@ -207,6 +212,22 @@ function onEvent(ev, state) {
       if (isMe(ev.i)) fx.tell(`${POWER_ICONS[ev.k]} ${k ? k.title : ev.k}!`, POWER_COLORS[ev.k]);
       fx.feed.push({ power: ev.k, who: ev.i, at: performance.now() });
       if (fx.feed.length > FEED_LINES) fx.feed.shift();
+      break;
+    }
+    case "super":
+      startSuperScene(ev.i);
+      sound.play("super");
+      break;
+    case "bomb": sound.play("bomb"); break;
+    case "boom": {
+      const k = app.match.powerups && app.match.powerups.plane;
+      boomEffect(ev.x, ev.y, k ? k.blast : 85);
+      sound.play("boom");
+      break;
+    }
+    case "land": {
+      const c = slots[ev.i] ? slots[ev.i].color : T.text;
+      fx.ring(ev.x, ev.y, c);
       break;
     }
     case "punch":

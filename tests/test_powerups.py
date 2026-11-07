@@ -161,3 +161,186 @@ def test_power_ups_dont_change_the_physics_sent_to_browsers():
     give(m.env, m.powerups, 0, "float")
     give(m.env, m.powerups, 0, "speed")
     assert m.physics() == before
+
+
+# --- which power-ups a room has ---------------------------------------------
+def test_only_the_rooms_kinds_turn_up():
+    env = TestEnv(None, None, map_name="classic")
+    env.reset()
+    ups = pu.PowerUps(env, random.Random(0), kinds=["float", "punch"])
+    kinds = set()
+    for _ in range(3000):
+        for e in ups.step(NOTHING):
+            if e["e"] == "spawn":
+                kinds.add(e["k"])
+        ups.pickups = []  # (make room for the next)
+    assert kinds == {"float", "punch"}
+
+
+def test_a_room_picks_its_power_ups():
+    from bonk_game.server import lobby
+    bots = lambda s: ["bot:medium"]
+    s = lobby.default_settings()
+    assert s["power_kinds"] == pu.ALL_KINDS
+    out, problem = lobby.check_settings(s, {"power_kinds": ["plane", "speed"]}, 1, bots)
+    assert problem is None and out["power_kinds"] == ["speed", "plane"]  # (in the usual order)
+    for bad, said in [(["nope"], "Unknown power-up."), ("speed", "Unknown power-up."),
+                      ([1], "Unknown power-up."), ([], "Pick at least one power-up.")]:
+        assert lobby.check_settings(s, {"power_kinds": bad}, 1, bots) == (s, said)
+    m = Match("platform", [{"kind": "bot:medium", "name": f"b{i}"} for i in range(2)], 2,
+              power_ups=True, power_kinds=["iron"])
+    assert m.powerups.kinds == ["iron"] and m.options["power_kinds"] == ["iron"]
+
+
+# --- the attack plane (the super power-up) ------------------------------------
+def plane_match(map_name="platform", n=3, mode="ffa", others="bot:medium"):
+    """A match (you in slot 0, bots in the rest, or people who stand
+    still), playing, with an attack plane just picked up by you: the
+    cutscene's on."""
+    m = Match(map_name, [{"kind": "human", "name": "me"}] + [{"kind": others, "name": f"b{i}"} for i in range(n - 1)],
+              5, mode=mode, power_ups=True, power_kinds=["plane"], seed=2)
+    while m.phase != "play":
+        m.tick()
+    p = m.env.players[0]
+    m.powerups.pickups = [[p.x, p.y, "plane"]]
+    events = m.tick()
+    assert [e["e"] for e in events if e["e"] in ("pickup", "super")] == ["pickup", "super"]
+    assert m.phase == "super" and m.snapshot()["super"] == [0, "plane"]
+    return m
+
+
+def fly(m):
+    """Through the rest of the cutscene, into the air."""
+    for _ in range(int(pu.INTRO_SECONDS * 30) + 1):
+        if m.phase == "play":
+            break
+        m.tick()
+    assert m.phase == "play" and m.powerups.plane is not None
+
+
+def test_the_match_stands_still_for_the_cutscene():
+    m = plane_match()
+    before = m.snapshot()
+    for _ in range(int(pu.INTRO_SECONDS * 30) - 2):
+        m.tick()
+        assert m.phase == "super"
+    after = m.snapshot()
+    assert after["players"] == before["players"] and after["t"] == before["t"]
+    fly(m)
+    st = m.snapshot()
+    pilot, x, y, facing, left, bombs = st["plane"]
+    assert pilot == 0 and bombs == pu.BOMBS and left == pu.PLANE_SECONDS and y == pu.PLANE_Y
+    assert st["held"][0] > 0  # out of play while flying
+
+
+def test_the_pilot_steers_and_cant_be_hit():
+    m = plane_match()
+    fly(m)
+    x0 = m.powerups.plane["x"]
+    m.set_input(0, Buttons(right=True))
+    for _ in range(10):
+        m.tick()
+    assert m.powerups.plane["x"] > x0 + 30 and m.powerups.plane["dir"] == 1
+    # Holding a key doesn't fly the ball (it's parked, out of play)
+    p = m.env.players[0]
+    assert p.held and p.alive and (p.x_v, p.y_v) == (0, 0)
+    assert m.env.nearest_opponent(1) != 0  # (bots go after someone else)
+
+
+def bomb_on(m, j):
+    """Fly over player j and drop a bomb on them. Returns every event until it goes off."""
+    events = []
+    for _ in range(200):
+        dx = m.env.players[j].x - m.powerups.plane["x"]
+        m.set_input(0, Buttons(left=dx < -3, right=dx > 3))
+        events += m.tick()
+        if abs(dx) <= 3:
+            break
+    m.set_input(0, Buttons(up=True))
+    m.set_input(0, Buttons())  # (a quick tap, let go before the next step, still counts)
+    for _ in range(120):
+        events += m.tick()
+        if any(e["e"] == "boom" for e in events):
+            break
+    events += m.tick()  # (the blast knocks them out at the start of the next step)
+    return events
+
+
+def test_a_bomb_knocks_out_the_balls_it_lands_near_and_the_pilot_gets_them():
+    m = plane_match(n=2, others="human")
+    fly(m)
+    events = bomb_on(m, 1)
+    assert sum(e["e"] == "bomb" for e in events) == 1
+    boom = next(e for e in events if e["e"] == "boom")
+    assert boom["i"] == 0 and boom["hit"] == [1]
+    death = next(e for e in events if e["e"] == "death")
+    assert death["i"] == 1 and death["by"] == 0
+    # The last one standing was up in the plane: the pilot takes the round
+    assert next(e for e in events if e["e"] == "score")["i"] == 0
+    assert m.stats[0]["kos"] == 1
+    assert m.powerups.plane is None and "plane" not in m.snapshot()
+
+
+def test_on_a_respawn_map_the_plane_flies_on_and_lands_where_it_took_off():
+    m = plane_match("classic", n=3, mode="knockouts", others="human")
+    took_off = (m.env.players[0].x, m.env.players[0].y)
+    fly(m)
+    assert m.powerups.plane_y > m.env.players[0].top  # (inside Classic's box)
+    events = bomb_on(m, 1)
+    assert any(e["e"] == "death" and e["i"] == 1 and e["by"] == 0 for e in events)
+    assert m.powerups.plane is not None and m.powerups.plane["bombs"] == pu.BOMBS - 1
+    for _ in range(pu.PLANE_SECONDS * 30):
+        events = m.tick()
+        if m.powerups.plane is None:
+            break
+    land = next(e for e in events if e["e"] == "land")
+    p = m.env.players[0]
+    assert land["i"] == 0 and (p.x, p.y) == took_off and p.held  # (a moment to see where you are)
+
+
+def test_two_bombs_then_its_over():
+    m = plane_match(n=4)
+    fly(m)
+    dropped = []
+    for _ in range(4):
+        m.set_input(0, Buttons(down=True))
+        dropped += [e for e in m.tick() if e["e"] == "bomb"]
+        m.set_input(0, Buttons())
+        for _ in range(int(pu.BOMB_GAP * 30) + 1):
+            dropped += [e for e in m.tick() if e["e"] == "bomb"]
+    assert len(dropped) == pu.BOMBS
+    # Once the last one's gone off, the plane doesn't hang about for the full time
+    ticks = 0
+    while m.powerups.plane is not None and ticks < pu.PLANE_SECONDS * 30:
+        m.tick()
+        ticks += 1
+    assert m.powerups.plane is None and ticks < (pu.PLANE_SECONDS - 3) * 30
+
+
+def test_a_bot_flies_the_plane_too():
+    m = Match("platform", [{"kind": "bot:hard", "name": f"b{i}"} for i in range(3)], 5,
+              power_ups=True, power_kinds=["plane"], seed=4)
+    while m.phase != "play":
+        m.tick()
+    p = m.env.players[0]
+    m.powerups.pickups = [[p.x, p.y, "plane"]]
+    events = []
+    for _ in range(int((pu.INTRO_SECONDS + pu.PLANE_SECONDS) * 30) + 5):
+        events += m.tick()
+    assert sum(e["e"] == "bomb" for e in events) >= 1
+    assert any(e["e"] == "boom" for e in events)
+
+
+def test_one_plane_at_a_time():
+    m = plane_match()
+    assert not any(k == "plane" for _, _, k in m.powerups.pickups)
+    assert m.powerups._pick_kind() is None  # (nothing else is on: nothing spawns)
+    m.powerups.kinds = ["plane", "speed"]
+    assert all(m.powerups._pick_kind() == "speed" for _ in range(20))
+
+
+def test_the_plane_is_cleared_between_rounds():
+    m = plane_match()
+    fly(m)
+    m.powerups.step({**NOTHING, "round_over": True})
+    assert m.powerups.plane is None and m.powerups.bombs == [] and m.powerups.pending is None

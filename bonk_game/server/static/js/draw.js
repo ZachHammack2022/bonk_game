@@ -397,7 +397,11 @@ function blendedState(now) {
     return [lerp(q[0], p[0], t), lerp(q[1], p[1], t), lerp(q[2], p[2], Math.min(t, 1)), p[3]];
   });
   const level = b.level.map((s, k) => blendShape(a.level[k], s, t));
-  return { ...b, players, level };
+  const out = { ...b, players, level };
+  // The attack plane and its bombs (super.js), blended the same way
+  if (a.plane && b.plane && a.plane[0] === b.plane[0]) out.plane = [b.plane[0], lerp(a.plane[1], b.plane[1], t), ...b.plane.slice(2)];
+  if (a.bombs && b.bombs && a.bombs.length === b.bombs.length) out.bombs = b.bombs.map((p, k) => [lerp(a.bombs[k][0], p[0], t), lerp(a.bombs[k][1], p[1], t)]);
+  return out;
 }
 
 function blendShape(a, b, t) {
@@ -558,6 +562,14 @@ function frame(now) {
   for (const [x, y, k] of st.pickups || []) {
     const bob = Math.sin(now / 300 + x) * 2.5;
     const c = POWER_COLORS[k] || T.accent;
+    if (k === "plane") {
+      // The super one: spinning rays behind it
+      ctx.save();
+      ctx.translate(x, y + bob); ctx.rotate(now / 700);
+      ctx.globalAlpha = 0.35;
+      for (let r = 0; r < 8; r++) { ctx.rotate(Math.PI / 4); poly([[0, 0], [-4, 26], [4, 26]], r % 2 ? c : T.accent); }
+      ctx.restore();
+    }
     ctx.globalAlpha = 0.25 + 0.1 * Math.sin(now / 200);
     circle(x, y + bob, 16, c);
     ctx.globalAlpha = 1;
@@ -573,6 +585,7 @@ function frame(now) {
   }
   for (const p of fx.parts) drawPart(p);
   ctx.globalAlpha = 1;
+  drawBooms(now);
 
   const R = app.match.radius;
   const showNames = st.players.length > 2;
@@ -584,9 +597,11 @@ function frame(now) {
     players[mine] = [ownAt[0], ownAt[1], st.players[mine][2], 1];
     st = { ...st, players };
   }
-  drawTrails(st.players, app.match.slots, R, now);
+  // (The pilot is up in the plane: their ball's out of play)
+  const flying = st.plane ? st.plane[0] : null;
+  drawTrails(st.players.map((p, i) => (i === flying ? [p[0], p[1], p[2], 0] : p)), app.match.slots, R, now);
   st.players.forEach((p, i) => {
-    if (!p[3]) return;
+    if (!p[3] || i === flying) return;
     const slot = app.match.slots[i];
     const eff = st.effects && st.effects[i];
     if (eff) {
@@ -603,8 +618,9 @@ function frame(now) {
     if (held) drawHold(p[0], p[1], R, held, slot);
   });
   if (mine >= 0) debug.drawn = { x: st.players[mine][0], y: st.players[mine][1], t: now };
+  drawSuper(st, now);
   st.players.forEach((p, i) => {
-    if (!p[3]) return;
+    if (!p[3] || i === flying) return;
     const slot = app.match.slots[i];
     // (Above the hat, if there is one)
     const up = slot.hat && slot.hat !== "none" ? R * 0.8 : 0;
@@ -630,5 +646,7 @@ function frame(now) {
 
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
   drawHud(st, now);
+  drawPilotHelp(st);
+  drawSuperScene(st, now);
 }
 requestAnimationFrame(frame);

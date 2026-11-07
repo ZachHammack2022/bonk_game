@@ -44,7 +44,7 @@ import traceback
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.maps import MAPS, make_map
 from bonk_game.server import (cosmetics, delta, limits, lobby, metrics, moderation, modes, playtest,
-                              profiles)
+                              powerups, profiles)
 from bonk_game.server.lobby import GRAVITY, HEX_COLOR, PATTERNS, ROUND_TIMES, SPEEDS, bot_label, map_order
 from bonk_game.server.match import BOT_KINDS, TICK_HZ, Match, is_bot
 from bonk_game.server.scene import level_shapes
@@ -317,6 +317,9 @@ class Room:
                      for n in map_order()],
             "modes": modes.describe_modes(),
             "round_times": list(ROUND_TIMES),
+            # Power-ups a room can pick from
+            "power_kinds": [{"id": k, "title": v["title"], "super": bool(v.get("super"))}
+                            for k, v in powerups.KINDS.items()],
             "gravities": list(GRAVITY),
             "speeds": list(SPEEDS),
             "team_names": list(modes.TEAM_NAMES),
@@ -704,7 +707,7 @@ class Room:
         self.match = Match(s["map"], slots, s["first_to"], agents, mode=s["mode"],
                            round_time=s["round_time"] if mode.uses_round_time else None,
                            gravity=GRAVITY[s["gravity"]], speed=SPEEDS[s.get("speed", "normal")],
-                           power_ups=s["power_ups"])
+                           power_ups=s["power_ups"], power_kinds=s.get("power_kinds"))
         self.match_tokens = humans + [None] * len(bots)
         # Who's signed in, as the match starts (a stand-in bot plays for
         # anyone who drops out; the match still counts for them)

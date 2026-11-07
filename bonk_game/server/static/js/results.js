@@ -69,8 +69,16 @@ function showResults(msg, quiet) {
 }
 
 const AWARD_ICONS = { kos: "💥", hit: "🔨", falls: "🧈", survivor: "🛡️", pickups: "🍬" };
-const POWER_ICONS = { speed: "⚡", float: "🎈", iron: "🪨", punch: "👊" };
-const POWER_COLORS = { speed: "#ffd166", float: "#9be7ff", iron: "#a0aec6", punch: "#ff8a65" };
+const POWER_ICONS = { speed: "⚡", float: "🎈", iron: "🪨", punch: "👊", plane: "✈️" };
+const POWER_COLORS = { speed: "#ffd166", float: "#9be7ff", iron: "#a0aec6", punch: "#ff8a65", plane: "#ff5ca8" };
+// What each one does (the lobby's tooltips)
+const POWER_HINTS = {
+  speed: "Push harder and go faster",
+  float: "Low gravity: jump higher, fall slower",
+  iron: "As heavy as a heavy ball, without slowing down",
+  punch: "The next ball you bump goes flying",
+  plane: "Super (rare): fly an attack plane for 10 s and drop 2 bombs",
+};
 
 function awardDetail(a) {
   switch (a.id) {

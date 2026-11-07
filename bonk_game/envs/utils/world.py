@@ -234,6 +234,16 @@ class World:
         at.angle = 0
         return any(b2.testOverlap(circle, 0, f.shape, 0, at, f.body.transform) for f in self._deadly)
 
+    def solid_at(self, x, y, r):
+        """Does a circle (px) overlap any of the level (not the balls)?"""
+        circle = b2.circleShape(radius=to_m(r))
+        at = b2.transform()
+        at.position = (to_m(x), to_m(y))
+        at.angle = 0
+        balls = {b.body for b in self.balls.values()}
+        return any(b2.testOverlap(circle, 0, f.shape, 0, at, f.body.transform)
+                   for body in self.b2.bodies if body not in balls for f in body.fixtures)
+
     def describe(self):
         """The level as the browser's copy of the physics builds it."""
         return {"static": [piece_spec(b, (0.0, 0.0)) for b in self.blocks],

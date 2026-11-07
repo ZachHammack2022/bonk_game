@@ -45,7 +45,7 @@ def is_bot(kind):
 class Match:
     def __init__(self, map_name, slots, first_to, agents=None, mode=modes.DEFAULT_MODE,
                  round_time=None, gravity=1.0, power_ups=False, seed=None,
-                 speed=stepping.TIME_SCALE):
+                 speed=stepping.TIME_SCALE, power_kinds=None):
         """slots: one dict per player, {"kind": "human" | "bot:<level>" | agent
         name, "name": display name, "color": optional colour index, "team":
         0 or 1 in the teams mode}. agents: name -> trained model, for any
@@ -53,14 +53,16 @@ class Match:
         seconds; see modes.py). round_time: seconds before sudden death
         (None: the map's own, 0: off). gravity: a multiplier. speed: how
         fast the world runs (stepping.TIME_SCALE; 1 is the original speed). power_ups:
-        turn on pickups (see powerups.py). seed: for everything random in
+        turn on pickups (see powerups.py); power_kinds: which ones (None:
+        all). seed: for everything random in
         the match (None: pick one)."""
         agents = agents or {}
         # (from numpy's random numbers, so np.random.seed() still makes a
         # repeatable match, as it did before matches had their own)
         self.seed = int(np.random.randint(2 ** 31)) if seed is None else int(seed)
         self.options = {"mode": mode, "first_to": first_to, "round_time": round_time,
-                        "gravity": gravity, "speed": speed, "power_ups": bool(power_ups)}
+                        "gravity": gravity, "speed": speed, "power_ups": bool(power_ups),
+                        "power_kinds": powerups.clean_kinds(power_kinds)}
         self.map_name = map_name
         self.slots = [dict(s) for s in slots]
         self.first_to = first_to
@@ -73,7 +75,8 @@ class Match:
         self.env = TestEnv(*kinds, map_name=map_name, colors=self.colors, gravity=gravity, seed=self.seed,
                            time_scale=speed, **options)
         self.mode.start(self.env)
-        self.powerups = powerups.PowerUps(self.env, random.Random(self.seed + 2)) if power_ups else None
+        self.powerups = (powerups.PowerUps(self.env, random.Random(self.seed + 2), power_kinds)
+                         if power_ups else None)
         self.controllers = []
         for i, kind in enumerate(kinds):
             if kind == "human":
@@ -83,6 +86,7 @@ class Match:
             else:
                 self.controllers.append(agents[kind])
         self.inputs = [NO_BUTTONS] * len(kinds)
+        self.tapped = set()  # slots that pressed a drop button since the last step (see _buttons)
         self.stand_ins = {}  # slot -> Bot playing for a disconnected human
         self.obs = self.env.reset()
         self.done = False       # someone reached first_to
@@ -104,7 +108,11 @@ class Match:
     # --- input ------------------------------------------------------------
     def set_input(self, slot, buttons):
         if self.controllers[slot] is None:
-            self.inputs[slot] = buttons if isinstance(buttons, Buttons) else Buttons(*map(bool, buttons))
+            new = buttons if isinstance(buttons, Buttons) else Buttons(*map(bool, buttons))
+            old = self.inputs[slot]
+            if (new.up and not old.up) or (new.down and not old.down) or (new.heavy and not old.heavy):
+                self.tapped.add(slot)
+            self.inputs[slot] = new
 
     def stand_in(self, slot):
         """A Medium bot plays for a human who dropped out."""
@@ -169,6 +177,13 @@ class Match:
                 self.set_phase("countdown", 2)
             return events
 
+        if self.phase == "super":
+            # Everything stands still for the super power-up's cutscene
+            if self.phase_t >= powerups.INTRO_SECONDS:
+                self.powerups.launch()
+                self.set_phase("play")
+            return events
+
         if self.phase == "over":
             if self.phase_t >= OVER_PAUSE:
                 self.finished = True
@@ -188,7 +203,7 @@ class Match:
         self.obs, _, info = env.step(actions)
         events = self.mode.step(info)
         if self.powerups:
-            events += self.powerups.step(info)
+            events += self.powerups.step(info, self._buttons())
         self.done = self.mode.done
 
         for i in living:
@@ -208,7 +223,7 @@ class Match:
         if info["round_over"]:
             events.append({"e": "round"})
         if not info["deaths"]:
-            hits = _hits(env.players, living, pre)
+            hits = _hits(env.players, [i for i in living if not env.players[i].held], pre)
             for h in hits:
                 st = self.stats[h["by"]]
                 st["best_hit"] = max(st["best_hit"], h["s"])
@@ -220,7 +235,22 @@ class Match:
             events.append({"e": "over"})
         elif info["round_over"]:
             self.set_phase("scored")
+        elif self.powerups and self.powerups.pending is not None:
+            self.set_phase("super")
         return events
+
+    def _buttons(self):
+        """What each person is pressing (None for bots and stand-ins). A
+        quick tap that was let go before this step still counts as a press
+        this step (dropping a bomb from the plane), once."""
+        out = []
+        for i, c in enumerate(self.controllers):
+            b = self.inputs[i] if c is None and i not in self.stand_ins else None
+            if b is not None and i in self.tapped:
+                b = b._replace(down=True)
+            out.append(b)
+        self.tapped.clear()
+        return out
 
     # --- what the browsers see ----------------------------------------------
     def countdown_number(self):
