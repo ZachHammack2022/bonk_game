@@ -35,10 +35,14 @@ def run_predict(cases):
     return json.loads(res.stdout)
 
 
-def server_run(map_name, inputs, place, others=None):
+def server_run(map_name, inputs, place, others=None, power=None):
     """Run the real physics with player 0 pressing `inputs`. others(env)
-    places the other ball (default: out of the way)."""
-    m = Match(map_name, [{"kind": "human", "name": "a"}, {"kind": "human", "name": "b"}], 100)
+    places the other ball (default: out of the way). power(match): sets up
+    a power-up (the match has them on, with none turning up by themselves)."""
+    m = Match(map_name, [{"kind": "human", "name": "a"}, {"kind": "human", "name": "b"}], 100,
+              power_ups=power is not None)
+    if power is not None:
+        m.powerups.next_spawn = 10 ** 9
     m.set_phase("play")
     m.env.timer.limit = 0  # no sudden death
     me, other = m.env.players
@@ -48,6 +52,9 @@ def server_run(map_name, inputs, place, others=None):
         m.tick()
     if others:
         others(m.env)
+    if power:
+        power(m)
+        m.powerups.apply()
     state, you = m.snapshot(), player_motion(me)
     others_v = [None] + [[p.x_v, p.y_v] for p in m.env.players[1:]]
     steps = []
@@ -55,7 +62,13 @@ def server_run(map_name, inputs, place, others=None):
         m.set_input(0, b)
         m.tick()
         steps.append((me.x, me.y))
-    return {"state": state, "you": you, "phys": m.physics(), "inputs": inputs,
+    phys = m.physics()
+    eff = m.powerups.effects[0] if m.powerups else None
+    if eff:
+        # (as js/net.js effectPhysics does)
+        k = m.describe()["powerups"][eff[0]]
+        phys = {**phys, "max_speed": phys["max_speed"] * k["max_speed"], "base": phys}
+    return {"state": state, "you": you, "phys": phys, "inputs": inputs,
             "r": me.r, "steps": steps, "others": others_v}
 
 
@@ -99,6 +112,42 @@ CASES = {
     "ride the sliding platform": ("slider", [NONE] * 15, put(340, 279), slider_moving(6)),
     "roll down a ramp": ("ramps", [NONE] * 15, put(200, 250), None),
 }
+
+
+def effect(kind, who=0, seconds=8):
+    def power(m):
+        m.powerups.effects[who] = [kind, seconds * 30]
+    return power
+
+
+def black_hole(m):
+    m.powerups.pending = (1, "hole")
+    m.powerups.launch()
+
+
+POWER_CASES = {
+    # A giant: twice the size, as much heavier as it is bigger
+    "a giant runs": ("platform", [R] * 12, put(300, 260), None, effect("giant")),
+    "a giant bumps a ball": ("platform", [R] * 12, put(260, 260), ball_coming(370, 279, 0), effect("giant")),
+    "a ball bumps a giant": ("platform", [NONE] * 12, put(340, 260), ball_coming(240, 279, 14), effect("giant", 1)),
+    # A ghost goes through
+    "a ghost runs through a ball": ("platform", [R] * 12, put(260, 279), ball_coming(330, 279, 0), effect("ghost")),
+    "a ball goes through a ghost": ("platform", [NONE] * 12, put(340, 279), ball_coming(260, 279, 14),
+                                    effect("ghost", 1)),
+    # Pulled by someone else's black hole
+    "pulled by a black hole": ("platform", [NONE] * 15, put(300, 279), None, black_hole),
+    "jump into a black hole": ("platform", [U] + [NONE] * 6, put(420, 279), None, black_hole),
+}
+
+
+@pytest.mark.parametrize("name", list(POWER_CASES))
+def test_prediction_with_power_ups(name):
+    map_name, inputs, place, others, power = POWER_CASES[name]
+    case = server_run(map_name, inputs, place, others, power)
+    predicted = run_predict([case])[0]
+    for k, ((sx, sy), (px, py)) in enumerate(zip(case["steps"], predicted)):
+        assert abs(px - sx) < 1.5 and abs(py - sy) < 1.5, (
+            f"step {k + 1}: server ({sx:.1f}, {sy:.1f}) vs predicted ({px:.1f}, {py:.1f})")
 
 
 @pytest.mark.parametrize("name", list(CASES))

@@ -49,6 +49,10 @@ GRIP_RUNNING = 30.0
 # Moving up faster than this (px per step), a ball has left the ground: grip
 # stops at once, so it doesn't take anything off a jump
 LIFT_OFF = 2.0
+# Collision categories: balls are BALL_BITS; a ghost ball (a power-up)
+# doesn't collide with that category, so it passes through the others
+BALL_BITS = 0x0002
+EVERYTHING = 0xFFFF
 # Share of their closing speed two balls bounce apart with (1 would lose
 # nothing; bonk.io's balls keep roughly 70-100%)
 PLAYER_BOUNCE = 0.85
@@ -122,12 +126,28 @@ class Ball:
         # A bullet: Box2D stops it passing into moving parts and other balls
         # between substeps (continuous collision), as it does for the level
         self.body = world.CreateDynamicBody(position=(to_m(p.x), to_m(p.y)), fixedRotation=True, bullet=True)
-        self.body.CreateCircleFixture(radius=to_m(p.r), density=1.0, friction=0.0, restitution=0.0,
-                                      userData=self)
+        self.shape = None  # (radius, ghost, group) the fixture was made with
+        self._fixture()
         self.mass = None
         self.hits = []  # what it hit in the last Box2D step (see _Contacts.PostSolve)
         self.fall = 0.0  # its downward speed going into this Box2D step (a pogo's landing)
         self.at = None  # (x, y) last read back from Box2D, to spot balls moved by hand
+
+    def _fixture(self):
+        """(Re)make the ball's circle for its size, whether it's a ghost,
+        and its group (power-ups change all three)."""
+        p = self.p
+        shape = (p.r, p.ghost, p.group)
+        if shape == self.shape:
+            return
+        for f in list(self.body.fixtures):
+            self.body.DestroyFixture(f)
+        self.body.CreateCircleFixture(
+            radius=to_m(p.r), density=1.0, friction=0.0, restitution=0.0, userData=self,
+            categoryBits=BALL_BITS, maskBits=EVERYTHING & ~BALL_BITS if p.ghost else EVERYTHING,
+            groupIndex=p.group)
+        self.shape = shape
+        self.mass = None
 
     def push(self, active):
         """Write the player's state into the body."""
@@ -136,13 +156,17 @@ class Ball:
             body.active = active
         if not active:
             return
+        self._fixture()
         if self.at != (p.x, p.y):
             body.transform = ((to_m(p.x), to_m(p.y)), 0)
-        if self.mass != p.m:
+        # (A giant is heavier in collisions by its area: pushes still move it
+        # as they move anyone, so it isn't slow)
+        mass = p.m * (p.r / p.base_r) ** 2
+        if self.mass != mass:
             md = body.massData
-            md.mass, md.I, md.center = p.m, 0.0, (0, 0)
+            md.mass, md.I, md.center = mass, 0.0, (0, 0)
             body.massData = md
-            self.mass = p.m
+            self.mass = mass
         body.gravityScale = p.gravity * p.gravity_mult / GRAVITY
         body.linearVelocity = (speed_to_b2(p.x_v), speed_to_b2(p.y_v))
 
@@ -223,6 +247,12 @@ class World:
         if b is None or b.p is not p:
             b = self.balls[id(p)] = Ball(self.b2, p)
         return b
+
+    def drop(self, p):
+        """Take a ball out of the world for good (a swarm copy that's gone)."""
+        b = self.balls.pop(id(p), None)
+        if b is not None and b.p is p:
+            self.b2.DestroyBody(b.body)
 
     def deadly(self, p):
         """Is player p (where it is now) touching a deadly piece?"""

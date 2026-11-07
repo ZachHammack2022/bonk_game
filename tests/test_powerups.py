@@ -344,3 +344,190 @@ def test_the_plane_is_cleared_between_rounds():
     fly(m)
     m.powerups.step({**NOTHING, "round_over": True})
     assert m.powerups.plane is None and m.powerups.bombs == [] and m.powerups.pending is None
+
+
+# --- swap and ghost --------------------------------------------------------------
+def test_swap_trades_places_with_an_opponent():
+    env, ups = setup(2, "platform")
+    a, b = env.players
+    a.x, a.y, a.x_v, b.x, b.y, b.x_v = 250.0, 270.0, 3.0, 430.0, 270.0, -2.0
+    ups.pickups = [[a.x, a.y, "swap"]]
+    events = ups.step(NOTHING)
+    swap = next(e for e in events if e["e"] == "swap")
+    assert swap["i"] == 0 and swap["j"] == 1
+    assert (a.x, a.x_v, b.x, b.x_v) == (430.0, -2.0, 250.0, 3.0)
+    assert ups.effects == [None, None] and env.last_hit[1][0] == 0  # (instant; their fall is on you)
+
+
+def test_a_ghost_goes_through_other_balls_but_not_the_level():
+    env, ups = setup(2, "platform")
+    a, b = env.players
+    for p, x in ((a, 300.0), (b, 360.0)):
+        p.x, p.y, p.x_v, p.y_v = x, 279.0, 0.0, 0.0
+    ups.effects[0] = ["ghost", 150]
+    for _ in range(40):
+        ups.apply()
+        env.step([Buttons(right=True), None])
+    assert a.x > b.x + 10  # straight through
+    assert abs(b.x - 360) < 1 and abs(b.x_v) < 0.1  # (b wasn't touched)
+    assert a.alive and abs(a.y - 279) < 2  # still standing on the platform
+    ups.effects[0] = None
+    ups.apply()
+    assert not a.ghost
+
+
+# --- giant -----------------------------------------------------------------------
+def bump_speed(giant):
+    """How fast a ball running into a resting one sends it."""
+    env, ups = setup(2, "platform")
+    a, b = env.players
+    a.x, a.y = 250.0, 279.0 - (a.base_r * (pu.GIANT_SIZE - 1) if giant else 0)
+    b.x, b.y = 380.0, 279.0
+    if giant:
+        ups.effects[0] = ["giant", 300]
+    fastest = 0
+    for _ in range(60):
+        ups.apply()
+        env.step([Buttons(right=True), None])
+        fastest = max(fastest, b.x_v)
+    return fastest
+
+
+def test_a_giant_is_bigger_and_hits_harder():
+    env, ups = setup(2, "platform")
+    ups.effects[0] = ["giant", 3]
+    ups.apply()
+    p = env.players[0]
+    assert p.r == p.base_r * pu.GIANT_SIZE and ups.state()["sizes"][0] == p.r
+    env.step()
+    assert env.map.world.ball(p).body.fixtures[0].shape.radius * 40 == pytest.approx(p.r)
+    assert bump_speed(True) > bump_speed(False) * 1.3
+    for _ in range(4):
+        ups.step(NOTHING)
+        ups.apply()
+    assert p.r == p.base_r and "sizes" not in ups.state()
+
+
+# --- black hole --------------------------------------------------------------------
+def test_a_black_hole_pulls_everyone_else_in_and_knocks_them_out():
+    m = plane_match(n=3, others="human")
+    m.powerups.pending = (0, "hole")  # (a black hole instead)
+    fly_hole = m.powerups
+    for _ in range(int(pu.INTRO_SECONDS * 30) + 1):
+        if m.phase == "play":
+            break
+        m.tick()
+    assert fly_hole.hole is not None and m.snapshot()["hole"]["safe"] == [0]
+    h = fly_hole.hole
+    owner, victim = m.env.players[0], m.env.players[1]
+    victim.x, victim.y = h["x"] + 10, h["y"] + 60
+    owner.x = h["x"] - 120
+    events = []
+    for _ in range(pu.HOLE_SECONDS * 30):
+        events += m.tick()
+        if m.phase != "play" or fly_hole.hole is None:
+            break
+    deaths = [e for e in events if e["e"] == "death"]
+    assert deaths and all(d["i"] != 0 and d["by"] == 0 for d in deaths)
+    assert any(d["i"] == 1 for d in deaths)
+
+
+def test_the_black_hole_closes_after_a_while():
+    env, ups = setup(3, "platform")
+    ups.pending = (0, "hole")
+    ups.launch()
+    for p in env.players[1:]:
+        p.held = 10 ** 6  # (out of reach, so nobody gets eaten)
+    events = []
+    for _ in range(pu.HOLE_SECONDS * 30):
+        ups.apply()
+        env.step()
+        events += ups.step(NOTHING)
+    assert ups.hole is None and [e["e"] for e in events].count("hole_end") == 1
+
+
+# --- swarm -----------------------------------------------------------------------------
+def swarm():
+    env, ups = setup(3, "platform")
+    me = env.players[0]
+    me.x, me.y = 340.0, 279.0
+    for p, x in zip(env.players[1:], (210.0, 470.0)):
+        p.x, p.y, p.held = x, 279.0, 10 ** 6  # (out of the way)
+    ups.pending = (0, "swarm")
+    ups.launch()
+    return env, ups, me
+
+
+def test_a_swarm_copies_your_moves():
+    env, ups, me = swarm()
+    assert len(env.copies) == pu.SWARM_COPIES and ups.effects[0][0] == "swarm"
+    assert len(ups.state()["copies"]) == pu.SWARM_COPIES
+    start = [c.x for _, c in env.copies] + [me.x]
+    for _ in range(20):
+        ups.apply()
+        env.step([Buttons(right=True), None, None])
+        ups.step(NOTHING)
+    moved = [c.x for _, c in env.copies] + [me.x]
+    assert all(b - a > 10 for a, b in zip(start, moved))
+    # They never bump into you or each other
+    assert me.group < 0 and all(c.group == me.group for _, c in env.copies)
+
+
+def test_copies_can_fall_off_without_costing_you_anything():
+    env, ups, me = swarm()
+    _, gone = env.copies[0]
+    gone.x, gone.y = 600.0, 470.0  # (about to fall out)
+    events = []
+    for _ in range(20):
+        ups.apply()
+        env.step()
+        events += ups.step(NOTHING)
+    assert any(e["e"] == "pop" and not e["end"] for e in events)
+    assert len(env.copies) == pu.SWARM_COPIES - 1 and me.alive
+
+
+def test_a_copy_bumping_someone_counts_as_you():
+    env, ups, me = swarm()
+    other = env.players[1]
+    other.held = 0
+    _, c = max(env.copies, key=lambda oc: oc[1].x)  # (the one on the right, away from you)
+    other.x, other.y, other.x_v = c.x + 60, c.y, 0.0
+    c.x_v = 12.0
+    for _ in range(8):
+        ups.apply()
+        env.step()
+        ups.step(NOTHING)
+    assert env.last_hit[1] is not None and env.last_hit[1][0] == 0
+    assert env.last_hit[0] is None  # (nobody touched the real you)
+
+
+def test_the_swarm_goes_when_it_runs_out_or_you_are_knocked_out():
+    env, ups, me = swarm()
+    ups.step({**NOTHING, "kos": [(0, None, False)]})
+    assert env.copies == []
+    env, ups, me = swarm()
+    ups.effects[0][1] = 1
+    events = ups.step(NOTHING)
+    assert env.copies == [] and sum(e["e"] == "pop" and e["end"] for e in events) == pu.SWARM_COPIES
+
+
+def test_one_super_at_a_time_whatever_it_is():
+    env, ups, me = swarm()
+    ups.kinds = list(pu.SUPERS)
+    assert ups.busy() and ups._pick_kind() is None
+    ups.pickups = [[me.x, me.y, "giant"]]
+    assert not [e for e in ups.step(NOTHING) if e["e"] == "pickup"]  # (left where it is)
+
+
+@pytest.mark.parametrize("kind", ["hole", "giant", "swarm", "ghost", "swap"])
+def test_a_match_with_just_one_kind(kind):
+    m = Match("platform", [{"kind": "bot:hard", "name": f"b{i}"} for i in range(4)], 3,
+              power_ups=True, power_kinds=[kind], seed=5)
+    seen = set()
+    for _ in range(30 * 240):
+        for e in m.tick():
+            seen.add(e.get("k") if e["e"] == "pickup" else e["e"])
+        json.dumps(m.snapshot())
+        if m.finished:
+            break
+    assert kind in seen

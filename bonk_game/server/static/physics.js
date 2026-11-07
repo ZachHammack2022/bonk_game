@@ -23,6 +23,7 @@
 
   const planck = root.planck || (typeof require === "function" ? require("planck") : null);
   const JUMP_BUFFER = 4;
+  const BALL_BITS = 0x0002;  // (world.BALL_BITS)
   const COYOTE_TIME = 4;
 
   // --- the world ------------------------------------------------------------
@@ -132,18 +133,23 @@
   // A ball from the server's state: p is [x, y, heavy 0-1, alive], and
   // motion [vx, vy, standing on something] (yours from the server; others'
   // worked out from the last two states)
-  function makeBall(sim, p, motion, ph, r) {
+  // r: its size now; base: its usual size (a giant is heavier by its area);
+  // ghost: it passes through other balls (world.Ball._fixture)
+  function makeBall(sim, p, motion, ph, r, base = r, ghost = false) {
     const { u, world } = sim;
     const grounded = !!motion[2];
     const b = {
-      x: p[0], y: p[1], vx: motion[0], vy: motion[1],
-      m: ph.min_m + p[2] * (ph.max_m - ph.min_m),
+      x: p[0], y: p[1], vx: motion[0], vy: motion[1], r,
+      m: ph.min_m + p[2] * (ph.max_m - ph.min_m), massMult: (r / base) ** 2,
       ph, grounded,
       heavyHeld: false, runDir: 0,
       jumpBuffer: 0, airSteps: grounded ? 0 : COYOTE_TIME + 1, jumpUsed: !grounded,
       body: world.createBody({ type: "dynamic", position: planck.Vec2(u.m(p[0]), u.m(p[1])), fixedRotation: true, bullet: true }),
     };
-    b.body.createFixture({ shape: new planck.Circle(u.m(r)), density: 1, friction: 0, restitution: 0, userData: { ball: b } });
+    b.body.createFixture({
+      shape: new planck.Circle(u.m(r)), density: 1, friction: 0, restitution: 0, userData: { ball: b },
+      filterCategoryBits: BALL_BITS, filterMaskBits: ghost ? 0xFFFF & ~BALL_BITS : 0xFFFF,
+    });
     sim.balls.push(b);
     return b;
   }
@@ -212,7 +218,8 @@
   function push(sim, s) {
     const { u, B } = sim, body = s.body;
     body.setTransform(planck.Vec2(u.m(s.x), u.m(s.y)), 0);
-    if (s.mass !== s.m) { setMass(body, s.m); s.mass = s.m; }
+    const mass = s.m * (s.massMult ?? 1);
+    if (s.mass !== mass) { setMass(body, mass); s.mass = mass; }
     body.setGravityScale(s.ph.gravity / B.base_gravity);
     body.setLinearVelocity(planck.Vec2(u.toV(s.vx), u.toV(s.vy)));
   }
@@ -309,6 +316,7 @@
 
   // One physics step (World.step): your buttons `b` go to `me`
   function step(sim, me, b) {
+    if (sim.hole) pullTowards(sim, sim.hole);
     applyInput(me, b);
     const ts = sim.phys.time_scale ?? 1;
     const n = sim.phys.substeps || 1;
@@ -330,30 +338,52 @@
     for (const s of sim.balls) endStep(s);
   }
 
+  // A black hole's pull (powerups.PowerUps._pull), on everyone it doesn't spare
+  function pullTowards(sim, h) {
+    const ts = sim.phys.time_scale ?? 1;
+    for (const s of sim.balls) {
+      if (h.safe.includes(s.slot)) continue;
+      const dx = h.x - s.x, dy = h.y - s.y, d = Math.hypot(dx, dy) || 1;
+      const dv = h.pull * Math.min(1, (h.near / d) ** 2) * ts;
+      s.vx += dx / d * dv; s.vy += dy / d * dv;
+    }
+  }
+
   // --- predicting -------------------------------------------------------------
   // Where your ball will be `n` steps (can be fractional) after the server
   // state S, if the server applies buttons inputs[0], inputs[1], ...
   //   i: your slot; you: [vx, vy, standing] (your speeds, from the server);
   //   phys: the match's physics, with your power-up (js/net.js; the
   //         match's own, for everyone else, is phys.base if different);
-  //   others: [vx, vy] per slot (null: not known), for the other balls.
+  //   others: [vx, vy] per slot (null: not known), for the other balls;
+  //   r: a ball's usual size.
+  // From S too: each ball's size (S.sizes: giants), who's a ghost
+  // (S.effects), other people's swarm copies, and a black hole's pull.
   // Returns [x, y].
   function predict(S, i, you, phys, inputs, n, r, others) {
     const base = phys.base || phys;
     const sim = build(base);
     (S.parts || []).forEach((st, j) => { if (sim.parts[j]) placePart(sim, sim.parts[j], st); });
+    sim.hole = S.hole || null;
+    const size = (j) => (S.sizes ? S.sizes[j] : r);
+    const ghost = (j) => !!(S.effects && S.effects[j] && S.effects[j][0] === "ghost");
     let me = null;
     S.players.forEach((p, j) => {
       if (!p[3] || (S.held && S.held[j])) return;
+      let b;
       if (j === i) {
-        me = makeBall(sim, p, you, phys, r);
+        b = me = makeBall(sim, p, you, phys, size(j), r, ghost(j));
         me.controlled = true;
       } else {
         const v = (others && others[j]) || [0, 0];
-        makeBall(sim, p, [v[0], v[1], 0], base, r);
+        b = makeBall(sim, p, [v[0], v[1], 0], base, size(j), r, ghost(j));
       }
+      b.slot = j;
     });
-    for (const s of sim.balls) s.r = r;
+    // (Your own copies never touch you; other people's do)
+    for (const [o, x, y, heavy] of S.copies || []) {
+      if (o !== i) makeBall(sim, [x, y, heavy, 1], [0, 0, 0], base, r).slot = o;
+    }
     if (!me) return [S.players[i][0], S.players[i][1]];
     const whole = Math.floor(n);
     for (let k = 0; k < whole; k++) step(sim, me, inputs[Math.min(k, inputs.length - 1)] || [0, 0, 0, 0, 0]);

@@ -400,6 +400,13 @@ function blendedState(now) {
   const out = { ...b, players, level };
   // The attack plane and its bombs (super.js), blended the same way
   if (a.plane && b.plane && a.plane[0] === b.plane[0]) out.plane = [b.plane[0], lerp(a.plane[1], b.plane[1], t), ...b.plane.slice(2)];
+  if (a.copies && b.copies && a.copies.length === b.copies.length && a.copies.every((c, k) => c[0] === b.copies[k][0])) {
+    out.copies = b.copies.map((c, k) => {
+      const q = a.copies[k];
+      if (Math.abs(c[1] - q[1]) > MAX_JUMP || Math.abs(c[2] - q[2]) > MAX_JUMP) return c;
+      return [c[0], lerp(q[1], c[1], t), lerp(q[2], c[2], t), c[3]];
+    });
+  }
   if (a.bombs && b.bombs && a.bombs.length === b.bombs.length) out.bombs = b.bombs.map((p, k) => [lerp(a.bombs[k][0], p[0], t), lerp(a.bombs[k][1], p[1], t)]);
   return out;
 }
@@ -600,22 +607,28 @@ function frame(now) {
   // (The pilot is up in the plane: their ball's out of play)
   const flying = st.plane ? st.plane[0] : null;
   drawTrails(st.players.map((p, i) => (i === flying ? [p[0], p[1], p[2], 0] : p)), app.match.slots, R, now);
+  // A giant's bigger (st.sizes, while anyone's a different size)
+  const size = (i) => (st.sizes ? st.sizes[i] : R);
+  drawHole(st, now);
+  drawCopies(st, R);
   st.players.forEach((p, i) => {
     if (!p[3] || i === flying) return;
     const slot = app.match.slots[i];
+    const Ri = size(i);
     const eff = st.effects && st.effects[i];
     if (eff) {
       // A glow in the power-up's colour, fading as it runs out
       const c = POWER_COLORS[eff[0]] || T.accent;
       ctx.globalAlpha = clamp(eff[1] / 1.5, 0.25, 1) * (0.45 + 0.15 * Math.sin(now / 120));
-      circle(p[0], p[1], R + 6, c);
+      circle(p[0], p[1], Ri + 6, c);
       ctx.globalAlpha = 1;
     }
     const held = st.held && st.held[i];
     if (held) ctx.globalAlpha = 0.5 + 0.15 * Math.sin(now / 90);  // see-through, flickering
-    drawPlayer(p[0], p[1], R, p[2], slot.color, slot.pattern, slot.hat);
+    else if (eff && eff[0] === "ghost") ctx.globalAlpha = 0.38 + 0.08 * Math.sin(now / 150);  // see-through
+    drawPlayer(p[0], p[1], Ri, p[2], slot.color, slot.pattern, slot.hat);
     ctx.globalAlpha = 1;
-    if (held) drawHold(p[0], p[1], R, held, slot);
+    if (held) drawHold(p[0], p[1], Ri, held, slot);
   });
   if (mine >= 0) debug.drawn = { x: st.players[mine][0], y: st.players[mine][1], t: now };
   drawSuper(st, now);
@@ -623,11 +636,12 @@ function frame(now) {
     if (!p[3] || i === flying) return;
     const slot = app.match.slots[i];
     // (Above the hat, if there is one)
-    const up = slot.hat && slot.hat !== "none" ? R * 0.8 : 0;
-    if (st.crown === i) drawCrown(p[0], p[1] - up, R);
-    if (slot.id === me.id) drawYouMarker(p[0], p[1] - up - (st.crown === i ? 8 : 0), R, slot.color);
-    else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 10, "rgba(241,245,249,0.75)", p[0], p[1] - up - R - 9, { weight: 700 });
-    drawOffscreen(p[0], p[1], R, slot.color);
+    const Ri = size(i);
+    const up = slot.hat && slot.hat !== "none" ? Ri * 0.8 : 0;
+    if (st.crown === i) drawCrown(p[0], p[1] - up, Ri);
+    if (slot.id === me.id) drawYouMarker(p[0], p[1] - up - (st.crown === i ? 8 : 0), Ri, slot.color);
+    else if (showNames && slot.kind === "human") text(slot.name.slice(0, 10), 10, "rgba(241,245,249,0.75)", p[0], p[1] - up - Ri - 9, { weight: 700 });
+    drawOffscreen(p[0], p[1], Ri, slot.color);
   });
   // Emote bubbles over balls
   fx.emotes = fx.emotes.filter((e) => now - e.at < 2000);

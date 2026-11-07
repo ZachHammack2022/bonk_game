@@ -66,6 +66,12 @@ class player():
         self.force_mult = 1.0    # push from inputs
         self.speed_mult = 1.0    # top speed
         self.gravity_mult = 1.0  # gravity
+        # Power-ups that change the ball itself (server/powerups.py; Box2D
+        # picks them up in world.Ball.push)
+        self.base_r = radius     # its usual size (r is bigger while it's a giant,
+                                 # and it's heavier in collisions by the same area)
+        self.ghost = False       # passes through other balls (not the level)
+        self.group = 0           # balls in the same (negative) group don't touch
         self.grounded = False
         self.jump_buffer = 0     # steps left on a remembered "up" press
         self.air_steps = COYOTE_TIME + 1  # steps since last standing on something

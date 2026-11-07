@@ -49,9 +49,18 @@ The respawning modes don't work on Sinking Swing, whose floor is gone by the end
 
 A knockout counts for whoever last hit you in the past 3 seconds; if nobody did, you just fell. The results screen hands out awards: most knockouts, hardest hit, butterfingers (most falls with nobody near) and survivor.
 
-The host can also set the **round time** (when the sudden-death walls close in), **gravity**, **speed** (normal is 75% of the original, which was too quick to plan anything) and **power-ups**: ⚡ speed, 🎈 float, 🪨 iron (heavy without being slow), 👊 punch (the next ball you bump goes flying) and the rare super one, ✈️ the attack plane. The host picks exactly which of them can turn up.
+The host can also set the **round time** (when the sudden-death walls close in), **gravity**, **speed** (normal is 75% of the original, which was too quick to plan anything) and **power-ups**. The host picks exactly which of them can turn up:
 
-Grab the **attack plane** and the match freezes for a cutscene of your ball jumping into a plane. Then you fly along the top of the map for 10 seconds, out of reach: ← → to steer, ↑ or heavy to drop a bomb. You have 2. A bomb goes off when it hits a ball or the level, and knocks out everyone near it (not your team). Then you land back where you took off.
+- ⚡ **Speed**, 🎈 **Float** (low gravity), 🪨 **Iron** (heavy without being slow), 👊 **Punch** (the next ball you bump goes flying)
+- 🔀 **Swap**: trade places with a random opponent, at once
+- 👻 **Ghost**: pass through other balls for 5 s
+
+And the rare **supers**, one at a time. The match freezes for a cutscene of what you got, then:
+
+- ✈️ **Attack plane**: you fly along the top of the map for 10 s, out of reach: ← → to steer, ↑ or heavy to drop a bomb. You have 2. A bomb goes off when it hits a ball or the level and knocks out everyone near it (not your team). Then you land back where you took off.
+- 🕳️ **Black hole**: a black hole opens above the middle of the map for 4 s and pulls everyone else in. Touch its core and you're out. Run for the edges!
+- 🐘 **Giant**: twice the size and four times as heavy for 8 s, and no slower.
+- 🐝 **Swarm**: three copies of you for 10 s. They do what you do, and their bumps count as yours, but only the real you can be knocked out.
 
 ### Controls
 
@@ -476,7 +485,7 @@ bonk_game/
     web.py                   routes, the WebSocket, security headers, /admin
     room.py                  a room: members, lobby, chat, the match loop
     lobby.py, modes.py       settings, seats, teams, colours; the game modes
-    match.py, powerups.py    running a match; pickups and the attack plane
+    match.py, powerups.py    running a match; power-ups and supers
     delta.py, scene.py       sending only what changed; the world as shapes for the browser
     auth.py, accounts.py     Google sign-in; accounts and sessions (SQLite)
     profiles.py, cosmetics.py  profiles and stats; what you can wear

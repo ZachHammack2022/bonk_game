@@ -1,6 +1,6 @@
-// bonk web client: The attack plane (the super power-up): its cutscene,
-// the plane, its bombs and their explosions. The server flies it
-// (server/powerups.py); this only draws what the state says.
+// bonk web client: The supers (server/powerups.py): their cutscenes; the
+// attack plane, its bombs and their explosions; the black hole; a swarm's
+// copies. The server runs them; this only draws what the state says.
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";
 
@@ -111,8 +111,9 @@ function drawPilotHelp(st) {
 }
 
 // The cutscene, while the match stands still (st.phase "super"): the
-// screen dims, a band in the pilot's colour sweeps across, and the
-// pilot's ball jumps into the plane, which takes off.
+// screen dims, a band in the player's colour sweeps across with their name
+// and the super's, and a little scene plays in it (the ball jumps into
+// the plane, grows, splits into a swarm, or opens a black hole).
 const superScene = { i: null, at: 0 };
 
 function startSuperScene(i) {
@@ -122,12 +123,13 @@ function startSuperScene(i) {
 
 function drawSuperScene(st, now) {
   if (st.phase !== "super" || !st.super) { superScene.i = null; return; }
-  const i = st.super[0];
+  const [i, kind] = st.super;
   // (Joined in the middle of one: start from here)
   if (superScene.i !== i) startSuperScene(i);
   const M = app.match, slot = M.slots[i];
   if (!slot) return;
-  const total = (M.powerups && M.powerups.plane && M.powerups.plane.intro) || 2.4;
+  const info = (M.powerups && M.powerups[kind]) || {};
+  const total = info.intro || 2.4;
   const t = (now - superScene.at) / 1000;
   const fadeIn = clamp(t / 0.2, 0, 1), fadeOut = clamp((total - t) / 0.25, 0, 1);
   const a = Math.min(fadeIn, fadeOut);
@@ -168,36 +170,8 @@ function drawSuperScene(st, now) {
   ctx.beginPath(); ctx.moveTo(-40, cy - half + slant / 2); ctx.lineTo(W + 40, cy - half - slant / 2); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(-40, cy + half + slant / 2); ctx.lineTo(W + 40, cy + half - slant / 2); ctx.stroke();
 
-  // The plane waits on the right; the ball runs up and jumps in (0.45-1.15
-  // s), then it takes off up and away (from 1.4 s)
-  const s = 2.1;
-  const px0 = W * 0.62, py0 = cy + 22;
-  const go = clamp((t - 1.4) / (total - 1.55), 0, 1);
-  const px = px0 + go * go * W * 0.9, py = py0 - go * go * 170;
-  const R = M.radius * 1.6;
-  const jump = clamp((t - 0.45) / 0.7, 0, 1);
-  const inside = jump >= 1;
-  if (go > 0) {
-    for (let k = 1; k <= 7; k++) {
-      ctx.globalAlpha = a * (0.3 - k * 0.035);
-      circle(px - k * 26 * s * 0.5, py + 6 + k * 3, 10 + k * 3, "#ffffff");
-    }
-    ctx.globalAlpha = a;
-  }
-  ctx.save();
-  ctx.translate(px, py); ctx.rotate(-go * 0.35); ctx.translate(-px, -py);
-  drawPlane(px, py, 1, s, inside ? slot : null, now / 20, M.radius);
-  ctx.restore();
-  if (!inside) {
-    // From the left edge of the band, in a hop, to the cockpit
-    const sx = W * 0.2, sy = cy + 40;
-    const ex = px0 + 6 * s, ey = py0 - 13 * s;
-    const run = clamp(t / 0.45, 0, 1);
-    const bx = jump > 0 ? lerp(sx, ex, jump) : lerp(-40, sx, easeOutBack(run));
-    const by = jump > 0 ? lerp(sy, ey, jump) - Math.sin(Math.PI * jump) * 120 : sy;
-    const r = lerp(R, M.radius * 0.5 * s, jump);
-    drawBall(ctx, bx, by, r, 0, slot.color, slot.pattern, true, slot.hat);
-  }
+  const scene = { plane: planeScene, hole: holeScene, giant: giantScene, swarm: swarmScene }[kind] || planeScene;
+  scene(t, total, a, cy, slot, M.radius, now);
   ctx.restore();
 
   // The words: who, and what
@@ -209,10 +183,145 @@ function drawSuperScene(st, now) {
     ctx.rotate(-0.09);
     ctx.scale(pop, pop);
     text(slotName(i).toUpperCase(), 20, "#ffffff", 0, -38, { weight: 900, alpha: a });
-    text("ATTACK PLANE!", 40, T.accent, 0, 0, { weight: 900, alpha: a });
+    text(`${(info.title || kind).toUpperCase()}!`, 40, T.accent, 0, 0, { weight: 900, alpha: a });
     ctx.restore();
   }
   ctx.globalAlpha = 1;
+}
+
+// The ball runs in from the left (the first 0.45 s of each scene)
+function runIn(t, x, y, r, slot) {
+  const run = clamp(t / 0.45, 0, 1);
+  drawBall(ctx, lerp(-40, x, easeOutBack(run)), y, r, 0, slot.color, slot.pattern, true, slot.hat);
+}
+
+// The plane waits on the right; the ball runs up and jumps in (0.45-1.15
+// s), then it takes off up and away (from 1.4 s)
+function planeScene(t, total, a, cy, slot, radius, now) {
+  const s = 2.1;
+  const px0 = W * 0.62, py0 = cy + 22;
+  const go = clamp((t - 1.4) / (total - 1.55), 0, 1);
+  const px = px0 + go * go * W * 0.9, py = py0 - go * go * 170;
+  const R = radius * 1.6;
+  const jump = clamp((t - 0.45) / 0.7, 0, 1);
+  const inside = jump >= 1;
+  if (go > 0) {
+    for (let k = 1; k <= 7; k++) {
+      ctx.globalAlpha = a * (0.3 - k * 0.035);
+      circle(px - k * 26 * s * 0.5, py + 6 + k * 3, 10 + k * 3, "#ffffff");
+    }
+    ctx.globalAlpha = a;
+  }
+  ctx.save();
+  ctx.translate(px, py); ctx.rotate(-go * 0.35); ctx.translate(-px, -py);
+  drawPlane(px, py, 1, s, inside ? slot : null, now / 20, radius);
+  ctx.restore();
+  if (inside) return;
+  const sx = W * 0.2, sy = cy + 40;
+  if (jump <= 0) { runIn(t, sx, sy, R, slot); return; }
+  // In a hop, to the cockpit
+  const ex = px0 + 6 * s, ey = py0 - 13 * s;
+  const bx = lerp(sx, ex, jump), by = lerp(sy, ey, jump) - Math.sin(Math.PI * jump) * 120;
+  drawBall(ctx, bx, by, lerp(R, radius * 0.5 * s, jump), 0, slot.color, slot.pattern, true, slot.hat);
+}
+
+// The ball stops in the middle and grows (0.55-1.1 s), then stomps
+function giantScene(t, total, a, cy, slot, radius) {
+  const x = W * 0.66, ground = cy + 70;
+  const R = radius * 1.6;
+  const grow = easeOutBack((t - 0.55) / 0.55);
+  const r = t < 0.55 ? R : lerp(R, R * 2.6, grow);
+  const stomp = t > 1.3 ? Math.abs(Math.sin((t - 1.3) * 9)) * 26 * Math.max(0, 1 - (t - 1.3)) : 0;
+  if (t > 1.3) fx.kick(4);
+  // A shadow on the ground under it
+  ctx.globalAlpha = a * 0.3;
+  ctx.fillStyle = "#000";
+  ctx.beginPath(); ctx.ellipse(x, ground, r * 0.9, 8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = a;
+  if (t < 0.55) runIn(t, x, ground - R, R, slot);
+  else drawBall(ctx, x, ground - r - stomp, r, 0, slot.color, slot.pattern, true, slot.hat);
+}
+
+// The ball runs to the middle and splits into a swarm (from 0.6 s): the
+// copies fan out and they all hop together
+function swarmScene(t, total, a, cy, slot, radius) {
+  const x = W * 0.66, y = cy + 34;
+  const R = radius * 1.4;
+  if (t < 0.6) { runIn(t, x, y, R, slot); return; }
+  const k = easeOutBack((t - 0.6) / 0.45);
+  const hop = Math.abs(Math.sin((t - 0.6) * 7)) * 22;
+  const spots = [-2.3, -1.15, 1.15, 0];  // (the real one last, in front)
+  for (const d of spots) {
+    if (d) ctx.globalAlpha = a * 0.9;
+    drawBall(ctx, x + d * R * 1.9 * k, y - hop - (d ? 0 : 4), R, 0, slot.color, slot.pattern, true, d ? "none" : slot.hat);
+    ctx.globalAlpha = a;
+  }
+}
+
+// The ball throws something up and a black hole opens there (from 0.7 s),
+// pulling streaks of light in
+function holeScene(t, total, a, cy, slot, radius, now) {
+  const bx = W * 0.5, by = cy + 46, hx = W * 0.74, hy = cy;
+  const R = radius * 1.4;
+  runIn(t, bx, by, R, slot);
+  const open = easeOutBack((t - 0.7) / 0.5);
+  if (open <= 0) return;
+  drawHoleAt(hx, hy, 58 * open, now, a);
+}
+
+// --- the black hole ------------------------------------------------------------
+// A black disc with a glowing ring, and streaks spiralling in
+function drawHoleAt(x, y, r, now, alpha = 1) {
+  ctx.save();
+  const glow = ctx.createRadialGradient(x, y, r * 0.4, x, y, r * 2.2);
+  glow.addColorStop(0, "rgba(160,90,255,0.55)");
+  glow.addColorStop(0.5, "rgba(120,60,220,0.18)");
+  glow.addColorStop(1, "rgba(120,60,220,0)");
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+  // Streaks, each on its own spiral, coming in
+  ctx.strokeStyle = "rgba(220,200,255,0.7)";
+  ctx.lineCap = "round";
+  for (let k = 0; k < 10; k++) {
+    const life = ((now / 900 + k / 10) % 1);
+    const d = r * (2.4 - 1.5 * life);
+    const ang = k * 2.4 + life * 3.2;
+    ctx.globalAlpha = alpha * Math.sin(Math.PI * life) * 0.8;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, d, ang, ang + 0.5);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = Math.max(2, r * 0.12);
+  ctx.strokeStyle = "#c79bff";
+  ctx.beginPath(); ctx.arc(x, y, r * 0.75, now / 300, now / 300 + Math.PI * 1.6); ctx.stroke();
+  circle(x, y, r * 0.62, "#000000");
+  ctx.restore();
+}
+
+// st.hole: {i, x, y, t: seconds left, ...}: it opens, then shrinks away at the end
+function drawHole(st, now) {
+  const h = st.hole;
+  if (!h) return;
+  const M = app.match;
+  const total = (M.powerups && M.powerups.hole && M.powerups.hole.seconds) || 4;
+  const core = (M.powerups && M.powerups.hole && M.powerups.hole.core) || 18;
+  const grow = clamp((total - h.t) / 0.4, 0, 1), fade = clamp(h.t / 0.5, 0, 1);
+  drawHoleAt(h.x, h.y, core * 1.6 * easeOutBack(grow) * (0.3 + 0.7 * fade), now);
+}
+
+// --- swarm copies ---------------------------------------------------------------
+// st.copies: [[owner, x, y, heavy]]: they look just like their owner
+function drawCopies(st, R) {
+  for (const [o, x, y, heavy] of st.copies || []) {
+    const slot = app.match.slots[o];
+    if (!slot) continue;
+    ctx.globalAlpha = 0.88;
+    drawPlayer(x, y, R, heavy, slot.color, slot.pattern, "none");
+    ctx.globalAlpha = 1;
+  }
 }
 
 // A bomb going off: a flash, a blast ring as big as what it knocks out,
