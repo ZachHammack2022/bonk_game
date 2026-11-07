@@ -223,7 +223,7 @@ class Match:
         if info["round_over"]:
             events.append({"e": "round"})
         if not info["deaths"]:
-            hits = _hits(env.players, [i for i in living if not env.players[i].held], pre)
+            hits = _hits(env.players, [i for i in living if not (env.players[i].held or env.players[i].ghost)], pre)
             for h in hits:
                 st = self.stats[h["by"]]
                 st["best_hit"] = max(st["best_hit"], h["s"])

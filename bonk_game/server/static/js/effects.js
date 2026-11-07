@@ -225,6 +225,27 @@ function onEvent(ev, state) {
       sound.play("boom");
       break;
     }
+    case "swap": {
+      // A puff where each of them was, and a ring where each of them is now
+      const ci = slots[ev.i] ? slots[ev.i].color : T.text, cj = slots[ev.j] ? slots[ev.j].color : T.text;
+      fx.burst(ev.a[0], ev.a[1], POWER_COLORS.swap, 18, 5, 4, 0.5, false);
+      fx.burst(ev.b[0], ev.b[1], POWER_COLORS.swap, 18, 5, 4, 0.5, false);
+      fx.ring(ev.b[0], ev.b[1], ci); fx.ring(ev.a[0], ev.a[1], cj);
+      sound.tone(500, 0.18, "triangle", 0.1, 2); sound.tone(1000, 0.18, "triangle", 0.08, 0.5);
+      if (isMe(ev.j)) fx.tell(`${slotName(ev.i)} swapped with you!`, ci);
+      break;
+    }
+    case "pop": {
+      const c = slots[ev.i] ? slots[ev.i].color : T.text;
+      fx.burst(clamp(ev.x, 12, W - 12), clamp(ev.y, 12, H - 12), c, ev.end ? 10 : 18, ev.end ? 3 : 6, 3.5, 0.45, !ev.end);
+      if (!ev.end) sound.tone(700, 0.12, "sine", 0.06, 0.5);
+      break;
+    }
+    case "hole_end":
+      fx.ring(ev.x, ev.y, POWER_COLORS.hole, 0.5);
+      fx.burst(ev.x, ev.y, POWER_COLORS.hole, 24, 6, 4, 0.6, false);
+      sound.tone(200, 0.4, "sine", 0.1, 3);
+      break;
     case "land": {
       const c = slots[ev.i] ? slots[ev.i].color : T.text;
       fx.ring(ev.x, ev.y, c);

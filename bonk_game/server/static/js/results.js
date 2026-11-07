@@ -69,15 +69,22 @@ function showResults(msg, quiet) {
 }
 
 const AWARD_ICONS = { kos: "💥", hit: "🔨", falls: "🧈", survivor: "🛡️", pickups: "🍬" };
-const POWER_ICONS = { speed: "⚡", float: "🎈", iron: "🪨", punch: "👊", plane: "✈️" };
-const POWER_COLORS = { speed: "#ffd166", float: "#9be7ff", iron: "#a0aec6", punch: "#ff8a65", plane: "#ff5ca8" };
+const POWER_ICONS = { speed: "⚡", float: "🎈", iron: "🪨", punch: "👊", swap: "🔀", ghost: "👻",
+  plane: "✈️", hole: "🕳️", giant: "🐘", swarm: "🐝" };
+const POWER_COLORS = { speed: "#ffd166", float: "#9be7ff", iron: "#a0aec6", punch: "#ff8a65", swap: "#7ed6aa",
+  ghost: "#dfe6f0", plane: "#ff5ca8", hole: "#a66bff", giant: "#ff9f43", swarm: "#ffe066" };
 // What each one does (the lobby's tooltips)
 const POWER_HINTS = {
   speed: "Push harder and go faster",
   float: "Low gravity: jump higher, fall slower",
   iron: "As heavy as a heavy ball, without slowing down",
   punch: "The next ball you bump goes flying",
+  swap: "Trade places with a random opponent, at once",
+  ghost: "Pass through other balls for 5 s",
   plane: "Super (rare): fly an attack plane for 10 s and drop 2 bombs",
+  hole: "Super (rare): a black hole pulls everyone else in for 4 s",
+  giant: "Super (rare): twice the size and much heavier for 8 s",
+  swarm: "Super (rare): 3 copies of you for 10 s; only the real you can be knocked out",
 };
 
 function awardDetail(a) {

@@ -304,14 +304,15 @@ function check(cond, what) {
     await host.check("#power-ups");
     await guest.waitForFunction(() => document.querySelector("#power-ups").checked);
     check(await guest.isDisabled("#power-ups"), "power-ups can be turned on (by the host only)");
-    check((await host.$$eval("#power-kinds button[aria-pressed=true]", (b) => b.length)) === 5,
-      "every power-up can turn up to start with, the attack plane too");
+    const allKinds = await host.$$eval("#power-kinds button", (b) => b.length);
+    check(allKinds >= 10 && (await host.$$eval("#power-kinds button[aria-pressed=true]", (b) => b.length)) === allKinds,
+      "every power-up can turn up to start with, the supers too");
     await host.click("#power-kinds [data-kind=punch]");
     await guest.waitForFunction(() => document.querySelector("#power-kinds [data-kind=punch]").getAttribute("aria-pressed") === "false");
     check(await guest.isDisabled("#power-kinds [data-kind=plane]") && (await guest.textContent("#sum-rest")).includes("Power-ups ⚡"),
       "the host picks which power-ups turn up, and the guest sees which");
     await host.click("#power-kinds [data-kind=punch]");
-    await host.waitForFunction(() => bonkDebug.app.lobby.settings.power_kinds.length === 5);
+    await host.waitForFunction((n) => bonkDebug.app.lobby.settings.power_kinds.length === n, allKinds);
     await host.click("#game-settings-done");
     await shot(host, "lobby-crown");
 

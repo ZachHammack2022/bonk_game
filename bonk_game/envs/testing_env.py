@@ -95,6 +95,11 @@ class TestEnv():
         self.last_hit = [None] * self.n  # (index of who hit them, step) per player
         self.kos = []  # this step's deaths: (victim, who knocked them out or None, walls?)
         self.steps = 0
+        # Extra balls that copy a player's inputs: [(owner index, player)]
+        # (the Swarm power-up: server/powerups.py adds and removes them).
+        # They move and bump like anyone, and a bump from one counts as the
+        # owner's, but they aren't players: no score, and they can't win.
+        self.copies = []
 
         self.renderer = arena.Renderer(render_mode, self.metadata["render_fps"],
                                        f"Bonk - {self.map.title}")
@@ -251,6 +256,9 @@ class TestEnv():
         for p, a, h in zip(self.players, actions, held):
             if p.alive and not h:
                 apply_input(p, a)
+        for owner, c in self.copies:
+            if self.players[owner].alive and not held[owner]:
+                apply_input(c, actions[owner])
         self.map.step(move=False)  # (stepping.advance moves everything)
         self.timer.step()
         self.steps += 1
@@ -262,13 +270,24 @@ class TestEnv():
             elif p.alive and not p.held:
                 movers.append(i)
 
-        def contact(a, b):
-            a, b = movers[a], movers[b]
-            self.last_hit[a] = (b, self.steps)
-            self.last_hit[b] = (a, self.steps)
+        n_real = len(movers)
 
-        stepping.advance([self.players[i] for i in movers], self.map, on_contact=contact,
-                         time_scale=self.time_scale)
+        def who(k):
+            """(player index, is it a copy?) for a mover index."""
+            return (movers[k], False) if k < n_real else (self.copies[k - n_real][0], True)
+
+        def contact(a, b):
+            (a, a_copy), (b, b_copy) = who(a), who(b)
+            if a == b:
+                return
+            # (A copy bumping someone is its owner's hit; nobody hit the owner)
+            if not a_copy:
+                self.last_hit[a] = (b, self.steps)
+            if not b_copy:
+                self.last_hit[b] = (a, self.steps)
+
+        stepping.advance([self.players[i] for i in movers] + [c for _, c in self.copies], self.map,
+                         on_contact=contact, time_scale=self.time_scale)
 
         self.scores = [p.score for p in self.players]
         terminated = max(self.scores) >= self.winning_score

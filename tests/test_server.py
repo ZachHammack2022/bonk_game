@@ -9,6 +9,7 @@ import pytest
 
 from bonk_game.envs.utils.controls import Buttons
 from bonk_game.envs.utils.maps import MAPS
+from bonk_game.server import powerups as pu
 from bonk_game.server import room as room_mod
 from bonk_game.server.match import BEAT, Match
 from bonk_game.server.room import LEAVE_GRACE, Room, RoomManager
@@ -130,7 +131,7 @@ def test_room_host_settings_and_permissions():
                                 "bots": ["bot:easy", "bot:hard"]})
         assert room.settings == {"map": "swing", "first_to": 3, "bots": ["bot:easy", "bot:hard"],
                                  "mode": "ffa", "round_time": None, "gravity": "normal", "speed": "normal",
-                                 "power_ups": False, "power_kinds": ["speed", "float", "iron", "punch", "plane"],
+                                 "power_ups": False, "power_kinds": pu.ALL_KINDS,
                                  "name": None, "password": None}
         await room.handle("a", {"type": "settings", "bots": ["nope"]})
         assert "Unknown bot" in a.last("error")["message"]
