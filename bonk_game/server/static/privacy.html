@@ -22,6 +22,7 @@
   <ul>
     <li>Your player name, ball colour and pattern, settings, stats and recent matches are stored only in your own browser (its local storage). The server does not keep them.</li>
     <li>While you're in a game room, the server holds your player name and a random identifier for your browser, so it can put you back in your seat if you reconnect. Rooms and this information are deleted from the server's memory shortly after everyone leaves.</li>
+    <li>To count how many players come back, the server keeps a scrambled (hashed) form of that random identifier and the days it joined a game, and whether it was opened from your home screen. It can't be turned back into the identifier, isn't linked to your name or account, and is deleted after 120 days.</li>
   </ul>
 
   <h2>2. Signing in with Google</h2>

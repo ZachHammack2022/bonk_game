@@ -30,6 +30,22 @@
     { title: "Browser errors", count: "client_errors_total", fmt: "int" },
   ];
 
+  // Who comes back (metrics.Retention), per day. vals: from the report.
+  const RET_CHARTS = [
+    { title: "Players per day", sub: "joined a game", fmt: "int", daily: true,
+      vals: (r) => r.daily.map((d) => d.active) },
+    { title: "New players per day", sub: "first game ever", fmt: "int", daily: true,
+      vals: (r) => r.daily.map((d) => d.new) },
+    { title: "D1 retention", sub: "of that day's new players", fmt: "%", daily: true,
+      vals: (r) => r.daily.map((d) => rate(cohortOf(r, d.day), "d1")) },
+    { title: "From the home screen", sub: "players who opened the web app", fmt: "int", daily: true,
+      vals: (r) => r.daily.map((d) => d.installed) },
+  ];
+  // Retention targets for a casual game (rough): below these is worth a look
+  const TARGETS = { d1: 0.35, d7: 0.1, d30: 0.04 };
+  function cohortOf(r, day) { return r.cohorts.find((c) => c.day === day); }
+  function rate(c, mark) { return c && c.new && c[mark] != null ? c[mark] / c.new : null; }
+
   const store = {
     get(k) {
       try { return sessionStorage.getItem(k) || localStorage.getItem(k); } catch { return null; }
@@ -55,6 +71,7 @@
     if (kind === "ms") return (v < 10 ? v.toFixed(2) : v.toFixed(1)) + " ms";
     if (kind === "bytes/s") return bytes(v) + "/s";
     if (kind === "bytes") return bytes(v);
+    if (kind === "%") return (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
     return nf.format(Math.round(v * 10) / 10);
   }
   function bytes(v) {
@@ -65,6 +82,7 @@
   }
   function short(v, kind) {
     if (kind === "bytes/s") return bytes(v);
+    if (kind === "%") return Math.round(v * 100) + "%";
     if (kind === "ms") return v < 10 && v % 1 ? v.toFixed(1) : String(Math.round(v));
     if (v >= 1e6) return (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M";
     if (v >= 1e3) return (v / 1e3).toFixed(v >= 1e4 ? 0 : 1) + "k";
@@ -83,8 +101,12 @@
     if (!withDate) return time;
     return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + time;
   }
-  function axisWhen(t) {
+  function dayName(day) {  // a UTC day number
+    return new Date(day * 86400e3).toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" });
+  }
+  function axisWhen(t, daily) {
     const d = new Date(t * 1000);
+    if (daily) return dayName(t / 86400);
     if (range <= 86400) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     return d.toLocaleDateString([], { month: "short", day: "numeric" });
   }
@@ -175,6 +197,7 @@
     $("updated").textContent = `Updated ${new Date().toLocaleTimeString()} · every ${REFRESH_MS / 1000} s`;
     for (const b of $("ranges").children) b.setAttribute("aria-pressed", String(Number(b.dataset.range) === data.range));
     renderTiles(now);
+    if (data.retention) renderRetention(data.retention);
     const h = data.history;
     $("history-note").textContent = data.kept
       ? `Sampled every minute, kept ${data.keep_days} days. Gaps are when the server was stopped. Each point covers ${duration(h.step)}.`
@@ -200,7 +223,19 @@
       ["Sending", rate == null ? "–" : fmt(rate, "bytes/s"), rate == null ? "next update" : "on the wire"],
       ["Uptime", duration(now.uptime_seconds)],
     ];
-    const box = $("tiles");
+    fillTiles($("tiles"), tiles);
+    const totals = [
+      ["matches started", now.matches_started_total], ["finished", now.matches_finished_total],
+      ["rooms made", now.rooms_created_total], ["late ticks", now.late_ticks_total],
+      ["sent", bytes(now.wire_bytes_sent_total)], ["browser errors", now.client_errors_total],
+      ["player reports", now.player_reports_total], ["playtest reports", now.playtest_reports_total],
+      ["old tabs refreshed", now.refused_old_clients_total],
+    ];
+    $("totals").textContent = "Since this restart: " +
+      totals.map(([k, v]) => `${typeof v === "number" ? nf.format(v) : v} ${k}`).join(" · ");
+  }
+
+  function fillTiles(box, tiles) {
     box.textContent = "";
     for (const [label, value, note, warn] of tiles) {
       const el = document.createElement("div");
@@ -220,19 +255,58 @@
       }
       box.appendChild(el);
     }
-    const totals = [
-      ["matches started", now.matches_started_total], ["finished", now.matches_finished_total],
-      ["rooms made", now.rooms_created_total], ["late ticks", now.late_ticks_total],
-      ["sent", bytes(now.wire_bytes_sent_total)], ["browser errors", now.client_errors_total],
-      ["player reports", now.player_reports_total], ["playtest reports", now.playtest_reports_total],
-      ["old tabs refreshed", now.refused_old_clients_total],
-    ];
-    $("totals").textContent = "Since this restart: " +
-      totals.map(([k, v]) => `${typeof v === "number" ? nf.format(v) : v} ${k}`).join(" · ");
+  }
+
+  // --- retention ----------------------------------------------------------
+  function renderRetention(r) {
+    const tiles = [];
+    for (const mark of ["d1", "d7", "d30"]) {
+      const o = r.overall[mark];
+      tiles.push([mark.toUpperCase() + " retention", o.rate == null ? "–" : fmt(o.rate, "%"),
+        o.cohort ? `${nf.format(o.back)} of ${nf.format(o.cohort)} came back` : "no cohort old enough yet",
+        o.rate != null && o.cohort >= 20 && o.rate < TARGETS[mark]]);
+    }
+    tiles.push(["Players today", fmt(r.dau)], ["This week", fmt(r.wau), "last 7 days"],
+      ["This month", fmt(r.mau), "last 30 days"],
+      ["From the home screen", fmt(r.installed_wau), "this week"]);
+    fillTiles($("ret-tiles"), tiles);
+    const h = { start: r.daily[0].day * 86400, step: 86400, t: r.daily.map((d) => d.day * 86400),
+      restarts: [], gauges: {}, counts: {} };
+    makeCards($("ret-chart"), RET_CHARTS);
+    for (const c of RET_CHARTS) { c.data = c.vals(r); drawChart(c, h); }
+    renderCohorts(r);
+  }
+  function renderCohorts(r) {
+    const table = $("cohorts");
+    table.textContent = "";
+    const head = table.createTHead().insertRow();
+    for (const label of ["First day", "New players", "D1", "D7", "D30"]) {
+      const th = document.createElement("th");
+      th.textContent = label;
+      head.appendChild(th);
+    }
+    const body = table.createTBody();
+    for (const c of r.cohorts) {
+      if (!c.new) continue;
+      const row = body.insertRow();
+      row.insertCell().textContent = dayName(c.day);
+      row.insertCell().textContent = nf.format(c.new);
+      for (const mark of ["d1", "d7", "d30"]) {
+        const cell = row.insertCell();
+        cell.textContent = c[mark] == null ? "–" : `${fmt(c[mark] / c.new, "%")} (${c[mark]})`;
+        if (c[mark] == null) cell.title = "Not that many days ago yet";
+      }
+    }
+    if (!body.rows.length) {
+      const cell = body.insertRow().insertCell();
+      cell.colSpan = 5;
+      cell.textContent = "Nobody's joined a game in the last 30 days yet.";
+    }
   }
 
   // One chart's values, from the history
   function values(c, h) {
+    if (c.data) return c.data;
     if (c.gauge) {
       const g = h.gauges[c.gauge];
       return g ? g[c.pick] : h.t.map(() => null);
@@ -260,10 +334,13 @@
   }
 
   function renderCharts(h) {
-    const box = $("charts");
-    if (box.children.length !== CHARTS.length) {
+    makeCards($("charts"), CHARTS);
+    for (const c of CHARTS) drawChart(c, h);
+  }
+  function makeCards(box, charts) {
+    if (box.children.length !== charts.length) {
       box.textContent = "";
-      for (const c of CHARTS) {
+      for (const c of charts) {
         const card = document.createElement("figure");
         card.className = "chart";
         card.innerHTML = '<div class="head"><div><h3></h3><div class="sub"></div></div><div class="latest"></div></div>';
@@ -272,7 +349,6 @@
         c.card = card;
       }
     }
-    for (const c of CHARTS) drawChart(c, h);
   }
 
   function drawChart(c, h) {
@@ -308,7 +384,7 @@
       const k = Math.round(f * (n - 1));
       const t = h.t[k] + (f === 1 ? h.step : 0);
       el("text", { class: "axis-text", x: x(k), y: H - 4, "text-anchor": f === 0 ? "start" : f === 1 ? "end" : "middle" }, svg)
-        .textContent = axisWhen(t);
+        .textContent = axisWhen(c.daily ? h.t[k] : t, c.daily);
     }
     // Restarts and deploys
     const tx = (t) => x((t - h.start) / h.step - 0.5);
@@ -364,7 +440,7 @@
       } else dot.classList.add("hidden");
       tip.textContent = "";
       const b = document.createElement("b");
-      let text = v == null ? "No samples (server stopped)" : fmt(v, c.fmt);
+      let text = v == null ? (c.daily ? "–" : "No samples (server stopped)") : fmt(v, c.fmt);
       if (v != null && c.gauge) {
         const g = h.gauges[c.gauge];
         const other = c.pick === "max" ? "avg" : "max";
@@ -373,7 +449,7 @@
       b.textContent = text;
       const s = document.createElement("span");
       s.className = "dim";
-      s.textContent = h.step > 60
+      s.textContent = c.daily ? dayName(h.t[k] / 86400) : h.step > 60
         ? `${when(h.t[k], range > 86400)} – ${when(h.t[k] + h.step, false)}`
         : when(h.t[k], range > 86400);
       tip.append(b, s);
@@ -411,7 +487,11 @@
   let resizeTimer = null;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (data) renderCharts(data.history); }, 150);
+    resizeTimer = setTimeout(() => {
+      if (!data) return;
+      renderCharts(data.history);
+      if (data.retention) renderRetention(data.retention);
+    }, 150);
   });
 
   if (token) load(); else showLogin();

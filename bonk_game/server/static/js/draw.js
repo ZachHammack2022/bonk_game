@@ -9,8 +9,15 @@ const canvas = $("canvas");
 const ctx = canvas.getContext("2d");
 let view = { scale: 1 };
 
+// The notch and home bar (non-zero only from the home screen, style.css)
+function safeInsets() {
+  const css = getComputedStyle(document.documentElement);
+  const px = (k) => parseFloat(css.getPropertyValue(k)) || 0;
+  return { x: px("--safe-l") + px("--safe-r"), y: px("--safe-t") + px("--safe-b") };
+}
 function resize() {
-  const vw = window.innerWidth, vh = window.innerHeight;
+  const safe = safeInsets();
+  const vw = window.innerWidth - safe.x, vh = window.innerHeight - safe.y;
   const scale = Math.min(vw / W, vh / H);
   const dpr = window.devicePixelRatio || 1;
   canvas.style.width = `${W * scale}px`;

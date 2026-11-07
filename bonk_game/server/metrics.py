@@ -10,9 +10,11 @@ so the /admin page can chart them over days, across restarts and deploys.
 """
 import collections
 import datetime
+import hashlib
 import json
 import logging
 import math
+import secrets
 import sqlite3
 import time
 
@@ -211,3 +213,126 @@ class History:
                     c[k] = 0
         return {"start": start, "step": step, "t": t_out, "gauges": gauges, "counts": counts,
                 "restarts": restarts, "deploys": deploys}
+
+
+class Retention:
+    """Who comes back: each browser's first day and the days it joined a
+    room, so the /admin page can show D1/D7/D30 retention (of the people
+    who first played on a day, how many played again 1, 7 and 30 days later).
+
+    A browser is its random token (core.js), hashed with a secret salt kept
+    in the database, so what's stored can't be used to play as anyone.
+    Nothing else about the player is kept. Days are UTC. Rows older than
+    KEEP_DAYS are deleted.
+
+    "installed": the page was opened from the home screen (the web app),
+    counted separately so you can see how many play that way."""
+
+    KEEP_DAYS = 120
+    SCHEMA = (
+        "CREATE TABLE IF NOT EXISTS retention_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS retention_players (id TEXT PRIMARY KEY, first INTEGER NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS retention_days (id TEXT NOT NULL, day INTEGER NOT NULL, "
+        "installed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (id, day))",
+        "CREATE INDEX IF NOT EXISTS retention_days_day ON retention_days (day)",
+    )
+    MARKS = (1, 7, 30)
+
+    def __init__(self, db, clock=time.time):
+        """db: a sqlite3 connection (History's, so it's the same file)."""
+        self.db = db
+        self.clock = clock
+        for sql in self.SCHEMA:
+            self.db.execute(sql)
+        row = self.db.execute("SELECT v FROM retention_meta WHERE k = 'salt'").fetchone()
+        if row is None:
+            salt = secrets.token_hex(16)
+            self.db.execute("INSERT OR IGNORE INTO retention_meta (k, v) VALUES ('salt', ?)", (salt,))
+            row = self.db.execute("SELECT v FROM retention_meta WHERE k = 'salt'").fetchone()
+        self.salt = row[0].encode()
+        self.recent = set()  # (id, installed) already written today
+        self.recent_day = None
+
+    def today(self):
+        return int(self.clock() // 86400)
+
+    def _id(self, token):
+        return hashlib.sha256(self.salt + str(token).encode()).hexdigest()[:20]
+
+    def seen(self, token, installed=False):
+        """Someone joined a room. Cheap to call often: one write a day each."""
+        if not token:
+            return
+        day = self.today()
+        pid = self._id(token)
+        if day != self.recent_day or len(self.recent) > 100000:
+            self.recent, self.recent_day = set(), day  # a new day (or a lot of people)
+        key = (pid, bool(installed))
+        if key in self.recent:
+            return
+        self.recent.add(key)
+        self.db.execute("INSERT OR IGNORE INTO retention_players (id, first) VALUES (?, ?)", (pid, day))
+        self.db.execute("INSERT INTO retention_days (id, day, installed) VALUES (?, ?, ?) "
+                        "ON CONFLICT (id, day) DO UPDATE SET installed = max(installed, excluded.installed)",
+                        (pid, day, int(bool(installed))))
+
+    def prune(self):
+        cut = self.today() - self.KEEP_DAYS
+        self.db.execute("DELETE FROM retention_days WHERE day < ?", (cut,))
+        self.db.execute("DELETE FROM retention_players WHERE first < ? AND id NOT IN "
+                        "(SELECT id FROM retention_days)", (cut,))
+
+    def _active(self, since, until=None, installed=False):
+        until = self.today() if until is None else until
+        sql = "SELECT COUNT(DISTINCT id) FROM retention_days WHERE day BETWEEN ? AND ?"
+        if installed:
+            sql += " AND installed = 1"
+        return self.db.execute(sql, (since, until)).fetchone()[0]
+
+    def report(self, days=30):
+        """{"today": day, "dau", "wau", "mau", "installed_wau",
+            "daily": [{"day", "active", "new", "installed"}...] (oldest first),
+            "cohorts": [{"day", "new", "d1", "d7", "d30"}...] (newest first;
+                        a mark is None until that day has come),
+            "overall": {"d1": {"cohort", "back", "rate"}, ...} over the
+                       cohorts in the last `days` that have reached that mark}"""
+        today = self.today()
+        start = today - days + 1
+        daily = {d: {"day": d, "active": 0, "new": 0, "installed": 0} for d in range(start, today + 1)}
+        for d, active, inst in self.db.execute(
+                "SELECT day, COUNT(*), SUM(installed) FROM retention_days WHERE day >= ? GROUP BY day", (start,)):
+            daily[d]["active"], daily[d]["installed"] = active, inst or 0
+        for d, n in self.db.execute(
+                "SELECT first, COUNT(*) FROM retention_players WHERE first >= ? GROUP BY first", (start,)):
+            daily[d]["new"] = n
+        back = {}  # (cohort day, mark) -> how many came back that day
+        for mark in self.MARKS:
+            rows = self.db.execute(
+                "SELECT p.first, COUNT(*) FROM retention_players p JOIN retention_days a "
+                "ON a.id = p.id AND a.day = p.first + ? WHERE p.first >= ? GROUP BY p.first",
+                (mark, start - max(self.MARKS)))
+            for d, n in rows:
+                back[(d, mark)] = n
+        cohorts, overall = [], {}
+        for d in range(today, start - 1, -1):
+            new = daily[d]["new"]
+            row = {"day": d, "new": new}
+            for mark in self.MARKS:
+                row[f"d{mark}"] = back.get((d, mark), 0) if d + mark <= today else None
+            cohorts.append(row)
+        for mark in self.MARKS:
+            ready = [c for c in cohorts if c[f"d{mark}"] is not None]
+            size = sum(c["new"] for c in ready)
+            came = sum(c[f"d{mark}"] for c in ready)
+            overall[f"d{mark}"] = {"cohort": size, "back": came,
+                                   "rate": round(came / size, 4) if size else None}
+        return {
+            "today": today,
+            "dau": self._active(today),
+            "wau": self._active(today - 6),
+            "mau": self._active(today - 29),
+            "installed_wau": self._active(today - 6, installed=True),
+            "daily": list(daily.values()),
+            "cohorts": cohorts,
+            "overall": overall,
+        }

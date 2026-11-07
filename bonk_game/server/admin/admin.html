@@ -38,6 +38,22 @@
         <p id="totals" class="dim totals"></p>
       </section>
 
+      <section aria-labelledby="retention-title">
+        <div class="section-head">
+          <h2 id="retention-title">Who comes back</h2>
+          <span class="dim">days are UTC</span>
+        </div>
+        <div id="ret-tiles" class="tiles"></div>
+        <p class="dim ret-note">Of the players who first joined a game on a day, how many joined one again 1, 7 and 30 days later
+          (on exactly that day). Rough targets for a casual game: D1 above 35%, D7 above 10%. Each browser counts once;
+          clearing its storage makes it a new player.</p>
+        <div id="ret-chart" class="charts"></div>
+        <details id="cohort-view" open>
+          <summary>Daily cohorts</summary>
+          <div class="table-wrap"><table id="cohorts"></table></div>
+        </details>
+      </section>
+
       <section aria-labelledby="history-title">
         <div class="section-head">
           <h2 id="history-title">History</h2>
