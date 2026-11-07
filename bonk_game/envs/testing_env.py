@@ -162,12 +162,12 @@ class TestEnv():
         players who died this step, where they died; points is the indexes
         of players who scored.
         """
-        living = [i for i, p in enumerate(self.players) if p.alive]
-        for i in living:
+        alive = [i for i, p in enumerate(self.players) if p.alive]
+        for i in alive:
             if self.players[i].held:
                 self._inside_walls(self.players[i])  # (the walls keep closing)
-        # Held players (just respawned) can't die yet
-        living = [i for i in living if not self.players[i].held]
+        # Held players (just respawned, or out of play for a while) can't die yet
+        living = [i for i in alive if not self.players[i].held]
         walled = [i for i in living if self.timer.kills(self.players[i])]
         dead = [i for i in living if self.map.killed(self.players[i]) or i in walled]
         for i in living:
@@ -180,7 +180,8 @@ class TestEnv():
             if dead:
                 for i in dead:
                     self.players[i].alive = 0
-                remaining = [i for i in living if i not in dead]
+                # (Held players are still in the round)
+                remaining = [i for i in alive if i not in dead]
                 # The round is over once only one team (or nobody) is left: they
                 # score. If the last ones all go at once, they all score.
                 over = len({self.teams[i] for i in remaining}) <= 1

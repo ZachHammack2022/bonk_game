@@ -476,6 +476,13 @@ body.touch .chat-overlay { bottom: auto; top: 60px; flex-direction: column-rever
 .game-settings-card .field-pair, .game-settings-card .settings-row { gap: 12px; }
 .game-settings-card > p.dim.small { margin: -4px 0 0; line-height: 1.4; }
 .game-settings-card #game-settings-done { margin-top: 4px; }
+/* Which power-ups can turn up: a toggle chip for each */
+.power-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }
+.power-kinds.off { opacity: 0.45; }
+.power-kinds button { height: 32px; padding: 0 11px; border-radius: 999px; font-size: 13px; gap: 6px; color: var(--dim); background: transparent; }
+.power-kinds button[aria-pressed=true] { color: var(--text); background: var(--surface-3); border-color: var(--dim); }
+.power-kinds button.super[aria-pressed=true] { border-color: #ff5ca8; box-shadow: 0 0 0 1px rgba(255, 92, 168, 0.35) inset; }
+.power-kinds button .tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; color: #ff8cc4; }
 .field-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .field-pair > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field-pair select { width: 100%; }

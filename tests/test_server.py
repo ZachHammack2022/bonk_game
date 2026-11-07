@@ -130,7 +130,8 @@ def test_room_host_settings_and_permissions():
                                 "bots": ["bot:easy", "bot:hard"]})
         assert room.settings == {"map": "swing", "first_to": 3, "bots": ["bot:easy", "bot:hard"],
                                  "mode": "ffa", "round_time": None, "gravity": "normal", "speed": "normal",
-                                 "power_ups": False, "name": None, "password": None}
+                                 "power_ups": False, "power_kinds": ["speed", "float", "iron", "punch", "plane"],
+                                 "name": None, "password": None}
         await room.handle("a", {"type": "settings", "bots": ["nope"]})
         assert "Unknown bot" in a.last("error")["message"]
         await room.handle("a", {"type": "settings", "bots": ["bot:easy"] * 20})

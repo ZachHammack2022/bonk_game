@@ -18,6 +18,7 @@
 //   replay.js    the killcam
 //   draw.js      drawing the match
 //   looks.js     trails, hats, knockout effects, and how balls look on your screen
+//   super.js     the attack plane (the super power-up): its cutscene, bombs and blasts
 //   people.js    the game browser (public and private games, New game); muting and reporting people
 //   chat.js      chat in the lobby and over the match
 //   account.js   signing in with Google (optional) and your account

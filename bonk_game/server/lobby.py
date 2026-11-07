@@ -16,7 +16,7 @@ import secrets
 
 from bonk_game.envs.utils import arena, stepping
 from bonk_game.envs.utils.maps import MAPS
-from bonk_game.server import cosmetics, moderation, modes
+from bonk_game.server import cosmetics, moderation, modes, powerups
 from bonk_game.server.match import is_bot
 from bonk_game.ui import theme
 
@@ -54,7 +54,7 @@ def default_settings():
     password: needed to join (None: anyone can). Every room is listed."""
     return {"map": DEFAULT_MAP, "first_to": 5, "bots": ["bot:medium"],
             "mode": modes.DEFAULT_MODE, "round_time": None, "gravity": "normal", "speed": "normal",
-            "power_ups": False, "name": None, "password": None}
+            "power_ups": False, "power_kinds": list(powerups.ALL_KINDS), "name": None, "password": None}
 
 
 def quick_settings():
@@ -153,6 +153,13 @@ def check_settings(settings, msg, people, bot_options):
         if not isinstance(msg["power_ups"], bool):
             return settings, "Power-ups should be on or off."
         s["power_ups"] = msg["power_ups"]
+    if "power_kinds" in msg:
+        kinds = msg["power_kinds"]
+        if not isinstance(kinds, list) or any(not isinstance(k, str) or k not in powerups.KINDS for k in kinds):
+            return settings, "Unknown power-up."
+        if not kinds:
+            return settings, "Pick at least one power-up."
+        s["power_kinds"] = powerups.clean_kinds(kinds)
     if "name" in msg:
         if msg["name"] is not None and not isinstance(msg["name"], str):
             return settings, "The room's name should be text."
