@@ -467,8 +467,11 @@ function drawMapPreview(canvas, mapInfo) {
   sky.addColorStop(0, T.bgTop); sky.addColorStop(1, T.bgBottom);
   g.fillStyle = sky; g.fillRect(0, 0, W, H);
   for (const sh of (mapInfo && mapInfo.preview) || []) {
-    g.fillStyle = sh.c || T.rail;
-    g.strokeStyle = sh.c || T.rail;
+    // In the critter colours (draw.js: materialOf), grass shown green
+    const m = sh.c && sh.t !== "line" ? materialOf(sh) : null;
+    const c = m ? (m === MATERIALS.grass ? "#8fd694" : m.deep) : sh.c || T.rail;
+    g.fillStyle = c;
+    g.strokeStyle = c;
     if (sh.t === "rect") {
       const [x1, y1, x2, y2] = sh.r;
       g.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.max(3, Math.abs(x2 - x1)), Math.max(3, Math.abs(y2 - y1)));
@@ -483,7 +486,7 @@ function drawMapPreview(canvas, mapInfo) {
     } else if (sh.t === "pivot") {
       g.fillStyle = T.rope; g.beginPath(); g.arc(sh.x, sh.y, 6, 0, Math.PI * 2); g.fill();
     } else if (sh.t === "edges") {
-      g.strokeStyle = "rgba(239,83,80,0.6)"; g.lineWidth = 8; g.strokeRect(0, 0, W, H);
+      g.strokeStyle = "rgba(255,110,140,0.5)"; g.lineWidth = 8; g.strokeRect(0, 0, W, H);
     }
   }
 }

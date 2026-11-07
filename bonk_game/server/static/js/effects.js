@@ -102,7 +102,7 @@ function drawFeed(now) {
   fx.feed = fx.feed.filter((f) => now - f.at < FEED_TIME);
   const slots = app.match.slots;
   let y = 54;
-  ctx.font = "700 12px ui-rounded, system-ui, sans-serif";
+  ctx.font = `600 12px ${T.font}`;
   for (const f of fx.feed) {
     const alpha = clamp((FEED_TIME - (now - f.at)) / 600, 0, 1);
     // Pieces drawn right to left: [text, colour, ball colour or null]
@@ -273,7 +273,8 @@ function onEvent(ev, state) {
     case "overtime": fx.say("Overtime!", T.accent); fx.tell("Next knockout wins", T.text); sound.play("go"); break;
     case "sudden": fx.say("Sudden death!", T.danger); fx.kick(6); sound.play("go"); break;
     case "hit":
-      fx.burst(ev.x, ev.y, T.text, Math.round(4 + ev.s), ev.s * 0.5, 3, 0.35);
+      critterHit(ev.x, ev.y, ev.s);
+      fx.burst(ev.x, ev.y, "#ffd23f", Math.round(3 + ev.s * 0.6), ev.s * 0.5, 3.5, 0.4, false, "star");
       fx.kick(Math.min(8, ev.s * 0.4));
       sound.play("hit", Math.min(1, ev.s / 18));
       break;
