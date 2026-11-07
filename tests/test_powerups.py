@@ -423,13 +423,35 @@ def test_a_black_hole_pulls_everyone_else_in_and_knocks_them_out():
     victim.x, victim.y = h["x"] + 10, h["y"] + 60
     owner.x = h["x"] - 120
     events = []
-    for _ in range(pu.HOLE_SECONDS * 30):
+    for _ in range(round((pu.HOLE_WARNING + pu.HOLE_SECONDS) * 30)):
         events += m.tick()
         if m.phase != "play" or fly_hole.hole is None:
             break
     deaths = [e for e in events if e["e"] == "death"]
     assert deaths and all(d["i"] != 0 and d["by"] == 0 for d in deaths)
     assert any(d["i"] == 1 for d in deaths)
+
+
+def test_the_black_hole_warns_before_it_pulls():
+    env, ups = setup(2, "platform")
+    ups.pending = (0, "hole")
+    ups.launch()
+    p = env.players[1]
+    h = ups.hole
+    p.x, p.y, p.x_v, p.y_v = h["x"], h["y"] + 5, 0.0, 0.0  # (right in it)
+    events = []
+    for _ in range(round(pu.HOLE_WARNING * 30)):
+        assert ups.state()["hole"]["w"] > 0
+        ups.apply()
+        assert (p.x_v, p.y_v) == (0.0, 0.0)  # no pull yet
+        p.x, p.y = h["x"], h["y"] + 5
+        events += ups.step(NOTHING)
+        assert not p.doomed  # and the core is harmless while it opens
+    assert [e["e"] for e in events] == ["hole_on"] and ups.state()["hole"]["w"] == 0
+    ups.apply()
+    assert p.y_v < 0  # now it pulls
+    ups.step(NOTHING)
+    assert p.doomed
 
 
 def test_the_black_hole_closes_after_a_while():
@@ -439,7 +461,7 @@ def test_the_black_hole_closes_after_a_while():
     for p in env.players[1:]:
         p.held = 10 ** 6  # (out of reach, so nobody gets eaten)
     events = []
-    for _ in range(pu.HOLE_SECONDS * 30):
+    for _ in range(round((pu.HOLE_WARNING + pu.HOLE_SECONDS) * 30)):
         ups.apply()
         env.step()
         events += ups.step(NOTHING)

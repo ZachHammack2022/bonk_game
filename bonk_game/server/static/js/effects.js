@@ -241,6 +241,12 @@ function onEvent(ev, state) {
       if (!ev.end) sound.tone(700, 0.12, "sine", 0.06, 0.5);
       break;
     }
+    case "hole_on":
+      // It starts pulling
+      fx.ring(ev.x, ev.y, POWER_COLORS.hole, 0.6);
+      fx.kick(8);
+      sound.tone(70, 1.2, "sawtooth", 0.12, 0.6);
+      break;
     case "hole_end":
       fx.ring(ev.x, ev.y, POWER_COLORS.hole, 0.5);
       fx.burst(ev.x, ev.y, POWER_COLORS.hole, 24, 6, 4, 0.6, false);

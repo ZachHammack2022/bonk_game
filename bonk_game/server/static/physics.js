@@ -316,7 +316,8 @@
 
   // One physics step (World.step): your buttons `b` go to `me`
   function step(sim, me, b) {
-    if (sim.hole) pullTowards(sim, sim.hole);
+    // (A black hole that's still opening pulls nothing yet)
+    if (sim.hole && sim.holeWait-- <= 0) pullTowards(sim, sim.hole);
     applyInput(me, b);
     const ts = sim.phys.time_scale ?? 1;
     const n = sim.phys.substeps || 1;
@@ -365,6 +366,7 @@
     const sim = build(base);
     (S.parts || []).forEach((st, j) => { if (sim.parts[j]) placePart(sim, sim.parts[j], st); });
     sim.hole = S.hole || null;
+    sim.holeWait = S.hole ? Math.round((S.hole.w || 0) * 30) : 0;  // (steps till it pulls)
     const size = (j) => (S.sizes ? S.sizes[j] : r);
     const ghost = (j) => !!(S.effects && S.effects[j] && S.effects[j][0] === "ghost");
     let me = null;
