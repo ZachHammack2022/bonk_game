@@ -142,7 +142,8 @@ POWER_CASES = {
     # Pulled by someone else's black hole
     "pulled by a black hole": ("platform", [NONE] * 15, put(300, 279), None, black_hole),
     "a black hole starts pulling": ("platform", [NONE] * 15, put(300, 279), None, opening_black_hole),
-    "jump into a black hole": ("platform", [U] + [NONE] * 6, put(420, 279), None, black_hole),
+    "run at someone who's a black hole": ("platform", [R] * 10, put(300, 279), ball_coming(380, 279, 0), black_hole),
+        "jump into a black hole": ("platform", [U] + [NONE] * 6, put(420, 279), None, black_hole),
 }
 
 

@@ -247,6 +247,13 @@ function onEvent(ev, state) {
       fx.kick(8);
       sound.tone(70, 1.2, "sawtooth", 0.12, 0.6);
       break;
+    case "gulp": {
+      // Swallowed: a swirl of their colour into the hole
+      const c = slots[ev.j] ? slots[ev.j].color : T.text;
+      fx.burst(ev.x, ev.y, c, 22, 4, 4, 0.5, false);
+      sound.tone(500, 0.35, "sine", 0.12, 0.2);
+      break;
+    }
     case "hole_end":
       fx.ring(ev.x, ev.y, POWER_COLORS.hole, 0.5);
       fx.burst(ev.x, ev.y, POWER_COLORS.hole, 24, 6, 4, 0.6, false);

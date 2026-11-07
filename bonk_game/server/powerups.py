@@ -19,9 +19,10 @@ And the supers: rarer, one at a time. The match freezes for a cutscene
          bombs. A bomb goes off when it hits a ball or the level, knocking
          out everyone (but your team) within BLAST. Then you're back where
          you were.
-- hole:  a black hole opens above the middle of the map. For HOLE_WARNING
-         it only grows (so everyone sees it coming); then for HOLE_SECONDS
-         it pulls everyone else in. Touching its core knocks you out.
+- hole:  you turn into a black hole. For HOLE_WARNING you're only
+         changing (so everyone sees it coming); then for HOLE_SECONDS
+         everyone else is pulled towards you, and anyone who touches you
+         is knocked out. You move as usual.
 - giant: you're GIANT_SIZE times as big, and as much heavier as you are
          bigger, for a while (you still move as fast).
 - swarm: SWARM_COPIES copies of you join in for a while. They do what
@@ -66,13 +67,11 @@ BLAST = 85               # a bomb knocks out every ball this close
 AFTER_LAST_BOMB = 1.2    # seconds the plane stays once its last bomb's gone off
 LANDING_HOLD = 1.0       # seconds the pilot's held (safe) once they're back
 # The black hole
-HOLE_WARNING = 1.2       # seconds it grows before it pulls (time to see it and run)
-HOLE_SECONDS = 4
-HOLE_PULL = 2.2          # speed it adds each step, towards it, within HOLE_NEAR (more than
-                         # gravity: close enough, it lifts you off the ground)
-HOLE_NEAR = 90           # further away, the pull falls off (with the distance squared)
-HOLE_CORE = 18           # touch this and you're out
-HOLE_HEIGHT = 115        # how far above the ground (under the middle of the map) it opens
+HOLE_WARNING = 1.2       # seconds you're turning into one before it pulls (time to run)
+HOLE_SECONDS = 6
+HOLE_PULL = 1.2          # speed it adds each step, towards you, within HOLE_NEAR
+HOLE_NEAR = 60           # further away, the pull falls off (with the distance squared)
+HOLE_CORE = 4            # a ball this close to touching you is out
 # Giant, swarm
 GIANT_SIZE = 2.0
 SWARM_COPIES = 3
@@ -156,6 +155,9 @@ class PowerUps:
             pilot = self.env.players[self.plane["i"]]
             pilot.held = max(pilot.held, 2)
         if self.hole:
+            # Nobody can shove a black hole: they're swallowed instead (_hole_step)
+            if not self.hole["wait"]:
+                self.env.players[self.hole["i"]].ghost = True
             self._pull()
 
     # --- supers --------------------------------------------------------------
@@ -270,17 +272,15 @@ class PowerUps:
         return Buttons(left=dx < -4, right=dx > 4, down=close and not plane["pressed"])
 
     # --- the black hole ---------------------------------------------------------
+    # You are the black hole: it's wherever your ball is, and you move as
+    # usual. Everyone else is pulled towards you, and touching you knocks
+    # them out.
     def _open_hole(self, i):
-        env = self.env
-        p = env.players[0]
-        box = env.map.spawn_box
-        x = (box[0] + box[1]) / 2
-        # The ground under the middle (the bottom of the spawn area if there's none)
-        world = env.map.world
-        ground = next((y for y in range(int(box[2]), int(env.map.height), 4) if world.solid_at(x, y, 2)), box[3])
-        y = max(ground - HOLE_HEIGHT, p.top + 45, 70)
-        self.hole = {"i": i, "x": x, "y": y, "wait": round(HOLE_WARNING * TICK_HZ),
-                     "ticks": HOLE_SECONDS * TICK_HZ}
+        self.hole = {"i": i, "wait": round(HOLE_WARNING * TICK_HZ), "ticks": HOLE_SECONDS * TICK_HZ}
+
+    def _hole_at(self):
+        p = self.env.players[self.hole["i"]]
+        return p.x, p.y
 
     def _hole_safe(self, j):
         """Is player j safe from the hole? (Its owner and their team are.)"""
@@ -290,13 +290,14 @@ class PowerUps:
         """Everyone else (copies too) gets pulled towards the hole."""
         env, h = self.env, self.hole
         if h["wait"]:
-            return  # (still opening)
+            return  # (still turning into one)
+        hx, hy = self._hole_at()
         balls = [p for j, p in enumerate(env.players) if not self._hole_safe(j)]
         balls += [c for o, c in env.copies if not self._hole_safe(o)]
         for p in balls:
             if not p.alive or p.held:
                 continue
-            dx, dy = h["x"] - p.x, h["y"] - p.y
+            dx, dy = hx - p.x, hy - p.y
             d = math.hypot(dx, dy) or 1
             dv = HOLE_PULL * min(1.0, (HOLE_NEAR / d) ** 2) * env.time_scale
             p.x_v += dx / d * dv
@@ -304,23 +305,30 @@ class PowerUps:
 
     def _hole_step(self):
         env, h, events = self.env, self.hole, []
-        if h["wait"]:
-            h["wait"] -= 1  # (still opening: nothing happens yet)
-            if not h["wait"]:
-                events.append({"e": "hole_on", "i": h["i"], "x": round(h["x"], 1), "y": round(h["y"], 1)})
+        owner = env.players[h["i"]]
+        hx, hy = self._hole_at()
+        if not owner.alive:
+            self.hole = None  # (knocked out: it's over)
             return events
+        if h["wait"]:
+            h["wait"] -= 1  # (still turning into one: nothing happens yet)
+            if not h["wait"]:
+                events.append({"e": "hole_on", "i": h["i"], "x": round(hx, 1), "y": round(hy, 1)})
+            return events
+        reach = owner.r + HOLE_CORE  # (touching you, or nearly)
         for j, p in enumerate(env.players):
             if (p.alive and not p.held and not self._hole_safe(j)
-                    and math.hypot(p.x - h["x"], p.y - h["y"]) < HOLE_CORE + p.r):
-                p.doomed = True  # (out at the start of the next step, to the hole's owner)
+                    and math.hypot(p.x - hx, p.y - hy) < reach + p.r):
+                p.doomed = True  # (out at the start of the next step, to you)
                 env.last_hit[j] = (h["i"], env.steps)
+                events.append({"e": "gulp", "i": h["i"], "j": j, "x": round(p.x, 1), "y": round(p.y, 1)})
         for o, c in env.copies:
-            if not self._hole_safe(o) and math.hypot(c.x - h["x"], c.y - h["y"]) < HOLE_CORE + c.r:
+            if not self._hole_safe(o) and math.hypot(c.x - hx, c.y - hy) < reach + c.r:
                 c.doomed = True
         h["ticks"] -= 1
         if h["ticks"] <= 0:
             self.hole = None
-            events.append({"e": "hole_end", "i": h["i"], "x": round(h["x"], 1), "y": round(h["y"], 1)})
+            events.append({"e": "hole_end", "i": h["i"], "x": round(hx, 1), "y": round(hy, 1)})
         return events
 
     # --- swarm ---------------------------------------------------------------------
@@ -487,7 +495,8 @@ class PowerUps:
         if self.hole is not None:
             h = self.hole
             # Everything the browser needs to predict the pull on your ball
-            out["hole"] = {"i": h["i"], "x": round(h["x"], 1), "y": round(h["y"], 1),
+            hx, hy = self._hole_at()
+            out["hole"] = {"i": h["i"], "x": round(hx, 1), "y": round(hy, 1),
                            "t": round(h["ticks"] / TICK_HZ, 1), "pull": HOLE_PULL, "near": HOLE_NEAR,
                            # seconds before it starts pulling (exact, for the browser's prediction)
                            "w": round(h["wait"] / TICK_HZ, 3),

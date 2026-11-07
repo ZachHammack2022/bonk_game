@@ -339,12 +339,15 @@
     for (const s of sim.balls) endStep(s);
   }
 
-  // A black hole's pull (powerups.PowerUps._pull), on everyone it doesn't spare
+  // A black hole's pull (powerups.PowerUps._pull), on everyone it doesn't
+  // spare. The hole is a player's ball: it moves with them.
   function pullTowards(sim, h) {
     const ts = sim.phys.time_scale ?? 1;
+    const owner = sim.balls.find((s) => s.slot === h.i && !s.copy);
+    const hx = owner ? owner.x : h.x, hy = owner ? owner.y : h.y;
     for (const s of sim.balls) {
       if (h.safe.includes(s.slot)) continue;
-      const dx = h.x - s.x, dy = h.y - s.y, d = Math.hypot(dx, dy) || 1;
+      const dx = hx - s.x, dy = hy - s.y, d = Math.hypot(dx, dy) || 1;
       const dv = h.pull * Math.min(1, (h.near / d) ** 2) * ts;
       s.vx += dx / d * dv; s.vy += dy / d * dv;
     }
@@ -368,7 +371,9 @@
     sim.hole = S.hole || null;
     sim.holeWait = S.hole ? Math.round((S.hole.w || 0) * 30) : 0;  // (steps till it pulls)
     const size = (j) => (S.sizes ? S.sizes[j] : r);
-    const ghost = (j) => !!(S.effects && S.effects[j] && S.effects[j][0] === "ghost");
+    // (A black hole passes through balls too: they're swallowed, not bumped)
+    const ghost = (j) => !!(S.effects && S.effects[j] && S.effects[j][0] === "ghost")
+      || !!(S.hole && S.hole.i === j && !(S.hole.w > 0));
     let me = null;
     S.players.forEach((p, j) => {
       if (!p[3] || (S.held && S.held[j])) return;
@@ -384,7 +389,9 @@
     });
     // (Your own copies never touch you; other people's do)
     for (const [o, x, y, heavy] of S.copies || []) {
-      if (o !== i) makeBall(sim, [x, y, heavy, 1], [0, 0, 0], base, r).slot = o;
+      if (o === i) continue;
+      const c = makeBall(sim, [x, y, heavy, 1], [0, 0, 0], base, r);
+      c.slot = o; c.copy = true;
     }
     if (!me) return [S.players[i][0], S.players[i][1]];
     const whole = Math.floor(n);

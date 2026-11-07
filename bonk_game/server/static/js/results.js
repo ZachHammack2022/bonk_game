@@ -82,7 +82,7 @@ const POWER_HINTS = {
   swap: "Trade places with a random opponent, at once",
   ghost: "Pass through other balls for 5 s",
   plane: "Super (rare): fly an attack plane for 10 s and drop 2 bombs",
-  hole: "Super (rare): a black hole pulls everyone else in for 4 s",
+  hole: "Super (rare): you become a black hole for 6 s: everyone's pulled in, and touching you knocks them out",
   giant: "Super (rare): twice the size and much heavier for 8 s",
   swarm: "Super (rare): 3 copies of you for 10 s; only the real you can be knocked out",
 };
