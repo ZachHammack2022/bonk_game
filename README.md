@@ -58,7 +58,7 @@ The host can also set the **round time** (when the sudden-death walls close in),
 And the rare **supers**, one at a time. The match freezes for a cutscene of what you got, then:
 
 - ✈️ **Attack plane**: you fly along the top of the map for 10 s, out of reach: ← → to steer, ↑ or heavy to drop a bomb. You have 2. A bomb goes off when it hits a ball or the level and knocks out everyone near it (not your team). Then you land back where you took off.
-- 🕳️ **Black hole**: a black hole opens above the middle of the map for 4 s and pulls everyone else in. Touch its core and you're out. Run for the edges!
+- 🕳️ **Black hole**: you *become* a black hole. After a moment's warning, everyone else is pulled towards you for 6 s, and anyone who touches you is out. Chase them down!
 - 🐘 **Giant**: twice the size and four times as heavy for 8 s, and no slower.
 - 🐝 **Swarm**: three copies of you for 10 s. They do what you do, and their bumps count as yours, but only the real you can be knocked out.
 

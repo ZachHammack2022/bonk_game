@@ -258,15 +258,19 @@ function swarmScene(t, total, a, cy, slot, radius) {
   }
 }
 
-// The ball throws something up and a black hole opens there (from 0.7 s),
-// pulling streaks of light in
+// The ball runs to the middle and collapses into a black hole (from 0.7
+// s), pulling streaks of light in
 function holeScene(t, total, a, cy, slot, radius, now) {
-  const bx = W * 0.5, by = cy + 46, hx = W * 0.74, hy = cy;
-  const R = radius * 1.4;
-  runIn(t, bx, by, R, slot);
-  const open = easeOutBack((t - 0.7) / 0.5);
-  if (open <= 0) return;
-  drawHoleAt(hx, hy, 58 * open, now, a);
+  const x = W * 0.66, y = cy + 20;
+  const R = radius * 1.8;
+  if (t < 0.7) { runIn(t, x, y, R, slot); return; }
+  const k = clamp((t - 0.7) / 0.5, 0, 1);
+  ctx.globalAlpha = a * (1 - k);
+  drawBall(ctx, x, y, R * (1 - 0.3 * k), 0, slot.color, slot.pattern, true, slot.hat);
+  ctx.globalAlpha = a;
+  drawHoleAt(x, y, R * 1.6 * easeOutBack(k), now, a);
+  ctx.beginPath(); ctx.arc(x, y, R * easeOutBack(k) + 2, 0, Math.PI * 2);
+  ctx.strokeStyle = slot.color; ctx.lineWidth = 4; ctx.stroke();
 }
 
 // --- the black hole ------------------------------------------------------------
@@ -301,30 +305,37 @@ function drawHoleAt(x, y, r, now, alpha = 1) {
   ctx.restore();
 }
 
-// st.hole: {i, x, y, t: seconds left, w: seconds before it pulls, near, ...}.
-// While it's opening it grows, pulsing, inside a dashed ring that shows
-// how far it reaches; then it pulls, and shrinks away at the end.
-function drawHole(st, now) {
-  const h = st.hole;
-  if (!h) return;
+// The player who's a black hole (st.hole: {i, t: seconds left, w: seconds
+// before it pulls, near, ...}), drawn at x, y (where their ball is, or
+// your prediction of yours). While they're turning into one, their ball
+// darkens and swirls inside a dashed ring showing how far it reaches;
+// then it's a black hole edged in their colour, and back to a ball at
+// the end.
+function drawHoleBall(h, x, y, R, slot, heavy, now) {
   const k = (app.match.powerups && app.match.powerups.hole) || {};
-  const core = k.core || 18, warning = k.warning || 1.2;
-  const fade = clamp(h.t / 0.5, 0, 1);
+  const warning = k.warning || 1.2;
+  const reach = (h.near || 60) * 1.6;
   if (h.w > 0) {
     const open = clamp(1 - h.w / warning, 0, 1);
-    const pulse = 1 + 0.08 * Math.sin(now / 70);
+    drawPlayer(x, y, R, heavy, slot.color, slot.pattern, slot.hat);
     ctx.save();
     ctx.setLineDash([8, 8]);
     ctx.lineDashOffset = -now / 30;
     ctx.strokeStyle = `rgba(199,155,255,${0.35 + 0.35 * Math.abs(Math.sin(now / 160))})`;
     ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.arc(h.x, h.y, (h.near || 80) * 1.4, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, reach * (1.4 - 0.4 * open), 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
-    drawHoleAt(h.x, h.y, core * 1.6 * (0.15 + 0.85 * open) * pulse, now, 0.5 + 0.5 * open);
-    if (!isMe(h.i)) text("GET AWAY!", 16, "#e6d4ff", h.x, h.y - (h.near || 80) * 1.4 - 14, { weight: 900, alpha: 0.6 + 0.4 * Math.abs(Math.sin(now / 120)) });
+    drawHoleAt(x, y, R * 1.6 * open * (1 + 0.08 * Math.sin(now / 70)), now, 0.4 + 0.6 * open);
+    if (!isMe(h.i)) text("GET AWAY!", 15, "#e6d4ff", x, y - reach * (1.4 - 0.4 * open) - 12, { weight: 900, alpha: 0.6 + 0.4 * Math.abs(Math.sin(now / 120)) });
     return;
   }
-  drawHoleAt(h.x, h.y, core * 1.6 * (0.3 + 0.7 * fade), now);
+  const fade = clamp(h.t / 0.4, 0, 1);  // (turning back into a ball at the end)
+  if (fade < 1) drawPlayer(x, y, R, heavy, slot.color, slot.pattern, slot.hat);
+  drawHoleAt(x, y, R * 1.6 * (0.4 + 0.6 * fade), now, fade);
+  ctx.globalAlpha = fade;
+  ctx.beginPath(); ctx.arc(x, y, R + 1, 0, Math.PI * 2);
+  ctx.strokeStyle = slot.color; ctx.lineWidth = 3; ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 // --- swarm copies ---------------------------------------------------------------

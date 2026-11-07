@@ -609,7 +609,6 @@ function frame(now) {
   drawTrails(st.players.map((p, i) => (i === flying ? [p[0], p[1], p[2], 0] : p)), app.match.slots, R, now);
   // A giant's bigger (st.sizes, while anyone's a different size)
   const size = (i) => (st.sizes ? st.sizes[i] : R);
-  drawHole(st, now);
   drawCopies(st, R);
   st.players.forEach((p, i) => {
     if (!p[3] || i === flying) return;
@@ -623,6 +622,7 @@ function frame(now) {
       circle(p[0], p[1], Ri + 6, c);
       ctx.globalAlpha = 1;
     }
+    if (st.hole && st.hole.i === i) { drawHoleBall(st.hole, p[0], p[1], Ri, slot, p[2], now); return; }
     const held = st.held && st.held[i];
     if (held) ctx.globalAlpha = 0.5 + 0.15 * Math.sin(now / 90);  // see-through, flickering
     else if (eff && eff[0] === "ghost") ctx.globalAlpha = 0.38 + 0.08 * Math.sin(now / 150);  // see-through
