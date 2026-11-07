@@ -19,8 +19,9 @@ And the supers: rarer, one at a time. The match freezes for a cutscene
          bombs. A bomb goes off when it hits a ball or the level, knocking
          out everyone (but your team) within BLAST. Then you're back where
          you were.
-- hole:  a black hole opens above the middle of the map for HOLE_SECONDS
-         and pulls everyone else in. Touching its core knocks you out.
+- hole:  a black hole opens above the middle of the map. For HOLE_WARNING
+         it only grows (so everyone sees it coming); then for HOLE_SECONDS
+         it pulls everyone else in. Touching its core knocks you out.
 - giant: you're GIANT_SIZE times as big, and as much heavier as you are
          bigger, for a while (you still move as fast).
 - swarm: SWARM_COPIES copies of you join in for a while. They do what
@@ -65,6 +66,7 @@ BLAST = 85               # a bomb knocks out every ball this close
 AFTER_LAST_BOMB = 1.2    # seconds the plane stays once its last bomb's gone off
 LANDING_HOLD = 1.0       # seconds the pilot's held (safe) once they're back
 # The black hole
+HOLE_WARNING = 1.2       # seconds it grows before it pulls (time to see it and run)
 HOLE_SECONDS = 4
 HOLE_PULL = 2.2          # speed it adds each step, towards it, within HOLE_NEAR (more than
                          # gravity: close enough, it lifts you off the ground)
@@ -87,7 +89,7 @@ KINDS = {
     "plane": {"title": "Attack plane", "seconds": PLANE_SECONDS, "force": 1.0, "max_speed": 1.0,
               "gravity": 1.0, "super": True, "bombs": BOMBS, "blast": BLAST},
     "hole": {"title": "Black hole", "seconds": HOLE_SECONDS, "force": 1.0, "max_speed": 1.0,
-             "gravity": 1.0, "super": True, "core": HOLE_CORE},
+             "gravity": 1.0, "super": True, "core": HOLE_CORE, "warning": HOLE_WARNING},
     "giant": {"title": "Giant", "seconds": 8, "force": 1.0, "max_speed": 0.9, "gravity": 1.0,
               "super": True, "size": GIANT_SIZE},
     "swarm": {"title": "Swarm", "seconds": 10, "force": 1.0, "max_speed": 1.0, "gravity": 1.0,
@@ -277,7 +279,8 @@ class PowerUps:
         world = env.map.world
         ground = next((y for y in range(int(box[2]), int(env.map.height), 4) if world.solid_at(x, y, 2)), box[3])
         y = max(ground - HOLE_HEIGHT, p.top + 45, 70)
-        self.hole = {"i": i, "x": x, "y": y, "ticks": HOLE_SECONDS * TICK_HZ}
+        self.hole = {"i": i, "x": x, "y": y, "wait": round(HOLE_WARNING * TICK_HZ),
+                     "ticks": HOLE_SECONDS * TICK_HZ}
 
     def _hole_safe(self, j):
         """Is player j safe from the hole? (Its owner and their team are.)"""
@@ -286,6 +289,8 @@ class PowerUps:
     def _pull(self):
         """Everyone else (copies too) gets pulled towards the hole."""
         env, h = self.env, self.hole
+        if h["wait"]:
+            return  # (still opening)
         balls = [p for j, p in enumerate(env.players) if not self._hole_safe(j)]
         balls += [c for o, c in env.copies if not self._hole_safe(o)]
         for p in balls:
@@ -299,6 +304,11 @@ class PowerUps:
 
     def _hole_step(self):
         env, h, events = self.env, self.hole, []
+        if h["wait"]:
+            h["wait"] -= 1  # (still opening: nothing happens yet)
+            if not h["wait"]:
+                events.append({"e": "hole_on", "i": h["i"], "x": round(h["x"], 1), "y": round(h["y"], 1)})
+            return events
         for j, p in enumerate(env.players):
             if (p.alive and not p.held and not self._hole_safe(j)
                     and math.hypot(p.x - h["x"], p.y - h["y"]) < HOLE_CORE + p.r):
@@ -479,6 +489,8 @@ class PowerUps:
             # Everything the browser needs to predict the pull on your ball
             out["hole"] = {"i": h["i"], "x": round(h["x"], 1), "y": round(h["y"], 1),
                            "t": round(h["ticks"] / TICK_HZ, 1), "pull": HOLE_PULL, "near": HOLE_NEAR,
+                           # seconds before it starts pulling (exact, for the browser's prediction)
+                           "w": round(h["wait"] / TICK_HZ, 3),
                            "safe": [j for j in range(self.env.n) if self._hole_safe(j)]}
         if self.env.copies:
             # [owner, x, y, how heavy 0-1]

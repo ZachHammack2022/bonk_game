@@ -120,9 +120,14 @@ def effect(kind, who=0, seconds=8):
     return power
 
 
-def black_hole(m):
+def black_hole(m, wait=0):
     m.powerups.pending = (1, "hole")
     m.powerups.launch()
+    m.powerups.hole["wait"] = wait
+
+
+def opening_black_hole(m):
+    black_hole(m, wait=5)  # (it starts pulling partway through)
 
 
 POWER_CASES = {
@@ -136,6 +141,7 @@ POWER_CASES = {
                                     effect("ghost", 1)),
     # Pulled by someone else's black hole
     "pulled by a black hole": ("platform", [NONE] * 15, put(300, 279), None, black_hole),
+    "a black hole starts pulling": ("platform", [NONE] * 15, put(300, 279), None, opening_black_hole),
     "jump into a black hole": ("platform", [U] + [NONE] * 6, put(420, 279), None, black_hole),
 }
 

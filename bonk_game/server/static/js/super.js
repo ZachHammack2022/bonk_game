@@ -301,15 +301,30 @@ function drawHoleAt(x, y, r, now, alpha = 1) {
   ctx.restore();
 }
 
-// st.hole: {i, x, y, t: seconds left, ...}: it opens, then shrinks away at the end
+// st.hole: {i, x, y, t: seconds left, w: seconds before it pulls, near, ...}.
+// While it's opening it grows, pulsing, inside a dashed ring that shows
+// how far it reaches; then it pulls, and shrinks away at the end.
 function drawHole(st, now) {
   const h = st.hole;
   if (!h) return;
-  const M = app.match;
-  const total = (M.powerups && M.powerups.hole && M.powerups.hole.seconds) || 4;
-  const core = (M.powerups && M.powerups.hole && M.powerups.hole.core) || 18;
-  const grow = clamp((total - h.t) / 0.4, 0, 1), fade = clamp(h.t / 0.5, 0, 1);
-  drawHoleAt(h.x, h.y, core * 1.6 * easeOutBack(grow) * (0.3 + 0.7 * fade), now);
+  const k = (app.match.powerups && app.match.powerups.hole) || {};
+  const core = k.core || 18, warning = k.warning || 1.2;
+  const fade = clamp(h.t / 0.5, 0, 1);
+  if (h.w > 0) {
+    const open = clamp(1 - h.w / warning, 0, 1);
+    const pulse = 1 + 0.08 * Math.sin(now / 70);
+    ctx.save();
+    ctx.setLineDash([8, 8]);
+    ctx.lineDashOffset = -now / 30;
+    ctx.strokeStyle = `rgba(199,155,255,${0.35 + 0.35 * Math.abs(Math.sin(now / 160))})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(h.x, h.y, (h.near || 80) * 1.4, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    drawHoleAt(h.x, h.y, core * 1.6 * (0.15 + 0.85 * open) * pulse, now, 0.5 + 0.5 * open);
+    if (!isMe(h.i)) text("GET AWAY!", 16, "#e6d4ff", h.x, h.y - (h.near || 80) * 1.4 - 14, { weight: 900, alpha: 0.6 + 0.4 * Math.abs(Math.sin(now / 120)) });
+    return;
+  }
+  drawHoleAt(h.x, h.y, core * 1.6 * (0.3 + 0.7 * fade), now);
 }
 
 // --- swarm copies ---------------------------------------------------------------
