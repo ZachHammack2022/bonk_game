@@ -106,3 +106,6 @@ th { position: sticky; top: 0; background: var(--surface-2); color: var(--dim); 
   #about { display: none; }
   .tile .value { font-size: 20px; }
 }
+
+.ret-note { margin: 10px 0 12px; font-size: 13px; max-width: 820px; }
+#ret-chart { margin-bottom: 4px; }

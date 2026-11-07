@@ -34,6 +34,7 @@ Open the page, pick a name and press **Play**. You'll see every game going: join
 - **Joining mid-match**: you take over a bot's seat, keeping its colour and score (straight away in Lives, Knockouts and Crown; at the next round otherwise), or watch until the next match.
 - **← Lobby** during a match steps out while a bot plays for you; **← Leave** leaves the room. If you refresh or lose connection, you get your seat back; after 30 seconds away you leave.
 - After a match everyone can vote to play again, and **Killcam** replays the final knockout in slow motion.
+- **On a phone**: the home page offers **Add bonk to your home screen** (Android and Chrome ask with their own prompt; on iPhone it shows how: Share, then Add to Home Screen). Opened from there it's full screen, like an app, and keeps clear of the notch.
 
 ### Modes
 
@@ -134,6 +135,7 @@ Set up once: make the staging app (`./deploy/fly.sh bonk-game-staging iad` plus 
 ### Watching it
 
 - **`/admin`**: paste the metrics token and see what's happening now (players, rooms, matches, tick time, bandwidth) and charts for the last hour to 90 days, with restarts marked. It's sampled every minute into `BONK_METRICS_DB`.
+  - **Who comes back**: D1, D7 and D30 retention (of the people who first joined a game on a day, how many joined one again 1, 7 and 30 days later), players per day, week and month, new players, how many play from the home screen, and a table of daily cohorts. A player is a browser: its random token, hashed with a salt kept in the database (so what's stored can't be used to play as anyone), kept 120 days.
 - **`/metrics`**: the same numbers in Prometheus format (`?format=json` for JSON), with `Authorization: Bearer <token>`.
 - **Logs**: one JSON object per line (rooms, matches, errors with tracebacks, sign-ins, reports). `fly logs -a <app>`.
 - **Player reports** at `/api/reports`, and **playtest reports** at `/api/playtest` (both with the token). See [Playtesting](#playtesting-with-friends).
@@ -491,11 +493,12 @@ bonk_game/
     profiles.py, cosmetics.py  profiles and stats; what you can wear
     moderation.py            the word filter and player reports
     limits.py                rate and size limits
-    metrics.py               logs, /metrics, and its history
+    metrics.py               logs, /metrics, its history, and retention (who comes back)
     playtest.py, playtest_report.py, smoke.py, load_test.py   checking how it plays and holds up
     admin/                   the /admin page
     static/                  the browser client (no build step)
       index.html, style.css
+      manifest.webmanifest, icons/   the web app (Add to Home Screen; js/install.js)
       physics.js             the browser's copy of the physics (on vendor/planck.min.js)
       clock.js, netsim.js, delta.js, profile.js   shared with the Python tests
       js/                    the client's scripts, listed at the top of js/core.js

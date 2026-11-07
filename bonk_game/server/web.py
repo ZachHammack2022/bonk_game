@@ -23,9 +23,11 @@ Routes:
                          (playtest.py; same token as /metrics)
     GET  /api/reports    the latest player reports (moderation.py; same token)
     GET  /admin          a page charting the server's numbers, now and over the
-                         last 90 days (you paste the metrics token into it)
+                         last 90 days, and who comes back (retention, from
+                         metrics.Retention); you paste the metrics token into it
     GET  /api/admin/metrics?range=<seconds>   what that page shows (same token;
                          unlike /metrics, refused if BONK_METRICS_TOKEN isn't set)
+    GET  /manifest.webmanifest   the web app's manifest (Add to Home Screen)
     GET  /privacy        what the site keeps about people
     GET  /terms          the terms of use
     /auth/..., /api/me   signing in with Google and your account, when
@@ -118,6 +120,8 @@ TOKEN_LIMIT = web.AppKey("token_limit", object)
 # while the server runs
 METRICS_DB = os.environ.get("BONK_METRICS_DB", ":memory:")
 HISTORY = web.AppKey("history", object)
+# Who comes back (metrics.Retention), in the same database as HISTORY
+RETENTION = web.AppKey("retention", object)
 SAMPLER = web.AppKey("sampler", object)
 ADMIN = os.path.join(os.path.dirname(__file__), "admin")
 # The admin page is nobody else's business: no search engines, no other
@@ -437,6 +441,7 @@ async def admin_metrics(request):
         "keep_days": history.KEEP_DAYS,
         "kept": history.path != ":memory:",
         "history": history.series(seconds),
+        "retention": request.app[RETENTION].report(),
     }, headers=ADMIN_HEADERS)
 
 
@@ -507,6 +512,10 @@ async def websocket(request):
         except RoomFull as e:
             token = None
             return await refuse(str(e))
+        try:  # for retention on /admin; never stops anyone playing
+            request.app[RETENTION].seen(token, installed=msg.get("installed") is True)
+        except Exception as e:
+            metrics.event("error", logging.ERROR, where="retention", error=repr(e))
 
         async for raw in ws:
             if raw.type != WSMsgType.TEXT:
@@ -562,6 +571,7 @@ async def _sampler(app):
             history.add(_snapshot(app))
             if n % 60 == 0:  # hourly
                 history.prune()
+                app[RETENTION].prune()
         except Exception as e:  # (a full disk, say): the game carries on
             metrics.event("error", logging.ERROR, where="metrics_history", error=repr(e))
         n += 1
@@ -592,6 +602,15 @@ async def _stop_background(app):
         await room.stop()
 
 
+async def manifest(request):
+    """The web app's manifest (Add to Home Screen): served from the root so
+    its scope is the whole site, with the right content type."""
+    with open(os.path.join(STATIC, "manifest.webmanifest"), encoding="utf-8") as f:
+        text = f.read()
+    return web.Response(text=text, content_type="application/manifest+json",
+                        headers={"Cache-Control": "no-cache"})
+
+
 async def privacy(request):
     return web.Response(text=request.app[PRIVACY_PAGE], content_type="text/html",
                         headers={"Cache-Control": "no-cache"})
@@ -611,6 +630,7 @@ def make_app(rooms=None, auth_config=None, accounts=None, history=None):
     app[GUESS_LIMIT] = limits.PerKey(WRONG_PASSWORDS / 60, WRONG_PASSWORDS)
     app[TOKEN_LIMIT] = limits.PerKey(WRONG_TOKENS / 60, WRONG_TOKENS)
     app[HISTORY] = history or metrics.History(METRICS_DB)
+    app[RETENTION] = metrics.Retention(app[HISTORY].db, clock=app[HISTORY].clock)
     app[CONNECTIONS] = {}  # ip -> open WebSockets
     app[SOCKETS] = set()  # open WebSockets, closed on shutdown
     app[PAGE] = render_index()
@@ -631,6 +651,7 @@ def make_app(rooms=None, auth_config=None, accounts=None, history=None):
     app.router.add_get("/admin", admin_page)
     app.router.add_get("/admin/{file}", admin_page)
     app.router.add_get("/api/admin/metrics", admin_metrics)
+    app.router.add_get("/manifest.webmanifest", manifest)
     app.router.add_get("/privacy", privacy)
     app.router.add_get("/terms", terms)
     accounts = auth.setup(app, auth_config, accounts)

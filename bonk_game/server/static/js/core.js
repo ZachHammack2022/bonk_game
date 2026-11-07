@@ -109,6 +109,13 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
   remove(k) { try { localStorage.removeItem(k); } catch (e) { /* private mode */ } },
 };
+// Opened from the home screen (the web app; install.js)?
+function installedApp() {
+  try {
+    return navigator.standalone === true ||
+      matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches;
+  } catch (e) { return false; }
+}
 function randomToken() {
   const a = new Uint8Array(12);
   crypto.getRandomValues(a);
@@ -385,6 +392,7 @@ function connect() {
     // forgotten the room; ask it to make the room again with the same code
     ws.send(JSON.stringify({ type: "hello", name: me.name, token: me.token, version: CLIENT_VERSION,
                              reopen: app.retry > 0, host: app.restoring !== null,
+                             installed: installedApp(),
                              ...(app.password ? { password: app.password } : {}) }));
   };
   ws.onmessage = (e) => {

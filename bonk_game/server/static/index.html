@@ -6,6 +6,14 @@
   <title>bonk</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23803636'/%3E%3Ccircle cx='32' cy='32' r='24' fill='%23ff6b6b'/%3E%3Ccircle cx='24' cy='23' r='6' fill='%23ffc4c4'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
+  <!-- The web app: Add to Home Screen (install.js) -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#0d1220">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="bonk">
 </head>
 <body>
   <!-- Icons (stroke icons, 24x24, drawn in the text colour): <svg class="i"><use href="#i-name"/></svg> -->
@@ -52,6 +60,15 @@
         <button type="submit" id="join-code" class="primary big">Join game</button>
         <p class="dim small quick-help">You were invited. <button type="button" id="join-other" class="link-button">See all games instead</button></p>
       </form>
+    </div>
+    <!-- Add to Home Screen: shown on phones and tablets, not once installed (install.js) -->
+    <div id="install" class="install hidden">
+      <button type="button" id="install-button" class="install-button">
+        <img src="/static/icons/icon-192.png" alt="" width="28" height="28">
+        <span><b>Add bonk to your home screen</b><span id="install-sub" class="dim small">Full screen, one tap away</span></span>
+      </button>
+      <button type="button" id="install-close" class="icon-button install-close" title="Not now"><svg class="i"><use href="#i-x"/></svg><span class="sr">Not now</span></button>
+      <p id="install-steps" class="install-steps small hidden"></p>
     </div>
     <footer class="home-footer"><a href="/privacy">Privacy policy</a> · <a href="/terms">Terms of service</a></footer>
   </section>
@@ -420,6 +437,7 @@
   <script src="/static/js/people.js"></script>
   <script src="/static/js/chat.js"></script>
   <script src="/static/js/account.js"></script>
+  <script src="/static/js/install.js"></script>
   <script src="/static/js/main.js"></script>
 </body>
 </html>

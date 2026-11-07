@@ -704,3 +704,34 @@ body.touch .game-bar { bottom: auto; top: 12px; }
 /* Covers the match while it plays: click anywhere to skip */
 .killcam { position: fixed; inset: 0; padding-top: 112px; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
 .killcam b { color: var(--danger); letter-spacing: 0.4em; font-size: 20px; font-weight: 700; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); }
+
+/* --- Add to Home Screen (install.js) --------------------------------------- */
+.install {
+  width: 100%; max-width: 420px; margin-top: 14px;
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l, 14px);
+  padding: 8px 8px 8px 12px;
+}
+.install-button {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  background: transparent; border: 0; padding: 4px 0; min-height: 0; height: auto; color: var(--text);
+}
+.install-button:hover { background: transparent; }
+.install-button img { border-radius: 7px; flex: none; }
+.install-button > span { display: flex; flex-direction: column; }
+.install-button b { font-weight: 600; }
+.install-steps { grid-column: 1 / -1; margin: 2px 4px 6px; color: var(--dim); }
+
+/* Opened from the home screen: full screen, so keep clear of the notch and
+   the home bar (draw.js sizes the game to fit inside these too) */
+html.installed-app {
+  --safe-t: env(safe-area-inset-top, 0px); --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px); --safe-l: env(safe-area-inset-left, 0px);
+}
+html.installed-app .screen:not(#game) {
+  padding: calc(32px + var(--safe-t)) calc(16px + var(--safe-r)) calc(32px + var(--safe-b)) calc(16px + var(--safe-l));
+}
+html.installed-app #stage { box-sizing: border-box; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
+html.installed-app .game-bar { left: calc(12px + var(--safe-l)); bottom: calc(12px + var(--safe-b)); }
+html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); bottom: auto; }
+.install-button .small { font-weight: 400; }
