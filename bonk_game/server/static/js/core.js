@@ -482,6 +482,7 @@ function onMessage(msg) {
       app.last = null;
       app.results = null;
       playClock.reset();
+      stalls.reset();
       replayer.stop();
       replayer.recent = [];
       $("killcam").classList.add("hidden");
@@ -504,6 +505,7 @@ function onMessage(msg) {
       // Mostly deltas: just what changed since the last tick
       const S = msg.type === "state" ? msg : BonkDelta.apply(app.last, msg);
       playtest.state(!!S);
+      stalls.state(performance.now());
       if (!S) break;  // missed the state it builds on: wait for the next full one
       app.last = S;
       replayer.keep(S);

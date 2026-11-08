@@ -63,6 +63,12 @@
           player is) and how laggy it is: the round trip each player's browser measures. Typical is the median;
           slow is the worst 5%. Over 150 ms, people start to feel it. "direct" means not through Fly's proxy
           (running locally).</p>
+        <p class="dim ret-note">And in matches: the <b>drawing delay</b> is how far behind the newest states the
+          match is drawn, which the browser grows when states come unevenly (roughly 40–80 ms on a steady connection).
+          A <b>stall</b> is a state coming more than 100 ms after the one before: on a WebSocket, one lost packet
+          holds up everything behind it. <b>Stalling often</b> is the share of players in a match who stalled more
+          than once a minute. Lots of stalls, or a drawing delay well above 80 ms, is the case for sending states
+          over UDP (WebTransport); few is the case against.</p>
         <div class="table-wrap"><table id="regions"></table></div>
       </section>
 

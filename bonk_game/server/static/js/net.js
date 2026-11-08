@@ -10,11 +10,42 @@ const net = {
   rtt: null,                                  // smoothed round trip, ms
   inputs: [{ t: 0, b: [0, 0, 0, 0, 0] }],     // when your buttons changed
 };
-// A ping a second; it carries your current round trip, so the server can
-// show how laggy players are where (the /admin page)
+// A ping a second. It carries how the network's treating you, so the server
+// can show how laggy players are where (the /admin page, as totals per
+// region): your round trip; and in a match, how far behind the newest
+// states the match is being drawn (the playback clock's delay: it grows
+// when states come unevenly) and how many states came since the last ping,
+// and how many of those after a stall (over STALL_MS since the one before:
+// on a WebSocket, one lost packet holds up everything behind it).
+const STALL_MS = 100;
+const stalls = {
+  last: null, states: 0, stalls: 0,
+  state(now) {
+    // (A hidden tab gets its messages late anyway: not the network's fault)
+    if (document.hidden) { this.last = null; return; }
+    if (this.last !== null && now - this.last > STALL_MS) this.stalls += 1;
+    this.last = now;
+    this.states += 1;
+  },
+  // What to send with this ping (and start counting again)
+  take() {
+    const out = { states: this.states, stalls: this.stalls };
+    // (No states for a second: between matches. Don't count that gap)
+    if (!this.states) this.last = null;
+    this.states = this.stalls = 0;
+    return out;
+  },
+  reset() { this.last = null; this.states = this.stalls = 0; },
+};
 setInterval(() => {
   if (app.ws && app.ws.readyState === WebSocket.OPEN) {
-    send({ type: "ping", t: performance.now(), ...(net.rtt == null ? {} : { rtt: Math.round(net.rtt) }) });
+    const msg = { type: "ping", t: performance.now() };
+    if (net.rtt != null) msg.rtt = Math.round(net.rtt);
+    const got = stalls.take();
+    const delay = app.match && !replayer.active && !document.hidden ? playClock.delay(performance.now()) : null;
+    if (got.states) Object.assign(msg, got);
+    if (got.states && delay != null && delay >= 0) msg.delay = Math.round(delay);
+    send(msg);
   }
 }, 1000);
 
