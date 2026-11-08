@@ -235,8 +235,9 @@ function openNewGame() {
   $("new-name").value = defaultRoomName();
   setNewPrivacy(store.get("bonk.newPrivate", "1") === "1");
   $("new-dialog").classList.remove("hidden");
-  $("new-name").focus();
-  $("new-name").select();
+  // The defaults are fine: focus Create (Enter makes the room), not the
+  // name box, so phones don't pop the keyboard up
+  $("new-create").focus();
 }
 async function newGame(name, locked, button) {
   $("name").dispatchEvent(new Event("change"));
