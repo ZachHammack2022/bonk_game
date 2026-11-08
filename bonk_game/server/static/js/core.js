@@ -94,11 +94,12 @@ const MAX_JUMP = 60;       // a bigger move in one tick is a teleport, not blend
 
 // Testing switches: ?net=mobile (or ?lag=150&jitter=40...) pretends the
 // network is worse than it is (see netsim.js); ?predict=0 turns off
-// prediction of your own ball.
+// prediction of your own ball, ?predict_others=0 of the balls near it.
 const params = new URLSearchParams(location.search);
 const NET_SIM = BonkNetSim.fromParams(params);
 const fakeNet = NET_SIM && BonkNetSim.make(NET_SIM);
 const PREDICT = params.get("predict") !== "0";
+const PREDICT_OTHERS = params.get("predict_others") !== "0";
 // The client's version (the server puts it in the page). Sent in "hello"; a
 // tab left open across a deploy is told to refresh.
 const CLIENT_VERSION = (document.querySelector('meta[name="bonk-version"]') || {}).content || "dev";

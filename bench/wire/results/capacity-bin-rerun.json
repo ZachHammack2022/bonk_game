@@ -1,0 +1,234 @@
+{
+ "meta": {
+  "python": "3.13.18",
+  "cpus": 4,
+  "at": "2026-11-08 19:16:38"
+ },
+ "people": 8,
+ "map": "grand",
+ "step": 3,
+ "found": {
+  "bin": [
+   18,
+   27
+  ]
+ },
+ "runs": [
+  {
+   "variant": "bin",
+   "rooms": 15,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 50.61445724174454,
+   "tick_ms_avg": 0.6392145049964407,
+   "tick_ms_p99": 1.3817680001011468,
+   "ticks_per_s": 30.092164737168762,
+   "late": 0,
+   "loop_lag_ms_p99": 2.7690179999808606,
+   "wire_kbit_per_player": 12.432280383697423,
+   "payload_kbit_per_player": 11.925329900111574,
+   "states_per_s_min": 29.997727447057652,
+   "states_per_s_med": 29.997727447057652,
+   "gap_ms_p99": 35.881757736206055,
+   "checked": 6781,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 5.724881621805401,
+   "repeat": 0
+  },
+  {
+   "variant": "bin",
+   "rooms": 18,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 58.698358637876375,
+   "tick_ms_avg": 0.6471791116649305,
+   "tick_ms_p99": 1.2479919996621902,
+   "ticks_per_s": 30.008841903774837,
+   "late": 0,
+   "loop_lag_ms_p99": 3.0259769996519026,
+   "wire_kbit_per_player": 12.401170120213303,
+   "payload_kbit_per_player": 11.89546419048221,
+   "states_per_s_min": 29.99958277328926,
+   "states_per_s_med": 29.99958277328926,
+   "gap_ms_p99": 36.52763366699219,
+   "checked": 8119,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 6.748061462195579,
+   "repeat": 0
+  },
+  {
+   "variant": "bin",
+   "rooms": 21,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 71.65411482719998,
+   "tick_ms_avg": 0.5656742616693009,
+   "tick_ms_p99": 1.164854999842646,
+   "ticks_per_s": 28.489296164259184,
+   "late": 51,
+   "loop_lag_ms_p99": 35.29470900002707,
+   "wire_kbit_per_player": 12.078826714678444,
+   "payload_kbit_per_player": 11.598532098592246,
+   "states_per_s_min": 28.0806057039641,
+   "states_per_s_med": 28.66388238030757,
+   "gap_ms_p99": 56.32615089416504,
+   "checked": 9091,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 7.604087265705355,
+   "repeat": 0
+  },
+  {
+   "variant": "bin",
+   "rooms": 15,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 49.922753086276025,
+   "tick_ms_avg": 0.6067377890044554,
+   "tick_ms_p99": 1.2768480000886484,
+   "ticks_per_s": 30.04649100951048,
+   "late": 0,
+   "loop_lag_ms_p99": 4.198262999580038,
+   "wire_kbit_per_player": 12.112368785895438,
+   "payload_kbit_per_player": 11.605883491522142,
+   "states_per_s_min": 29.996496848096985,
+   "states_per_s_med": 29.996496848096985,
+   "gap_ms_p99": 36.27157211303711,
+   "checked": 6773,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 5.7398488002420285,
+   "repeat": 1
+  },
+  {
+   "variant": "bin",
+   "rooms": 18,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 59.19360521044043,
+   "tick_ms_avg": 0.6152243073358175,
+   "tick_ms_p99": 1.2416499998835206,
+   "ticks_per_s": 30.008945049121717,
+   "late": 0,
+   "loop_lag_ms_p99": 2.9330769998523465,
+   "wire_kbit_per_player": 12.389888789577553,
+   "payload_kbit_per_player": 11.88404223421698,
+   "states_per_s_min": 29.999685886810973,
+   "states_per_s_med": 29.999685886810973,
+   "gap_ms_p99": 36.38195991516113,
+   "checked": 8119,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 6.7114751166193845,
+   "repeat": 1
+  },
+  {
+   "variant": "bin",
+   "rooms": 21,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 68.30051207496639,
+   "tick_ms_avg": 0.5629891070020676,
+   "tick_ms_p99": 1.0549809999247373,
+   "ticks_per_s": 30.062198947464523,
+   "late": 0,
+   "loop_lag_ms_p99": 4.667529000016657,
+   "wire_kbit_per_player": 12.30515720547159,
+   "payload_kbit_per_player": 11.799115480633647,
+   "states_per_s_min": 29.99870961494612,
+   "states_per_s_med": 29.99870961494612,
+   "gap_ms_p99": 36.12875938415527,
+   "checked": 9492,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 7.46341624717302,
+   "repeat": 1
+  },
+  {
+   "variant": "bin",
+   "rooms": 24,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 73.1162322051874,
+   "tick_ms_avg": 0.5836690736711413,
+   "tick_ms_p99": 1.2591380000230856,
+   "ticks_per_s": 30.040772575590648,
+   "late": 0,
+   "loop_lag_ms_p99": 13.749550999818894,
+   "wire_kbit_per_player": 12.39328392159976,
+   "payload_kbit_per_player": 11.886646222670047,
+   "states_per_s_min": 29.99910714899482,
+   "states_per_s_med": 29.99910714899482,
+   "gap_ms_p99": 38.64479064941406,
+   "checked": 10836,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 8.309576869863875,
+   "repeat": 1
+  },
+  {
+   "variant": "bin",
+   "rooms": 27,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 79.54712744377385,
+   "tick_ms_avg": 0.574264696664007,
+   "tick_ms_p99": 1.2665209997066995,
+   "ticks_per_s": 30.081178771466593,
+   "late": 0,
+   "loop_lag_ms_p99": 11.689864999880228,
+   "wire_kbit_per_player": 12.47630083046038,
+   "payload_kbit_per_player": 11.969491451626617,
+   "states_per_s_min": 29.997851406448678,
+   "states_per_s_med": 29.997851406448678,
+   "gap_ms_p99": 39.28732872009277,
+   "checked": 12209,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 9.152092474108608,
+   "repeat": 1
+  },
+  {
+   "variant": "bin",
+   "rooms": 30,
+   "people": 8,
+   "map": "grand",
+   "cpu_pct": 85.00260783379473,
+   "tick_ms_avg": 0.5501155300047079,
+   "tick_ms_p99": 1.2422159998095594,
+   "ticks_per_s": 29.549010052733898,
+   "late": 30,
+   "loop_lag_ms_p99": 34.71726299994771,
+   "wire_kbit_per_player": 12.099919855466421,
+   "payload_kbit_per_player": 11.602472653913503,
+   "states_per_s_min": 29.399099629692973,
+   "states_per_s_med": 29.482383198049043,
+   "gap_ms_p99": 45.488595962524414,
+   "checked": 13358,
+   "rebuild_failures": 0,
+   "frame_kinds": [
+    "binary"
+   ],
+   "browser_cpu_pct_max": 9.835055087677983,
+   "repeat": 1
+  }
+ ]
+}

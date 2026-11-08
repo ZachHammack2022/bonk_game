@@ -562,6 +562,82 @@ function check(cond, what) {
       "with the Content-Security-Policy on, the game connects, plays and gets states");
     check(violations.length === 0, "the policy blocks nothing" + (violations.length ? ": " + violations.join(" | ") : ""));
 
+    // With a ping, the balls near yours are drawn predicted, at the same
+    // moment as yours (js/net.js otherPositions); unticking it in Settings,
+    // or ?predict_others=0, draws them where the server last had them
+    const toLobby = async (page) => {
+      await page.click("#find");
+      await page.waitForSelector("#browse:not(.hidden)");
+      await page.click("#new-game");
+      await page.click("#new-create");
+      await page.waitForSelector("#lobby:not(.hidden)");
+      await page.evaluate(() => send({ type: "settings", map: "platform", mode: "knockouts", first_to: 50,
+        bots: ["bot:hard", "bot:hard", "bot:hard"] }));
+      await page.waitForFunction(() => document.querySelector("#map").value === "platform");
+    };
+    const startFromLobby = async (page) => {
+      await page.evaluate(() => send({ type: "start" }));
+      await page.waitForSelector("#game:not(.hidden)", { timeout: 8000 });
+    };
+    const startLagged = async (page) => { await toLobby(page); await startFromLobby(page); };
+    // Settings, from the lobby's or the game's gear: flip the switch, close
+    const flipSetting = async (page, gear) => {
+      await page.click(gear);
+      await page.waitForSelector("#settings:not(.hidden)");
+      const was = await page.isChecked("#set-predict");
+      await page.click("#set-predict");
+      await page.click("#me-close");
+      await page.waitForSelector("#settings", { state: "hidden" });
+      return was;
+    };
+    // Every frame for a while: the most any other ball was drawn predicted
+    // (from now on: what it was before doesn't count)
+    const watchNearby = (page) => page.evaluate(() => new Promise((resolve) => {
+      bonkDebug.near.w.length = 0;
+      let most = 0, predicted = 0, frames = 0, btn = false, own = 0;
+      const t0 = performance.now();
+      const look = () => {
+        const S = bonkDebug.app.states.length && bonkDebug.app.states[bonkDebug.app.states.length - 1][1];
+        if (S && Array.isArray(S.btn)) btn = true;
+        for (const w of bonkDebug.near.w) if (w > most) most = w;
+        if (bonkDebug.near.at) predicted += 1;
+        if (bonkDebug.own.base) own += 1;
+        frames += 1;
+        if (performance.now() - t0 < 9000 && most < 0.9) requestAnimationFrame(look);
+        else resolve({ most, predicted, frames, btn, own: own > 0 });
+      };
+      requestAnimationFrame(look);
+    }));
+    const lagged = async (name, q = "") => {
+      const page = await open(name);
+      await page.goto(base + "/?lag=120&jitter=10&seed=1" + q);
+      await page.fill("#name", "Pip");
+      return page;
+    };
+    const onPage = await lagged("predict on");
+    await startLagged(onPage);
+    const on = await watchNearby(onPage);
+    check(on.btn && on.predicted > 0 && on.most > 0.5,
+      `with a ping, a ball near yours is drawn predicted (most ${on.most.toFixed(2)}, ${on.predicted}/${on.frames} frames)`);
+    const off = await watchNearby(await (async () => { const p = await lagged("predict off", "&predict_others=0"); await startLagged(p); return p; })());
+    check(off.btn && off.most === 0 && off.own, "?predict_others=0: the others are drawn as before, yours still predicted");
+
+    // The setting (Settings: Show nearby balls where they are now): on to
+    // start with; unticked, the others are drawn as before; ticked again
+    // mid-match, predicted again straight away; and it's remembered
+    const setPage = await lagged("predict setting");
+    await toLobby(setPage);
+    check(await flipSetting(setPage, "#open-settings-lobby"), "Settings: Show nearby balls where they are now, on to start with");
+    await startFromLobby(setPage);
+    const unticked = await watchNearby(setPage);
+    check(unticked.btn && unticked.most === 0 && unticked.own, "unticked in Settings: the others are drawn as before, yours still predicted");
+    check(!(await flipSetting(setPage, "#open-settings-game")), "it was unticked, and can be ticked again in the middle of a match");
+    const ticked = await watchNearby(setPage);
+    check(ticked.most > 0.5, `ticked again mid-match: nearby balls are predicted again straight away (most ${ticked.most.toFixed(2)})`);
+    await flipSetting(setPage, "#open-settings-game");
+    await setPage.reload();
+    check(await setPage.evaluate(() => prefs.predictOthers === false && !predictOthers()), "unticked, it stays off after a reload");
+
     check(errors.length === 0, "no page errors" + (errors.length ? ": " + errors.join(" | ") : ""));
   } finally {
     if (browser) await browser.close();

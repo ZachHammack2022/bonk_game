@@ -207,8 +207,7 @@
 
   // player.end_step: let go of heavy unless it was held (the Iron power-up
   // keeps you heavy), forget which way you ran, and a remembered "up" press
-  // counts down. The other balls' buttons aren't known: they stay as heavy
-  // as they were.
+  // counts down. A ball whose buttons aren't known stays as heavy as it was.
   function endStep(s) {
     const ph = s.ph;
     if (s.jumpBuffer) s.jumpBuffer -= 1;
@@ -318,20 +317,25 @@
     body.setTransform(planck.Vec2(u.m(s.x), u.m(s.y)), 0);
   }
 
-  // One physics step (World.step): your buttons `b` go to `me`
+  // One physics step (World.step): your buttons `b` go to `me`, and each
+  // other ball whose buttons are known (s.drive) keeps pressing those
   function step(sim, me, b) {
     // (A black hole that's still opening pulls nothing yet)
     if (sim.hole && sim.holeWait-- <= 0) pullTowards(sim, sim.hole);
+    const driven = sim.driven || [];
     applyInput(me, b);
+    for (const s of driven) applyInput(s, s.drive);
     const ts = sim.phys.time_scale ?? 1;
     const n = sim.phys.substeps || 1;
     for (const s of sim.balls) push(sim, s);
     // Who's standing on something where they are now (a step of no time
     // brings the contacts up to date), for jumping
     sim.world.step(0, sim.B.velocity_iterations, sim.B.position_iterations);
-    me.grounded = standing(me);
-    beginStep(me);
-    me.body.setLinearVelocity(planck.Vec2(sim.u.toV(me.vx), sim.u.toV(me.vy)));
+    for (const s of [me, ...driven]) {
+      s.grounded = standing(s);
+      beginStep(s);
+      s.body.setLinearVelocity(planck.Vec2(sim.u.toV(s.vx), sim.u.toV(s.vy)));
+    }
     const dt = ts * sim.B.step_seconds / n;
     for (let k = 0; k < n; k++) {
       const before = sim.parts.map((pt) => pt.vx);
@@ -364,12 +368,14 @@
   //   phys: the match's physics, with your power-up (js/net.js; the
   //         match's own, for everyone else, is phys.base if different);
   //   others: [vx, vy] per slot (null: not known), for the other balls;
-  //   r: a ball's usual size.
+  //   r: a ball's usual size;
+  //   drive: per slot, {b: buttons, ph: physics} for another ball whose
+  //          buttons are known (it keeps pressing them), or null: it coasts.
   // From S too: each ball's size (S.sizes: giants), who's a ghost
   // (S.effects), other people's swarm copies, and a black hole's pull.
   // Returns [x, y].
-  function predict(S, i, you, phys, inputs, n, r, others) {
-    const { sim, me } = setup(S, i, you, phys, r, others);
+  function predict(S, i, you, phys, inputs, n, r, others, drive) {
+    const { sim, me } = setup(S, i, you, phys, r, others, drive);
     if (!me) return [S.players[i][0], S.players[i][1]];
     const whole = Math.floor(n);
     for (let k = 0; k < whole; k++) step(sim, me, inputs[Math.min(k, inputs.length - 1)] || [0, 0, 0, 0, 0]);
@@ -384,7 +390,7 @@
 
   // The world at server state S, ready to step (predict's arguments, less
   // the buttons): { sim, me } (me: null if your ball isn't in play)
-  function setup(S, i, you, phys, r, others) {
+  function setup(S, i, you, phys, r, others, drive) {
     const base = phys.base || phys;
     const sim = build(base);
     (S.parts || []).forEach((st, j) => { if (sim.parts[j]) placePart(sim, sim.parts[j], st); });
@@ -395,6 +401,7 @@
     const ghost = (j) => !!(S.effects && S.effects[j] && S.effects[j][0] === "ghost")
       || !!(S.hole && S.hole.i === j && !(S.hole.w > 0));
     let me = null;
+    sim.driven = [];
     S.players.forEach((p, j) => {
       if (!p[3] || (S.held && S.held[j])) return;
       let b;
@@ -403,7 +410,9 @@
         me.controlled = true;
       } else {
         const v = (others && others[j]) || [0, 0];
-        b = makeBall(sim, p, [v[0], v[1], 0], base, size(j), r, ghost(j));
+        const d = drive && drive[j];
+        b = makeBall(sim, p, [v[0], v[1], 0], (d && d.ph) || base, size(j), r, ghost(j));
+        if (d) { b.drive = d.b; b.controlled = true; sim.driven.push(b); }
       }
       b.slot = j;
     });
@@ -429,11 +438,13 @@
   // turn out different starts it over from S. Everything that moves (balls,
   // moving parts and their state) comes from S, so anything the server
   // sends a state for is predicted this way too.
-  function predictor(S, i, you, phys, r, others) {
+  function predictor(S, i, you, phys, r, others, drive) {
     let run;
+    const where = (sim) => sim.balls.filter((s) => !s.copy).map((s) => [s.slot, s.x, s.y]);
     const restart = () => {
-      const { sim, me } = setup(S, i, you, phys, r, others);
-      run = { sim, me, used: [], at: me ? [[me.x, me.y]] : null };  // at[k]: after k steps
+      const { sim, me } = setup(S, i, you, phys, r, others, drive);
+      // at[k]: where you are after k steps; all[k]: everyone ([slot, x, y])
+      run = { sim, me, used: [], at: me ? [[me.x, me.y]] : null, all: me ? [where(sim)] : null };
     };
     restart();
     return {
@@ -453,12 +464,27 @@
           step(run.sim, run.me, b);
           run.used.push(b);
           run.at.push([run.me.x, run.me.y]);
+          run.all.push(where(run.sim));
         }
         if (frac > 0) {
           const [x0, y0] = run.at[whole], [x1, y1] = run.at[whole + 1];
           return [x0 + (x1 - x0) * frac, y0 + (y1 - y0) * frac];
         }
         return run.at[whole].slice();
+      },
+      // Where every ball in play is at the same n as the last at(): an
+      // array by slot of [x, y] (empty where a ball isn't in play)
+      everyone(n) {
+        const out = [];
+        if (!run.me) return out;
+        n = Math.max(0, n) || 0;
+        const whole = Math.min(Math.floor(n), run.all.length - 1);
+        const frac = whole + 1 < run.all.length ? n - whole : 0;
+        const a = run.all[whole], b = frac > 0 ? run.all[whole + 1] : a;
+        a.forEach(([slot, x, y], k) => {
+          out[slot] = frac > 0 ? [x + (b[k][1] - x) * frac, y + (b[k][2] - y) * frac] : [x, y];
+        });
+        return out;
       },
       steps() { return run.used.length; },  // (for tests)
     };
