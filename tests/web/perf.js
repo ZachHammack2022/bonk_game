@@ -3,7 +3,7 @@
 // and a pretend network (static/netsim.js), and prints a table.
 //
 //   node tests/web/perf.js [--maps classic,grand,platform] [--seconds 8] [--lag 150]
-//                          [--throttle 4] [--runs 1] [--base http://127.0.0.1:8000]
+//                          [--throttle 4] [--runs 1] [--base http://127.0.0.1:8000] [--quality 0|1|2]
 //
 // Without --base it starts its own server from this checkout. To compare
 // two versions, run a server from each (say main on one port, your branch
@@ -36,6 +36,7 @@ const SECONDS = +arg("seconds", 8);
 const LAG = +arg("lag", 150);
 const THROTTLE = +arg("throttle", 4);
 const RUNS = +arg("runs", 1);
+const QUALITY = arg("quality", null);  // (fixed; by default it's automatic)
 
 const freePort = () => new Promise((resolve) => {
   const s = net.createServer();
@@ -52,7 +53,8 @@ async function waitForServer(base) {
 
 // Make a room, set it up and start: you and three Easy bots
 async function startMatch(page, base, map) {
-  await page.goto(base + "/" + (LAG ? `?lag=${LAG}&jitter=20&seed=1` : ""));
+  const q = [LAG ? `lag=${LAG}&jitter=20&seed=1` : "", QUALITY != null ? `quality=${QUALITY}` : ""].filter(Boolean).join("&");
+  await page.goto(base + "/" + (q ? "?" + q : ""));
   await page.click("#find");
   await page.waitForSelector("#browse:not(.hidden)");
   await page.click("#new-game");
@@ -139,6 +141,7 @@ function measure(page, seconds) {
           frameMs: inPlay ? total / inPlay : null,
           predictMs: inPlay ? predicting / inPlay : null,
           inPlayShare: inPlay / Math.max(1, frames),
+          quality: bonkDebug.quality ? bonkDebug.quality.level : null,
         });
       }
     };
@@ -183,13 +186,14 @@ async function run(browser, base, map) {
         const r = await run(browser, base, map);
         const ms = (v) => (v == null ? "–" : v.toFixed(2) + " ms");
         rows.push([map, r.fps.toFixed(1), ms(r.frameMs), ms(r.predictMs),
-          `${Math.round(r.inPlayShare * 100)}%${r.enough ? "" : " (not enough in play: not reliable)"}`]);
+          `${Math.round(r.inPlayShare * 100)}%${r.enough ? "" : " (not enough in play: not reliable)"}`,
+          r.quality == null ? "–" : ["full", "lighter", "lightest"][r.quality]]);
         console.error(`${map}: done`);
       }
     }
     console.log(`iPhone 13 landscape, CPU ${THROTTLE}x slower, ${LAG} ms simulated lag, Knockouts with 3 Easy bots, ${SECONDS} s of your ball in play per run:\n`);
-    console.log("| map | fps | script per frame | predicting your ball | time in play |");
-    console.log("|---|---|---|---|---|");
+    console.log("| map | fps | script per frame | predicting your ball | time in play | graphics quality (at the end) |");
+    console.log("|---|---|---|---|---|---|");
     for (const row of rows) console.log("| " + row.join(" | ") + " |");
   } finally {
     if (browser) await browser.close();

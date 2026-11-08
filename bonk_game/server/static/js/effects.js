@@ -70,7 +70,7 @@ const fx = {
   // shape: how each particle is drawn (looks.js: drawPart)
   burst(x, y, color, n = 26, speed = 7, size = 4.5, life = 0.7, gravity = true, shape = null) {
     // Phones draw fewer: the oldest go first past the cap
-    const cap = MAX_PARTS();
+    const cap = Math.round(MAX_PARTS() * (typeof quality === "undefined" ? 1 : quality.parts[quality.level]));
     if (this.parts.length + n > cap) this.parts.splice(0, this.parts.length + n - cap);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.9);
@@ -109,35 +109,52 @@ const FEED_LINES = 4, FEED_TIME = 5000;
 
 function drawFeed(now) {
   fx.feed = fx.feed.filter((f) => now - f.at < FEED_TIME);
-  const slots = app.match.slots;
   let y = 54;
-  ctx.font = `600 12px ${T.font}`;
   for (const f of fx.feed) {
-    const alpha = clamp((FEED_TIME - (now - f.at)) / 600, 0, 1);
-    // Pieces drawn right to left: [text, colour, ball colour or null]
-    const victim = slots[f.victim];
-    const parts = [];
-    if (f.power !== undefined) {
-      const k = app.match.powerups && app.match.powerups[f.power];
-      parts.push([slotName(f.who), T.text, slots[f.who].color], [`${POWER_ICONS[f.power]} ${k ? k.title : f.power}`, POWER_COLORS[f.power], null]);
-    } else if (f.by !== null && slots[f.by]) {
-      parts.push([slotName(f.by), T.text, slots[f.by].color], ["💥", T.text, null], [slotName(f.victim), T.text, victim.color]);
-    } else {
-      parts.push([slotName(f.victim), T.text, victim.color], [f.wall ? "got squished" : "fell", T.dim, null]);
-    }
-    const widths = parts.map(([str, , ball]) => ctx.measureText(str).width + (ball ? 14 : 0));
-    const w = widths.reduce((a, b) => a + b, 0) + 6 * (parts.length - 1) + 20;
-    ctx.globalAlpha = alpha;
-    pill(W - 10 - w, y - 10, w, 20, 0.6);
-    let x = W - 10 - w + 10;
-    parts.forEach(([str, color, ball], k) => {
-      if (ball) { circle(x + 5, y, 5, ball); x += 14; }
-      text(str, 12, color, x, y, { align: "left", weight: 700, shadow: false, alpha });
-      x += widths[k] - (ball ? 14 : 0) + 6;
-    });
+    // Each line is drawn once (feedLine) and then copied, fading out
+    if (!f.img || f.scale !== view.scale) feedLine(f);
+    ctx.globalAlpha = clamp((FEED_TIME - (now - f.at)) / 600, 0, 1);
+    ctx.drawImage(f.img, W - 10 - f.w, y - 12, f.w, 26);
     ctx.globalAlpha = 1;
     y += 24;
   }
+}
+
+// One line of the feed, into its own little canvas (f.img, f.w wide)
+function feedLine(f) {
+  const slots = app.match.slots;
+  // Pieces drawn left to right: [text, colour, ball colour or null]
+  const victim = slots[f.victim];
+  const parts = [];
+  if (f.power !== undefined) {
+    const k = app.match.powerups && app.match.powerups[f.power];
+    parts.push([slotName(f.who), T.text, slots[f.who].color], [`${POWER_ICONS[f.power]} ${k ? k.title : f.power}`, POWER_COLORS[f.power], null]);
+  } else if (f.by !== null && slots[f.by]) {
+    parts.push([slotName(f.by), T.text, slots[f.by].color], ["💥", T.text, null], [slotName(f.victim), T.text, victim.color]);
+  } else {
+    parts.push([slotName(f.victim), T.text, victim.color], [f.wall ? "got squished" : "fell", T.dim, null]);
+  }
+  const main = ctx;
+  const c = f.img || document.createElement("canvas");
+  try {
+    ctx = c.getContext("2d");
+    ctx.font = `600 12px ${T.font}`;
+    const widths = parts.map(([str, , ball]) => ctx.measureText(str).width + (ball ? 14 : 0));
+    const w = Math.ceil(widths.reduce((a, b) => a + b, 0) + 6 * (parts.length - 1) + 20);
+    c.width = Math.ceil(w * view.scale); c.height = Math.ceil(26 * view.scale);  // (the pill and its shadow)
+    ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
+    pill(0, 2, w, 20, 0.6);
+    let x = 10;
+    parts.forEach(([str, color, ball], k) => {
+      if (ball) { circle(x + 5, 12, 5, ball); x += 14; }
+      text(str, 12, color, x, 12, { align: "left", weight: 700, shadow: false });
+      x += widths[k] - (ball ? 14 : 0) + 6;
+    });
+    f.w = w;
+  } finally {
+    ctx = main;
+  }
+  f.img = c; f.scale = view.scale;
 }
 
 function isMe(i) {

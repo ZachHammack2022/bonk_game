@@ -439,6 +439,9 @@
     return {
       at(n, buttonsFor) {
         if (!run.me) return [S.players[i][0], S.players[i][1]];
+        // (Asked for a moment before S: a state can arrive after the frame's
+        // timestamp was taken. Where S has you is the best answer)
+        n = Math.max(0, n) || 0;
         const whole = Math.floor(n), frac = n - whole;
         const need = frac > 0 ? whole + 1 : whole;
         for (let k = 0; k < Math.min(need, run.used.length); k++) {

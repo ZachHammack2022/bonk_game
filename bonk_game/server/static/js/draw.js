@@ -10,6 +10,47 @@ const canvas = $("canvas");
 let ctx = canvas.getContext("2d");
 let view = { scale: 1 };
 
+// Graphics quality, lowered by itself when frames can't keep up (a slow
+// phone) and raised again once there's room. Each second of a match it
+// looks at the frame rate: under 45 fps for 2 seconds in a row steps down,
+// over 56 for 8 steps back up (not again if it had to come straight back
+// down). A steady 30 fps with little to do is a phone capping it (iPhone
+// Low Power Mode), not a slow one: that's left alone. ?quality=0/1/2 fixes it.
+//   0: full; 1: 1.5x pixels, still clouds, half the particles; 2: 1x, a third
+const quality = {
+  level: 0, auto: true,
+  dpr: [2, 1.5, 1], parts: [1, 0.5, 0.33],
+  frames: 0, work: 0, since: 0, last: 0, slow: 0, fast: 0, raisedAt: -1e9, locked: false,
+  tick(now, cost) {
+    if (!this.auto) return;
+    if (!this.since || now - this.last > 500) { this.since = now; this.frames = 0; this.work = 0; }  // (back from elsewhere)
+    this.last = now;
+    this.frames++; this.work += cost;
+    const span = now - this.since;
+    if (span < 1000) return;
+    const fps = (this.frames - 1) * 1000 / span, busy = this.work / this.frames;
+    this.since = now; this.frames = 0; this.work = 0;
+    if (document.hidden) return;
+    const capped = fps > 27 && fps < 33 && busy < 12;
+    if (fps < 45 && !capped) { this.slow++; this.fast = 0; }
+    else if (fps > 56) { this.fast++; this.slow = 0; }
+    else { this.slow = 0; this.fast = 0; }
+    if (this.slow >= 2 && this.level < 2) {
+      if (now - this.raisedAt < 15000) this.locked = true;  // (it can't hold the higher one)
+      this.set(this.level + 1);
+    } else if (this.fast >= 8 && this.level > 0 && !this.locked) {
+      this.raisedAt = now;
+      this.set(this.level - 1);
+    }
+  },
+  set(level) {
+    this.level = level; this.slow = this.fast = 0;
+    resize();
+  },
+};
+if (params.has("quality")) { quality.auto = false; quality.level = clamp(+params.get("quality") || 0, 0, 2); }
+debug.quality = quality;
+
 // The notch and home bar (non-zero only from the home screen, style.css)
 function safeInsets() {
   const css = getComputedStyle(document.documentElement);
@@ -20,9 +61,9 @@ function resize() {
   const safe = safeInsets();
   const vw = window.innerWidth - safe.x, vh = window.innerHeight - safe.y;
   const scale = Math.min(vw / W, vh / H);
-  // At most 2 pixels per CSS pixel: 3x phones would draw 2.25 times as many
-  // pixels every frame for a difference you can't see
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  // At most 2 pixels per CSS pixel (3x phones would draw 2.25 times as many
+  // every frame for a difference you can't see), fewer at lower quality
+  const dpr = Math.min(quality.dpr[quality.level], window.devicePixelRatio || 1);
   canvas.style.width = `${W * scale}px`;
   canvas.style.height = `${H * scale}px`;
   canvas.width = Math.round(W * scale * dpr);
@@ -75,8 +116,8 @@ function drawSky() {
   ctx.fillStyle = "rgba(160,215,170,0.45)";
   for (let k = -1; k < 9; k++) { ctx.beginPath(); ctx.arc(k * 120 + 40, H + 70, 110, 0, Math.PI * 2); ctx.fill(); }
 }
-function drawClouds() {
-  const t = performance.now() / 1000;
+// t: seconds (they drift; at lower quality they keep still, in the cache)
+function drawClouds(t = performance.now() / 1000) {
   ctx.fillStyle = "rgba(255,255,255,0.8)";
   for (const [cx, cy, s] of CLOUDS) {
     const x = ((cx + t * 6 * s + 120) % (W + 240)) - 120;
@@ -92,7 +133,7 @@ function drawBackground() { drawSky(); drawClouds(); }
 // copied each frame; only the clouds and moving pieces are drawn fresh.
 // A piece that moves is drawn fresh from then on. Redrawn when the window
 // changes size or a new match starts.
-const scenery = { match: null, first: null, moving: new Set(), w: 0, h: 0, sky: null, ground: null, dirty: true };
+const scenery = { match: null, first: null, moving: new Set(), w: 0, h: 0, q: 0, sky: null, ground: null, dirty: true };
 function drawScenery(st) {
   const level = st.level;
   if (scenery.match !== app.match || !scenery.first || scenery.first.length !== level.length) {
@@ -101,11 +142,12 @@ function drawScenery(st) {
   level.forEach((sh, k) => {
     if (!scenery.moving.has(k) && JSON.stringify(sh) !== scenery.first[k]) { scenery.moving.add(k); scenery.dirty = true; }
   });
-  if (scenery.w !== canvas.width || scenery.h !== canvas.height) scenery.dirty = true;
+  if (scenery.w !== canvas.width || scenery.h !== canvas.height || scenery.q !== quality.level) scenery.dirty = true;
   if (scenery.dirty) buildScenery(level);
   // (A shake shows past the edges: draw the sky itself then, wider than the screen)
-  if (fx.shake) drawSky(); else ctx.drawImage(scenery.sky, 0, 0, W, H);
-  drawClouds();
+  const drift = quality.level === 0;
+  if (fx.shake) { drawSky(); if (!drift) drawClouds(0); } else ctx.drawImage(scenery.sky, 0, 0, W, H);
+  if (drift) drawClouds();
   ctx.drawImage(scenery.ground, 0, 0, W, H);
   level.forEach((sh, k) => { if (scenery.moving.has(k)) drawShape(sh); });
 }
@@ -123,12 +165,13 @@ function buildScenery(level) {
   try {
     ctx = scenery.sky.getContext("2d");
     drawSky();
+    if (quality.level > 0) drawClouds(0);
     ctx = scenery.ground.getContext("2d");
     level.forEach((sh, k) => { if (!scenery.moving.has(k)) drawShape(sh); });
   } finally {
     ctx = main;
   }
-  scenery.w = canvas.width; scenery.h = canvas.height; scenery.dirty = false;
+  scenery.w = canvas.width; scenery.h = canvas.height; scenery.q = quality.level; scenery.dirty = false;
 }
 
 function drawEdges() {
@@ -664,6 +707,7 @@ function drawHold(x, y, R, left, slot) {
 let lastFrame = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
+  const started = performance.now();
   const ms = now - lastFrame;
   const dt = Math.min(0.1, ms / 1000);
   lastFrame = now;
@@ -779,5 +823,6 @@ function frame(now) {
   drawHud(st, now);
   drawPilotHelp(st);
   drawSuperScene(st, now);
+  quality.tick(now, performance.now() - started);
 }
 requestAnimationFrame(frame);
