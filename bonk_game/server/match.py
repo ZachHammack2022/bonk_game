@@ -38,6 +38,19 @@ def bot_level(kind):
     return kind.split(":", 1)[1] if ":" in kind else "medium"
 
 
+def button_bits(action):
+    """One step's input (Buttons, a bot's or agent's action 0-15, or None)
+    as bits: up 1, left 2, down 4, right 8, heavy 16 (what physics.js
+    applyInput takes, as a number)."""
+    if action is None:
+        return 0
+    if isinstance(action, Buttons):
+        b = action
+        return (1 if b.up else 0) | (2 if b.left else 0) | (4 if b.down else 0) | (8 if b.right else 0) | (16 if b.heavy else 0)
+    dx, dy, heavy = arena.ACTIONS[int(action)]
+    return (1 if dy < 0 else 4 if dy > 0 else 0) | (8 if dx > 0 else 2 if dx < 0 else 0) | (16 if heavy else 0)
+
+
 def is_bot(kind):
     return kind == "bot" or kind.startswith("bot:")
 
@@ -86,6 +99,10 @@ class Match:
             else:
                 self.controllers.append(agents[kind])
         self.inputs = [NO_BUTTONS] * len(kinds)
+        # The buttons each ball last moved with (bits: up 1, left 2, down 4,
+        # right 8, heavy 16), sent in every state so browsers can predict the
+        # other balls too (js/net.js)
+        self.pressed = [0] * len(kinds)
         self.tapped = set()  # slots that pressed a drop button since the last step (see _buttons)
         self.stand_ins = {}  # slot -> Bot playing for a disconnected human
         self.obs = self.env.reset()
@@ -200,6 +217,7 @@ class Match:
         if self.powerups:
             self.powerups.apply()
         actions = self._actions()
+        self.pressed = [button_bits(a) for a in actions]
         self.obs, _, info = env.step(actions)
         events = self.mode.step(info)
         if self.powerups:
@@ -277,6 +295,7 @@ class Match:
             "walls": None if timer.walls() is None else [round(w, 1) for w in timer.walls()],
             "t": round(timer.steps / TICK_HZ, 2),
             "stand_ins": sorted(self.stand_ins),
+            "btn": self.pressed,
             **self._held(),
             **self.mode.extra_state(),
             **(self.powerups.state() if self.powerups else {}),

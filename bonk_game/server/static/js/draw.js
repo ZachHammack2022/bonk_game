@@ -760,8 +760,9 @@ function frame(now) {
   const mine = app.match.slots.findIndex((s) => s.id === me.id);
   const ownAt = ownPosition(now, dt);
   if (ownAt && mine >= 0) {
-    // A copy: st may be a stored server state, which prediction still reads
-    const players = st.players.slice();
+    // A copy: st may be a stored server state, which prediction still reads.
+    // The balls near yours are drawn at the same moment as it (net.js).
+    const players = otherPositions(st.players, mine, ownAt, dt, now).slice();
     players[mine] = [ownAt[0], ownAt[1], st.players[mine][2], 1];
     st = { ...st, players };
   }

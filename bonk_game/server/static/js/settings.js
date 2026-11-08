@@ -15,7 +15,7 @@ const FIXED_KEYS = { ArrowUp: 0, ArrowLeft: 1, ArrowDown: 2, ArrowRight: 3, Shif
 const RESERVED_KEYS = new Set(["Digit1", "Digit2", "Digit3", "Digit4", "KeyM", "KeyT", "Escape", "Tab", "Enter"]);
 
 const prefs = (() => {
-  const d = { volume: 0.8, shake: true, haptics: true, ping: true, chat: true, colorblind: false, contrast: false, keys: { ...DEFAULT_KEYS } };
+  const d = { volume: 0.8, shake: true, haptics: true, ping: true, predictOthers: true, chat: true, colorblind: false, contrast: false, keys: { ...DEFAULT_KEYS } };
   const saved = profileStore.get().prefs;
   return { ...d, ...saved, keys: { ...d.keys, ...(saved.keys || {}) } };
 })();
@@ -93,6 +93,7 @@ function renderSettings() {
   $("set-haptics").checked = prefs.haptics !== false;
   $("set-haptics-row").classList.toggle("hidden", !haptics.supported());
   $("set-ping").checked = prefs.ping;
+  $("set-predict").checked = prefs.predictOthers !== false;
   $("set-chat").checked = prefs.chat !== false;
   $("set-colorblind").checked = prefs.colorblind;
   $("set-contrast").checked = prefs.contrast;
@@ -170,6 +171,7 @@ $("set-haptics").addEventListener("change", () => {
   if (prefs.haptics) haptics.buzz("hit");  // feel what it's like
 });
 $("set-ping").addEventListener("change", () => { prefs.ping = $("set-ping").checked; savePrefs(); });
+$("set-predict").addEventListener("change", () => { prefs.predictOthers = $("set-predict").checked; savePrefs(); });
 $("set-chat").addEventListener("change", () => { prefs.chat = $("set-chat").checked; savePrefs(); chat.renderFeed(); });
 for (const [id, key] of [["set-colorblind", "colorblind"], ["set-contrast", "contrast"]]) {
   $(id).addEventListener("change", () => { prefs[key] = $(id).checked; savePrefs(); applyLooks(app.match); });

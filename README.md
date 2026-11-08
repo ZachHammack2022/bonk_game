@@ -259,7 +259,7 @@ bonk is small enough to read in an afternoon but does most of what a real online
 
 **Try.** Open the game with `?net=bad`, which pretends you're on a poor connection, and watch the other balls stay smooth.
 
-### 4. Predicting your own ball
+### 4. Predicting your own ball (and the ones near it)
 
 **Problem.** Interpolation works for everyone else, but your own ball would only react once your key press had gone to the server and the result had come back: a full round trip, 100 ms or more. Controls would feel like steering through mud.
 
@@ -271,11 +271,13 @@ bonk is small enough to read in an afternoon but does most of what a real online
 
 It doesn't redo that from scratch each frame: states come 30 times a second but frames 60 or more, so a *predictor* (`physics.js`) keeps the world from each server state and only takes the steps it hasn't taken yet, remembering where your ball was after each. If buttons it guessed for a step turn out different (you pressed something new), it starts again from the server's state. It gives exactly the answer replaying everything would (a test checks), for a fraction of the work, and the saving grows with your ping.
 
-The whole level is in the prediction: slopes, bumpers, moving platforms, and the other balls moving on as they were, so riding the slider or bumping someone is predicted too. When the next server state arrives and disagrees (say a bot shoved you in a way your browser couldn't know), the difference is **faded out over 0.1 s** instead of snapping (*reconciliation*). A big jump, like a respawn, is treated as a teleport and taken straight away.
+The whole level is in the prediction: slopes, bumpers, moving platforms, and the other balls, so riding the slider or bumping someone is predicted too. When the next server state arrives and disagrees (say a bot shoved you in a way your browser couldn't know), the difference is **faded out over 0.1 s** instead of snapping (*reconciliation*). A big jump, like a respawn, is treated as a teleport and taken straight away.
 
-**Read.** `static/js/net.js` (`predictFrom`, `ownPosition`), `static/physics.js`. `tests/test_predict.py` replays recorded matches through the browser's physics and checks it lands where the server did.
+**The balls near you are predicted too.** Your ball is drawn a little in the future (where it'll be when the server uses the keys you're pressing now), but everyone else is drawn a little in the past (3). So with a ping, the ball you see bump you isn't where your ball met it. The fix: every state says which buttons each ball moved with (`btn`: one number each, bits up 1, left 2, down 4, right 8, heavy 16), and the prediction has the other balls keep pressing those, so the balls near yours are drawn at the same moment as it (`otherPositions`). Like your own, their corrections fade out over 0.1 s. Only near you: blending out from 4 to 9 ball sizes away, as far away a ball drawn in the past is never wrong, and less the further ahead it's guessing (a ping over about 250 ms), as people change buttons. `bench/predict/eval.py` measures it on recorded matches: at a 120 ms ping, a ball near yours is drawn within half a ball of where the server has it 86% of the time, against 55% drawn in the past (and sending everyone's exact speeds as well would only make that 88%).
 
-**Try.** `?net=far` (200 ms round trip) feels almost local. Then add `&predict=0` to turn prediction off and feel the difference.
+**Read.** `static/js/net.js` (`predictFrom`, `ownPosition`, `otherPositions`), `static/physics.js`. `tests/test_predict.py` replays recorded matches through the browser's physics and checks it lands where the server did, for your ball and for others holding their buttons.
+
+**Try.** `?net=far` (200 ms round trip) feels almost local. Then add `&predict=0` to turn prediction off and feel the difference, or `&predict_others=0` to draw the other balls in the past as before (or Settings: *Show nearby balls where they are now*).
 
 **Compare.** Many .io games skip this: their slow, mouse-steered movement hides the lag. Fighting and shooting games predict, and some also *rewind* the server to judge hits from each player's point of view (lag compensation). bonk doesn't rewind: the server's view of a bump is final.
 

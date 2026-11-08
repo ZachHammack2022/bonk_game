@@ -562,6 +562,45 @@ function check(cond, what) {
       "with the Content-Security-Policy on, the game connects, plays and gets states");
     check(violations.length === 0, "the policy blocks nothing" + (violations.length ? ": " + violations.join(" | ") : ""));
 
+    // With a ping, the balls near yours are drawn predicted, at the same
+    // moment as yours (js/net.js otherPositions); ?predict_others=0 draws
+    // them where the server last had them, as before
+    const nearby = async (q) => {
+      const page = await open("predict " + q);
+      await page.goto(base + "/?lag=120&jitter=10&seed=1" + q);
+      await page.fill("#name", "Pip");
+      await page.click("#find");
+      await page.waitForSelector("#browse:not(.hidden)");
+      await page.click("#new-game");
+      await page.click("#new-create");
+      await page.waitForSelector("#lobby:not(.hidden)");
+      await page.evaluate(() => send({ type: "settings", map: "platform", mode: "knockouts", first_to: 50,
+        bots: ["bot:hard", "bot:hard", "bot:hard"] }));
+      await page.waitForFunction(() => document.querySelector("#map").value === "platform");
+      await page.evaluate(() => send({ type: "start" }));
+      await page.waitForSelector("#game:not(.hidden)", { timeout: 8000 });
+      // Watch every frame for a while: the most any other ball was drawn predicted
+      return page.evaluate(() => new Promise((resolve) => {
+        let most = 0, predicted = 0, frames = 0, btn = false;
+        const t0 = performance.now();
+        const look = () => {
+          const S = bonkDebug.app.states.length && bonkDebug.app.states[bonkDebug.app.states.length - 1][1];
+          if (S && Array.isArray(S.btn)) btn = true;
+          for (const w of bonkDebug.near.w) if (w > most) most = w;
+          if (bonkDebug.near.at) predicted += 1;
+          frames += 1;
+          if (performance.now() - t0 < 9000 && most < 0.9) requestAnimationFrame(look);
+          else resolve({ most, predicted, frames, btn, own: !!bonkDebug.own.base });
+        };
+        requestAnimationFrame(look);
+      }));
+    };
+    const on = await nearby("");
+    check(on.btn && on.predicted > 0 && on.most > 0.5,
+      `with a ping, a ball near yours is drawn predicted (most ${on.most.toFixed(2)}, ${on.predicted}/${on.frames} frames)`);
+    const off = await nearby("&predict_others=0");
+    check(off.btn && off.most === 0 && off.own, "?predict_others=0: the others are drawn as before, yours still predicted");
+
     check(errors.length === 0, "no page errors" + (errors.length ? ": " + errors.join(" | ") : ""));
   } finally {
     if (browser) await browser.close();
