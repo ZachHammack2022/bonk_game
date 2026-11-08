@@ -15,7 +15,7 @@ const FIXED_KEYS = { ArrowUp: 0, ArrowLeft: 1, ArrowDown: 2, ArrowRight: 3, Shif
 const RESERVED_KEYS = new Set(["Digit1", "Digit2", "Digit3", "Digit4", "KeyM", "KeyT", "Escape", "Tab", "Enter"]);
 
 const prefs = (() => {
-  const d = { volume: 0.8, shake: true, ping: true, chat: true, colorblind: false, contrast: false, keys: { ...DEFAULT_KEYS } };
+  const d = { volume: 0.8, shake: true, haptics: true, ping: true, chat: true, colorblind: false, contrast: false, keys: { ...DEFAULT_KEYS } };
   const saved = profileStore.get().prefs;
   return { ...d, ...saved, keys: { ...d.keys, ...(saved.keys || {}) } };
 })();
@@ -90,6 +90,8 @@ function renderSettings() {
   $("set-volume-out").textContent = sound.muted ? "muted" : `${Math.round(prefs.volume * 100)}%`;
   $("set-mute").checked = sound.muted;
   $("set-shake").checked = prefs.shake;
+  $("set-haptics").checked = prefs.haptics !== false;
+  $("set-haptics-row").classList.toggle("hidden", !haptics.supported());
   $("set-ping").checked = prefs.ping;
   $("set-chat").checked = prefs.chat !== false;
   $("set-colorblind").checked = prefs.colorblind;
@@ -163,6 +165,10 @@ $("set-volume").addEventListener("input", () => {
 $("set-volume").addEventListener("change", () => sound.play("point"));
 $("set-mute").addEventListener("change", () => { sound.setMuted($("set-mute").checked); renderSettings(); });
 $("set-shake").addEventListener("change", () => { prefs.shake = $("set-shake").checked; savePrefs(); });
+$("set-haptics").addEventListener("change", () => {
+  prefs.haptics = $("set-haptics").checked; savePrefs();
+  if (prefs.haptics) haptics.buzz("hit");  // feel what it's like
+});
 $("set-ping").addEventListener("change", () => { prefs.ping = $("set-ping").checked; savePrefs(); });
 $("set-chat").addEventListener("change", () => { prefs.chat = $("set-chat").checked; savePrefs(); chat.renderFeed(); });
 for (const [id, key] of [["set-colorblind", "colorblind"], ["set-contrast", "contrast"]]) {

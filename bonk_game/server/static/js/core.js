@@ -16,6 +16,7 @@
 //   effects.js   sound, particles, the knockout feed, game events
 //   net.js       network timing and predicting your own ball (physics.js, with planck.js)
 //   replay.js    the killcam
+//   haptics.js   vibration on phones (and in an app shell)
 //   draw.js      drawing the match
 //   critter.js   the balls: faces, moods, squash and stretch
 //   looks.js     trails, hats, knockout effects, and how balls look on your screen

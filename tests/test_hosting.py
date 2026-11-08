@@ -399,7 +399,7 @@ def test_sigterm_tells_everyone_and_exits_cleanly():
 
     async def go():
         async with aiohttp.ClientSession() as http:
-            for _ in range(100):
+            for _ in range(300):  # (up to 30 s: a cold start on a busy machine can take a while)
                 try:
                     async with http.get(base + "/healthz") as r:
                         if r.status == 200:

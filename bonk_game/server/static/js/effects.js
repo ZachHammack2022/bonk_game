@@ -146,7 +146,7 @@ function onEvent(ev, state) {
   const slots = app.match ? app.match.slots : [];
   switch (ev.e) {
     case "beep": sound.play("beep"); break;
-    case "go": sound.play("go"); fx.say("GO!", T.accent, true); break;
+    case "go": sound.play("go"); fx.say("GO!", T.accent, true); haptics.buzz("hit"); break;
     case "death": {
       const c = slots[ev.i] ? slots[ev.i].color : T.text;
       let x = clamp(ev.x, 12, W - 12), y = clamp(ev.y, 12, H - 12);
@@ -155,6 +155,8 @@ function onEvent(ev, state) {
         x = clamp(debug.drawn.x, 12, W - 12); y = clamp(debug.drawn.y, 12, H - 12);
       }
       knockoutEffect(x, y, c, slots[ev.i] && slots[ev.i].ko);
+      if (isMe(ev.i)) haptics.buzz([60, 40, 90]);       // you're out
+      else if (isMe(ev.by)) haptics.buzz([15, 50, 25]); // you got them
       fx.kick(10);
       sound.play("death");
       fx.feed.push({ victim: ev.i, by: ev.by ?? null, wall: !!ev.wall, at: performance.now() });
@@ -209,19 +211,21 @@ function onEvent(ev, state) {
       const k = app.match.powerups && app.match.powerups[ev.k];
       fx.burst(ev.x, ev.y, POWER_COLORS[ev.k] || T.accent, 16, 5, 3.5, 0.5, false);
       sound.play("point");
-      if (isMe(ev.i)) fx.tell(`${POWER_ICONS[ev.k]} ${k ? k.title : ev.k}!`, POWER_COLORS[ev.k]);
+      if (isMe(ev.i)) { fx.tell(`${POWER_ICONS[ev.k]} ${k ? k.title : ev.k}!`, POWER_COLORS[ev.k]); haptics.buzz("tap"); }
       fx.feed.push({ power: ev.k, who: ev.i, at: performance.now() });
       if (fx.feed.length > FEED_LINES) fx.feed.shift();
       break;
     }
     case "super":
       startSuperScene(ev.i);
+      if (isMe(ev.i)) haptics.buzz([20, 40, 20, 40, 80]);
       sound.play("super");
       break;
     case "bomb": sound.play("bomb"); break;
     case "boom": {
       const k = app.match.powerups && app.match.powerups.plane;
       boomEffect(ev.x, ev.y, k ? k.blast : 85);
+      haptics.buzz(nearMe(ev.x, ev.y, (k ? k.blast : 85) * 2) ? "big" : "hit");
       sound.play("boom");
       break;
     }
@@ -233,6 +237,7 @@ function onEvent(ev, state) {
       fx.ring(ev.b[0], ev.b[1], ci); fx.ring(ev.a[0], ev.a[1], cj);
       sound.tone(500, 0.18, "triangle", 0.1, 2); sound.tone(1000, 0.18, "triangle", 0.08, 0.5);
       if (isMe(ev.j)) fx.tell(`${slotName(ev.i)} swapped with you!`, ci);
+      if (isMe(ev.i) || isMe(ev.j)) haptics.buzz("hit");
       break;
     }
     case "pop": {
@@ -265,6 +270,7 @@ function onEvent(ev, state) {
       break;
     }
     case "punch":
+      if (nearMe(ev.x, ev.y, 60)) haptics.buzz("big");
       fx.burst(ev.x, ev.y, POWER_COLORS.punch, 30, 10, 4.5, 0.6);
       fx.ring(ev.x, ev.y, POWER_COLORS.punch, 0.4);
       fx.kick(12);
@@ -274,6 +280,7 @@ function onEvent(ev, state) {
     case "sudden": fx.say("Sudden death!", T.danger); fx.kick(6); sound.play("go"); break;
     case "hit":
       critterHit(ev.x, ev.y, ev.s);
+      if (isMe(ev.by) || nearMe(ev.x, ev.y)) haptics.buzz("bump", ev.s / 18);
       fx.burst(ev.x, ev.y, "#ffd23f", Math.round(3 + ev.s * 0.6), ev.s * 0.5, 3.5, 0.4, false, "star");
       fx.kick(Math.min(8, ev.s * 0.4));
       sound.play("hit", Math.min(1, ev.s / 18));
