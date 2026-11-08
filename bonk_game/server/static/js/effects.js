@@ -58,11 +58,20 @@ window.addEventListener("keydown", () => sound.unlock());
 // ---------------------------------------------------------------------------
 // Effects: particles, rings, screen shake, banners
 // ---------------------------------------------------------------------------
+// How many particles at once (phones and tablets draw fewer)
+const MAX_PARTS = (() => {
+  let coarse = false;
+  try { coarse = matchMedia("(pointer: coarse)").matches; } catch (e) { /* old browser */ }
+  return () => (coarse ? 240 : 700);
+})();
 const fx = {
   parts: [], rings: [], shake: 0, banner: null, note: null, emotes: [], feed: [], trails: {}, booms: [],
   reset() { this.parts = []; this.rings = []; this.shake = 0; this.banner = null; this.note = null; this.emotes = []; this.feed = []; this.trails = {}; this.booms = []; },
   // shape: how each particle is drawn (looks.js: drawPart)
   burst(x, y, color, n = 26, speed = 7, size = 4.5, life = 0.7, gravity = true, shape = null) {
+    // Phones draw fewer: the oldest go first past the cap
+    const cap = MAX_PARTS();
+    if (this.parts.length + n > cap) this.parts.splice(0, this.parts.length + n - cap);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.9);
       this.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - (gravity ? 2 : 0), color,

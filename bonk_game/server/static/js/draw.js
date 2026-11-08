@@ -6,7 +6,8 @@
 // Drawing
 // ---------------------------------------------------------------------------
 const canvas = $("canvas");
-const ctx = canvas.getContext("2d");
+// (let: the scenery cache below draws into its own canvas through it for a moment)
+let ctx = canvas.getContext("2d");
 let view = { scale: 1 };
 
 // The notch and home bar (non-zero only from the home screen, style.css)
@@ -19,7 +20,9 @@ function resize() {
   const safe = safeInsets();
   const vw = window.innerWidth - safe.x, vh = window.innerHeight - safe.y;
   const scale = Math.min(vw / W, vh / H);
-  const dpr = window.devicePixelRatio || 1;
+  // At most 2 pixels per CSS pixel: 3x phones would draw 2.25 times as many
+  // pixels every frame for a difference you can't see
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
   canvas.style.width = `${W * scale}px`;
   canvas.style.height = `${H * scale}px`;
   canvas.width = Math.round(W * scale * dpr);
@@ -63,12 +66,16 @@ function line(a, b, color, width) {
 
 // The sky: a pastel gradient, drifting clouds and soft hills far below
 const CLOUDS = [[90, 70, 1], [330, 40, 0.8], [600, 95, 1.15], [820, 55, 0.9]];
-function drawBackground() {
+function drawSky() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, T.bgTop);
   g.addColorStop(1, T.bgBottom);
   ctx.fillStyle = g;
   ctx.fillRect(-50, -50, W + 100, H + 100);
+  ctx.fillStyle = "rgba(160,215,170,0.45)";
+  for (let k = -1; k < 9; k++) { ctx.beginPath(); ctx.arc(k * 120 + 40, H + 70, 110, 0, Math.PI * 2); ctx.fill(); }
+}
+function drawClouds() {
   const t = performance.now() / 1000;
   ctx.fillStyle = "rgba(255,255,255,0.8)";
   for (const [cx, cy, s] of CLOUDS) {
@@ -77,8 +84,51 @@ function drawBackground() {
       ctx.beginPath(); ctx.arc(x + dx * s, cy + dy * s, r * s, 0, Math.PI * 2); ctx.fill();
     }
   }
-  ctx.fillStyle = "rgba(160,215,170,0.45)";
-  for (let k = -1; k < 9; k++) { ctx.beginPath(); ctx.arc(k * 120 + 40, H + 70, 110, 0, Math.PI * 2); ctx.fill(); }
+}
+function drawBackground() { drawSky(); drawClouds(); }
+
+// The scenery that doesn't move (the sky, and every piece of the level that
+// hasn't moved since the match began) is drawn once into two canvases and
+// copied each frame; only the clouds and moving pieces are drawn fresh.
+// A piece that moves is drawn fresh from then on. Redrawn when the window
+// changes size or a new match starts.
+const scenery = { match: null, first: null, moving: new Set(), w: 0, h: 0, sky: null, ground: null, dirty: true };
+function drawScenery(st) {
+  const level = st.level;
+  if (scenery.match !== app.match || !scenery.first || scenery.first.length !== level.length) {
+    Object.assign(scenery, { match: app.match, first: level.map((sh) => JSON.stringify(sh)), moving: new Set(), dirty: true });
+  }
+  level.forEach((sh, k) => {
+    if (!scenery.moving.has(k) && JSON.stringify(sh) !== scenery.first[k]) { scenery.moving.add(k); scenery.dirty = true; }
+  });
+  if (scenery.w !== canvas.width || scenery.h !== canvas.height) scenery.dirty = true;
+  if (scenery.dirty) buildScenery(level);
+  // (A shake shows past the edges: draw the sky itself then, wider than the screen)
+  if (fx.shake) drawSky(); else ctx.drawImage(scenery.sky, 0, 0, W, H);
+  drawClouds();
+  ctx.drawImage(scenery.ground, 0, 0, W, H);
+  level.forEach((sh, k) => { if (scenery.moving.has(k)) drawShape(sh); });
+}
+function buildScenery(level) {
+  const layer = (old) => {
+    const c = old || document.createElement("canvas");
+    c.width = canvas.width; c.height = canvas.height;  // (also clears it)
+    const g = c.getContext("2d");
+    g.setTransform(view.scale, 0, 0, view.scale, 0, 0);
+    return c;
+  };
+  scenery.sky = layer(scenery.sky);
+  scenery.ground = layer(scenery.ground);
+  const main = ctx;
+  try {
+    ctx = scenery.sky.getContext("2d");
+    drawSky();
+    ctx = scenery.ground.getContext("2d");
+    level.forEach((sh, k) => { if (!scenery.moving.has(k)) drawShape(sh); });
+  } finally {
+    ctx = main;
+  }
+  scenery.w = canvas.width; scenery.h = canvas.height; scenery.dirty = false;
 }
 
 function drawEdges() {
@@ -502,11 +552,28 @@ function drawCrown(x, y, r) {
   circle(x, base - h * 0.35, 2, "#ef5350");
 }
 
-function drawHud(st, now) {
+// The scoreboard changes only when a score, who's in, the crown or the
+// window does: drawn into its own canvas then, and copied every frame
+const board = { key: "", canvas: null };
+function drawScoreboard(st) {
+  const M = app.match;
+  const key = JSON.stringify([canvas.width, canvas.height, M.mode, st.scores, st.team_scores, st.crown,
+    st.players.map((p) => !!p[3]), M.slots.map((sl) => [sl.id === me.id, sl.name, sl.color, sl.team])]);
+  if (key !== board.key || !board.canvas) {
+    const c = board.canvas || document.createElement("canvas");
+    c.width = canvas.width; c.height = Math.ceil(48 * view.scale);  // (the top 48 px of the game)
+    const g = c.getContext("2d");
+    g.setTransform(view.scale, 0, 0, view.scale, 0, 0);
+    const main = ctx;
+    try { ctx = g; if (st.team_scores) drawTeamScores(st); else drawChips(st); } finally { ctx = main; }
+    board.canvas = c; board.key = key;
+  }
+  ctx.drawImage(board.canvas, 0, 0, W, board.canvas.height / view.scale);
+}
+
+// Scoreboard: a chip per player
+function drawChips(st) {
   const M = app.match, n = st.players.length;
-  if (st.team_scores) drawTeamScores(st);
-  // Scoreboard: a chip per player
-  else {
   const chipW = Math.min(n <= 4 ? 120 : 62, (W - 20) / n - 4);
   const x0 = W / 2 - (n * (chipW + 4) - 4) / 2;
   st.players.forEach((p, i) => {
@@ -526,7 +593,11 @@ function drawHud(st, now) {
     text(score, M.mode === "lives" ? 14 : 16, out ? T.faint : M.mode === "lives" ? "#ff8a8a" : T.text, x + chipW - (M.mode === "lives" ? 19 : 16), 23, { shadow: false });
     if (st.crown === i) drawCrown(x + 15, 23, 8);
   });
-  }
+}
+
+function drawHud(st, now) {
+  const M = app.match;
+  drawScoreboard(st);
 
   // Clock: the round timer, or the match clock in Knockouts
   const clock = (secs) => { const left = Math.ceil(secs); return [`${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, left <= 10 ? T.accent : T.dim]; };
@@ -608,8 +679,7 @@ function frame(now) {
   const sx = fx.shake ? (Math.random() - 0.5) * fx.shake : 0;
   const sy = fx.shake ? (Math.random() - 0.5) * fx.shake : 0;
   ctx.setTransform(view.scale, 0, 0, view.scale, sx * view.scale, sy * view.scale);
-  drawBackground();
-  for (const s of st.level) drawShape(s);
+  drawScenery(st);
   drawWalls(st.walls, st.t);
 
   // Power-ups waiting to be picked up: a bobbing bubble with an icon
