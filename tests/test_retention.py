@@ -4,9 +4,13 @@ import asyncio
 import json
 import os
 
-from aiohttp.test_utils import TestClient, TestServer
+import pytest
 
-from bonk_game.server import metrics, web
+# (The server's packages: not in the training-only install, tests.yml)
+pytest.importorskip("aiohttp")
+from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
+
+from bonk_game.server import metrics, web  # noqa: E402
 from bonk_game.server.room import RoomManager
 
 DAY = 86400
