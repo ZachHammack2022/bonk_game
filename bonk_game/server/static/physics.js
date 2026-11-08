@@ -17,6 +17,10 @@
 // server's answer differs (someone changed direction), js/net.js smooths
 // the correction out.
 //
+// predict() replays from a server state in one go; predictor() does the
+// same frame after frame, taking only the steps it hasn't taken yet (what
+// js/net.js uses).
+//
 // Used by js/net.js in the browser and by tests in Node.
 (function (root) {
   "use strict";
@@ -365,6 +369,22 @@
   // (S.effects), other people's swarm copies, and a black hole's pull.
   // Returns [x, y].
   function predict(S, i, you, phys, inputs, n, r, others) {
+    const { sim, me } = setup(S, i, you, phys, r, others);
+    if (!me) return [S.players[i][0], S.players[i][1]];
+    const whole = Math.floor(n);
+    for (let k = 0; k < whole; k++) step(sim, me, inputs[Math.min(k, inputs.length - 1)] || [0, 0, 0, 0, 0]);
+    const frac = n - whole;
+    if (frac > 0) {
+      const x = me.x, y = me.y;
+      step(sim, me, inputs[Math.min(whole, inputs.length - 1)] || [0, 0, 0, 0, 0]);
+      return [x + (me.x - x) * frac, y + (me.y - y) * frac];
+    }
+    return [me.x, me.y];
+  }
+
+  // The world at server state S, ready to step (predict's arguments, less
+  // the buttons): { sim, me } (me: null if your ball isn't in play)
+  function setup(S, i, you, phys, r, others) {
     const base = phys.base || phys;
     const sim = build(base);
     (S.parts || []).forEach((st, j) => { if (sim.parts[j]) placePart(sim, sim.parts[j], st); });
@@ -393,19 +413,61 @@
       const c = makeBall(sim, [x, y, heavy, 1], [0, 0, 0], base, r);
       c.slot = o; c.copy = true;
     }
-    if (!me) return [S.players[i][0], S.players[i][1]];
-    const whole = Math.floor(n);
-    for (let k = 0; k < whole; k++) step(sim, me, inputs[Math.min(k, inputs.length - 1)] || [0, 0, 0, 0, 0]);
-    const frac = n - whole;
-    if (frac > 0) {
-      const x = me.x, y = me.y;
-      step(sim, me, inputs[Math.min(whole, inputs.length - 1)] || [0, 0, 0, 0, 0]);
-      return [x + (me.x - x) * frac, y + (me.y - y) * frac];
-    }
-    return [me.x, me.y];
+    return { sim, me };
   }
 
-  const api = { predict, build };
+  // Predicting frame after frame from one server state, without redoing
+  // work: predict() replays every step each time it's asked, but between
+  // two server states (30 a second) the browser asks every frame (60 a
+  // second or more) for a moment a little further on. This keeps the world
+  // stepping instead, remembering where your ball was after each step.
+  //
+  // predictor(S, i, you, phys, r, others).at(n, buttonsFor) gives exactly
+  // what predict(S, ..., inputs, n, ...) would with inputs[k] =
+  // buttonsFor(k), taking only the steps it hasn't taken yet. A step taken
+  // with buttons guessed ahead of time (the ones you're pressing now) that
+  // turn out different starts it over from S. Everything that moves (balls,
+  // moving parts and their state) comes from S, so anything the server
+  // sends a state for is predicted this way too.
+  function predictor(S, i, you, phys, r, others) {
+    let run;
+    const restart = () => {
+      const { sim, me } = setup(S, i, you, phys, r, others);
+      run = { sim, me, used: [], at: me ? [[me.x, me.y]] : null };  // at[k]: after k steps
+    };
+    restart();
+    return {
+      at(n, buttonsFor) {
+        if (!run.me) return [S.players[i][0], S.players[i][1]];
+        const whole = Math.floor(n), frac = n - whole;
+        const need = frac > 0 ? whole + 1 : whole;
+        for (let k = 0; k < Math.min(need, run.used.length); k++) {
+          if (!sameButtons(run.used[k], buttonsFor(k))) { restart(); break; }
+        }
+        while (run.used.length < need) {
+          const k = run.used.length;
+          const b = buttonsFor(k) || [0, 0, 0, 0, 0];
+          step(run.sim, run.me, b);
+          run.used.push(b);
+          run.at.push([run.me.x, run.me.y]);
+        }
+        if (frac > 0) {
+          const [x0, y0] = run.at[whole], [x1, y1] = run.at[whole + 1];
+          return [x0 + (x1 - x0) * frac, y0 + (y1 - y0) * frac];
+        }
+        return run.at[whole].slice();
+      },
+      steps() { return run.used.length; },  // (for tests)
+    };
+  }
+
+  function sameButtons(a, b) {
+    b = b || [0, 0, 0, 0, 0];
+    for (let k = 0; k < 5; k++) if (!a[k] !== !b[k]) return false;
+    return true;
+  }
+
+  const api = { predict, predictor, build };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.BonkPhysics = api;
 })(typeof window !== "undefined" ? window : globalThis);

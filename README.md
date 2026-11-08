@@ -268,6 +268,8 @@ bonk is small enough to read in an afternoon but does most of what a real online
 2. replays the buttons you've pressed since then, which the server hasn't used yet (`net.inputs` remembers when they changed);
 3. draws your ball where that ends up.
 
+It doesn't redo that from scratch each frame: states come 30 times a second but frames 60 or more, so a *predictor* (`physics.js`) keeps the world from each server state and only takes the steps it hasn't taken yet, remembering where your ball was after each. If buttons it guessed for a step turn out different (you pressed something new), it starts again from the server's state. It gives exactly the answer replaying everything would (a test checks), for a fraction of the work, and the saving grows with your ping.
+
 The whole level is in the prediction: slopes, bumpers, moving platforms, and the other balls moving on as they were, so riding the slider or bumping someone is predicted too. When the next server state arrives and disagrees (say a bot shoved you in a way your browser couldn't know), the difference is **faded out over 0.1 s** instead of snapping (*reconciliation*). A big jump, like a respawn, is treated as a teleport and taken straight away.
 
 **Read.** `static/js/net.js` (`predictFrom`, `ownPosition`), `static/physics.js`. `tests/test_predict.py` replays recorded matches through the browser's physics and checks it lands where the server did.
