@@ -268,6 +268,8 @@ bonk is small enough to read in an afternoon but does most of what a real online
 2. replays the buttons you've pressed since then, which the server hasn't used yet (`net.inputs` remembers when they changed);
 3. draws your ball where that ends up.
 
+It doesn't redo that from scratch each frame: states come 30 times a second but frames 60 or more, so a *predictor* (`physics.js`) keeps the world from each server state and only takes the steps it hasn't taken yet, remembering where your ball was after each. If buttons it guessed for a step turn out different (you pressed something new), it starts again from the server's state. It gives exactly the answer replaying everything would (a test checks), for a fraction of the work, and the saving grows with your ping.
+
 The whole level is in the prediction: slopes, bumpers, moving platforms, and the other balls moving on as they were, so riding the slider or bumping someone is predicted too. When the next server state arrives and disagrees (say a bot shoved you in a way your browser couldn't know), the difference is **faded out over 0.1 s** instead of snapping (*reconciliation*). A big jump, like a respawn, is treated as a teleport and taken straight away.
 
 **Read.** `static/js/net.js` (`predictFrom`, `ownPosition`), `static/physics.js`. `tests/test_predict.py` replays recorded matches through the browser's physics and checks it lands where the server did.
@@ -289,7 +291,7 @@ The whole level is in the prediction: slopes, bumpers, moving platforms, and the
 | `far` | 180 ms | ±10 ms | none | another continent, wired |
 | `bad` | 150 ms | ±80 ms | 800 ms, every ~8 s | weak signal |
 
-Or set each part: `?lag=150&jitter=40&stall=400&stall_every=10` (`&seed=7` repeats the same "random" network). `node tests/web/network.js` plays a match in a real browser on each and prints what the playtest report saw. On `bad`, for example, frames where everything froze went from 35.5% with a fixed 50 ms delay to 2.4% with the adaptive clock.
+Or set each part: `?lag=150&jitter=40&stall=400&stall_every=10` (`&seed=7` repeats the same "random" network). `node tests/web/network.js` plays a match in a real browser on each and prints what the playtest report saw. On `bad`, for example, frames where everything froze went from 35.5% with a fixed 50 ms delay to 2.4% with the adaptive clock. `node tests/web/perf.js` measures what each frame costs on a phone (an iPhone-sized screen, the CPU slowed 4x, 150 ms of lag), timing only frames where your ball is in play: it plays Knockouts, so a knocked-out ball comes straight back, and steers for the middle of the map.
 
 **Compare.** Games that need the lowest latency use UDP (WebRTC data channels or WebTransport in browsers), where a lost packet is just skipped. That's a lot more machinery; few browser games bother.
 
@@ -410,6 +412,8 @@ python -m pytest                      # the Python tests
 npm ci && npx playwright install chromium
 node tests/web/e2e.js                 # the browser test
 node tests/web/network.js             # a match on each simulated network
+node tests/web/perf.js                # frame cost on a slowed-down phone at 150 ms ping
+                                      # (--base <url> to measure a running server, e.g. main vs a branch)
 
 ruff check .                          # Python lint (rules in pyproject.toml)
 npm run lint                          # browser lint (eslint.config.js)

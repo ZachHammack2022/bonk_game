@@ -29,7 +29,7 @@ const freePort = () => new Promise((resolve) => {
 });
 
 async function waitForServer(base) {
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 300; i++) {
     try { if ((await fetch(base + "/healthz")).ok) return; } catch (e) { /* not up yet */ }
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -43,7 +43,11 @@ async function play(browser, base, netName) {
   const q = netName === "none" ? "" : `?net=${netName}&seed=1`;
   await page.goto(base + "/" + q);
   await page.fill("#name", "Tester");
-  await page.click("#create");
+  await page.click("#find");
+  await page.waitForSelector("#browse:not(.hidden)");
+  await page.click("#new-game");
+  await page.waitForSelector("#new-dialog:not(.hidden)");
+  await page.click("#new-create");
   await page.waitForSelector("#lobby:not(.hidden)");
   await page.evaluate((map) => {
     send({ type: "settings", map, first_to: 99, bots: ["bot:hard", "bot:hard"] });

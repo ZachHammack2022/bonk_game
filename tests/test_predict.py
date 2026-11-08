@@ -178,3 +178,57 @@ def test_the_page_serves_the_planck_js_the_tests_use():
     assert gzip.decompress((vendor / "planck.min.js.gz").read_bytes()) == served
     version = json.loads((ROOT / "package.json").read_text())["devDependencies"]["planck"]
     assert f"Planck.js v{version}".encode() in served[:400]
+
+
+# --- predicting frame after frame (physics.js predictor, used by js/net.js) ---
+def run_frames(cases):
+    """For each case, ask a predictor for a moment a bit further on each
+    "frame" (fractional steps, as the browser does), with the buttons for
+    later steps changing partway (you pressed something new): what it says,
+    what predict() says from scratch, and how many steps each took."""
+    script = f"""
+    const P = require({json.dumps(str(PHYSICS))});
+    const cases = JSON.parse(require("fs").readFileSync(0, "utf8"));
+    const out = cases.map((c) => {{
+      const pr = P.predictor(c.state, 0, c.you, c.phys, c.r, c.others);
+      const rows = [];
+      let stepsTaken = 0, stepsFresh = 0;
+      for (let f = 0; f < 60; f++) {{
+        const n = Math.min(0.3 + f * 0.27, c.steps.length);
+        // Frames 0-19: the case's buttons; from frame 20 the ones for step 4
+        // on change (as if you'd just pressed something else), and from
+        // frame 40 the ones from step 2 on
+        const buttons = (k) => f >= 40 && k >= 2 ? [0, 1, 0, 0, 0]
+          : f >= 20 && k >= 4 ? [1, 0, 0, 0, 1] : c.inputs[Math.min(k, c.inputs.length - 1)];
+        const before = pr.steps();
+        const a = pr.at(n, buttons);
+        stepsTaken += Math.max(0, pr.steps() - before);
+        const inputs = [];
+        for (let k = 0; k <= Math.ceil(n); k++) inputs.push(buttons(k));
+        const b = P.predict(c.state, 0, c.you, c.phys, inputs, n, c.r, c.others);
+        stepsFresh += Math.ceil(n);
+        rows.push([a, b]);
+      }}
+      return {{ rows, stepsTaken, stepsFresh }};
+    }});
+    console.log(JSON.stringify(out));
+    """
+    res = subprocess.run([NODE, "-e", script], input=json.dumps(cases), capture_output=True,
+                         text=True, check=True, cwd=ROOT)
+    return json.loads(res.stdout)
+
+
+def test_predicting_frame_after_frame_matches_predicting_from_scratch():
+    """The predictor keeps stepping instead of replaying every frame, but
+    must give exactly predict()'s answer, including when the buttons it
+    guessed change, a ball's bumped, a part's moving or a black hole pulls."""
+    picks = [CASES["run, then reverse"], CASES["bumped by another ball"], CASES["ride the sliding platform"],
+             CASES["pogo"], CASES["fly on Classic"]]
+    cases = [server_run(m, inputs, place, others) for m, inputs, place, others, *_ in picks]
+    m, inputs, place, others, power = POWER_CASES["pulled by a black hole"]
+    cases.append(server_run(m, inputs, place, others, power))
+    for k, res in enumerate(run_frames(cases)):
+        for f, (a, b) in enumerate(res["rows"]):
+            assert a == b, f"case {k}, frame {f}: frame after frame {a} vs from scratch {b}"
+        # (and far fewer steps than replaying everything each frame)
+        assert res["stepsTaken"] < res["stepsFresh"] / 3, res

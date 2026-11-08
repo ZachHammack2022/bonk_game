@@ -21,8 +21,22 @@ const own = { tick: null, base: null, offX: 0, offY: 0 };
 // For tests and poking around in the console
 const debug = (window.bonkDebug = { app, net, own, drawn: null, get fx() { return fx; } });
 
+// A predictor (physics.js) for each of the last few server states: asked
+// every frame, it only takes the steps it hasn't taken yet
+const predictors = [];  // [[entry, predictor, slot]], newest last
+function predictorFor(entry, i) {
+  let found = predictors.find(([e, , slot]) => e === entry && slot === i);
+  if (!found) {
+    const S = entry[1], M = app.match;
+    found = [entry, BonkPhysics.predictor(S, i, S.you || [0, 0, 0], effectPhysics(M, S, i), M.radius, othersMoving(S, M)), i];
+    predictors.push(found);
+    if (predictors.length > 3) predictors.shift();
+  }
+  return found[1];
+}
+
 function predictFrom(entry, now) {
-  const [arrived, S] = entry;
+  const arrived = entry[0];
   const M = app.match;
   const i = M.slots.findIndex((s) => s.id === me.id);
   const tick = M.physics.tick_ms;
@@ -30,10 +44,7 @@ function predictFrom(entry, now) {
   // Steps from that state until the server uses the keys you're pressing
   // now (plus about half a step waiting for the next server step)
   const n = Math.min((now - arrived + rtt) / tick + 0.5, 15);
-  const inputs = [];
-  for (let k = 0; k <= Math.ceil(n); k++) inputs.push(buttonsAt(arrived - rtt + (k + 1) * tick));
-  return BonkPhysics.predict(S, i, S.you || [0, 0, 0], effectPhysics(M, S, i), inputs, n, M.radius,
-    othersMoving(S, M));
+  return predictorFor(entry, i).at(n, (k) => buttonsAt(arrived - rtt + (k + 1) * tick));
 }
 
 // How fast everyone else is going (px per physics step), worked out from
