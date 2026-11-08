@@ -133,3 +133,66 @@ def test_the_web_app_manifest_and_icons():
         assert 'rel="apple-touch-icon"' in page and 'id="install"' in page
         assert (await client.get("/static/icons/apple-touch-icon.png")).status == 200
     asyncio.run(with_client(go))
+
+
+# --- ping by region (metrics.ping_by_region, History.regions, /admin) ---
+def test_ping_is_summed_up_by_region_and_over_time():
+    from bonk_game.server import room as room_mod
+
+    class FakeRoom:
+        def __init__(self, members):
+            self.members = {k: m for k, m in enumerate(members)}
+
+    def member(region, rtt, connected=True):
+        m = room_mod.Member(f"t{region}{rtt}", "x", None)
+        m.region, m.rtt, m.connected = region, rtt, connected
+        return m
+
+    rooms = [FakeRoom([member("lhr", 90), member("lhr", 110), member("iad", 20)]),
+             FakeRoom([member("lhr", 300), member("iad", None), member("sin", 250, connected=False)])]
+    regions = metrics.ping_by_region(rooms)
+    assert set(regions) == {"lhr", "iad"}  # (sin's not connected)
+    assert regions["lhr"] == {"players": 3, "known": 3, "med": 110, "p95": 300, "slow": 1}
+    assert regions["iad"]["players"] == 2 and regions["iad"]["known"] == 1 and regions["iad"]["med"] == 20
+
+    clock = Clock()
+    h = metrics.History(clock=clock)
+    h.add({"uptime_seconds": 1, "regions": regions})
+    clock.t += 60
+    h.add({"uptime_seconds": 61, "regions": {"lhr": {"players": 1, "known": 1, "med": 50, "p95": 50, "slow": 0}}})
+    rows = h.regions(3600)
+    assert [r["region"] for r in rows] == ["lhr", "iad"]
+    lhr = rows[0]
+    assert lhr["players_avg"] == 2 and lhr["players_peak"] == 3
+    assert lhr["med"] == round((110 * 3 + 50) / 4) and lhr["slow_share"] == 0.25
+    # Prometheus gets the numbers, not the table
+    text = metrics.prometheus({"ping_med_ms": 40, "ping_p95_ms": None, "regions": regions})
+    assert "bonk_ping_med_ms 40" in text and "regions" not in text and "p95" not in text
+
+
+def test_a_players_region_and_ping_reach_admin(monkeypatch):
+    from bonk_game.server import limits
+    monkeypatch.setattr(web, "METRICS_TOKEN", "s3cret")
+    monkeypatch.setattr(limits, "TRUST_PROXY", True)
+
+    async def go(client):
+        ws = await client.ws_connect("/ws/ABCD", headers={"Fly-Region": "LHR"})
+        await ws.send_json({"type": "hello", "name": "Ann", "token": "t1", "version": web.VERSION, "reopen": True})
+        assert (await ws.receive_json())["type"] == "welcome"
+        await ws.send_json({"type": "ping", "t": 1, "rtt": 123})
+        while (await ws.receive_json())["type"] != "pong":
+            pass
+        bad = await client.ws_connect("/ws/ABCD", headers={"Fly-Region": "<script>"})
+        await bad.send_json({"type": "hello", "name": "Bo", "token": "t2", "version": web.VERSION})
+        assert (await bad.receive_json())["type"] == "welcome"
+        await bad.send_json({"type": "ping", "t": 1, "rtt": "fast"})  # (ignored)
+        while (await bad.receive_json())["type"] != "pong":
+            pass
+        body = await (await client.get("/api/admin/metrics", headers={"Authorization": "Bearer s3cret"})).json()
+        regions = body["now"]["regions"]
+        assert regions["lhr"] == {"players": 1, "known": 1, "med": 123, "p95": 123, "slow": 0}
+        assert regions["direct"]["players"] == 1 and regions["direct"]["known"] == 0
+        assert body["now"]["ping_med_ms"] == 123
+        assert isinstance(body["regions"], list)
+        assert "bonk_ping_med_ms 123" in await (await client.get("/metrics", headers={"Authorization": "Bearer s3cret"})).text()
+    asyncio.run(with_client(go))

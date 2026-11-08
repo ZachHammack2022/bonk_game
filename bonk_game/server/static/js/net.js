@@ -9,7 +9,13 @@ const net = {
   rtt: null,                                  // smoothed round trip, ms
   inputs: [{ t: 0, b: [0, 0, 0, 0, 0] }],     // when your buttons changed
 };
-setInterval(() => { if (app.ws && app.ws.readyState === WebSocket.OPEN) send({ type: "ping", t: performance.now() }); }, 1000);
+// A ping a second; it carries your current round trip, so the server can
+// show how laggy players are where (the /admin page)
+setInterval(() => {
+  if (app.ws && app.ws.readyState === WebSocket.OPEN) {
+    send({ type: "ping", t: performance.now(), ...(net.rtt == null ? {} : { rtt: Math.round(net.rtt) }) });
+  }
+}, 1000);
 
 function buttonsAt(t) {
   let b = net.inputs[0].b;

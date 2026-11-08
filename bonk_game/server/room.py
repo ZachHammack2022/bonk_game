@@ -114,6 +114,8 @@ class Member:
         self.names = collections.deque([name], maxlen=5)  # names they've used here, for reports
         self.report_times = collections.deque(maxlen=moderation.REPORTS_PER_MINUTE)
         self.reported = set()    # pids they've reported
+        self.region = None       # where their connection came in (Fly's region, e.g. "lhr"), for /admin
+        self.rtt = None          # their round trip in ms, as their browser last said
 
     def rename(self, name):
         self.name = name
@@ -394,6 +396,9 @@ class Room:
         if kind == "ping":
             m = self.members.get(token)
             if m is not None:
+                rtt = msg.get("rtt")
+                if isinstance(rtt, (int, float)) and not isinstance(rtt, bool) and 0 <= rtt < 10000:
+                    m.rtt = round(rtt)
                 await m.send({"type": "pong", "t": msg.get("t")})
             return
         if kind in ("report", "client_error"):
