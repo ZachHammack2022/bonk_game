@@ -291,7 +291,7 @@ The whole level is in the prediction: slopes, bumpers, moving platforms, and the
 | `far` | 180 ms | ±10 ms | none | another continent, wired |
 | `bad` | 150 ms | ±80 ms | 800 ms, every ~8 s | weak signal |
 
-Or set each part: `?lag=150&jitter=40&stall=400&stall_every=10` (`&seed=7` repeats the same "random" network). `node tests/web/network.js` plays a match in a real browser on each and prints what the playtest report saw. On `bad`, for example, frames where everything froze went from 35.5% with a fixed 50 ms delay to 2.4% with the adaptive clock.
+Or set each part: `?lag=150&jitter=40&stall=400&stall_every=10` (`&seed=7` repeats the same "random" network). `node tests/web/network.js` plays a match in a real browser on each and prints what the playtest report saw. On `bad`, for example, frames where everything froze went from 35.5% with a fixed 50 ms delay to 2.4% with the adaptive clock. `node tests/web/perf.js` measures what each frame costs on a phone (an iPhone-sized screen, the CPU slowed 4x, 150 ms of lag), timing only frames where your ball is in play: it plays Knockouts, so a knocked-out ball comes straight back, and steers for the middle of the map.
 
 **Compare.** Games that need the lowest latency use UDP (WebRTC data channels or WebTransport in browsers), where a lost packet is just skipped. That's a lot more machinery; few browser games bother.
 
@@ -412,6 +412,8 @@ python -m pytest                      # the Python tests
 npm ci && npx playwright install chromium
 node tests/web/e2e.js                 # the browser test
 node tests/web/network.js             # a match on each simulated network
+node tests/web/perf.js                # frame cost on a slowed-down phone at 150 ms ping
+                                      # (--base <url> to measure a running server, e.g. main vs a branch)
 
 ruff check .                          # Python lint (rules in pyproject.toml)
 npm run lint                          # browser lint (eslint.config.js)
