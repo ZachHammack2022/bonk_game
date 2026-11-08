@@ -232,3 +232,24 @@ def test_predicting_frame_after_frame_matches_predicting_from_scratch():
             assert a == b, f"case {k}, frame {f}: frame after frame {a} vs from scratch {b}"
         # (and far fewer steps than replaying everything each frame)
         assert res["stepsTaken"] < res["stepsFresh"] / 3, res
+
+
+def test_a_predictor_asked_for_a_moment_before_its_state_says_where_the_state_has_you():
+    """A state can arrive after the frame's timestamp was taken, so the
+    browser can ask for a moment just before it (a negative number of
+    steps): that's where the state has you, not a crash."""
+    case = server_run(*CASES["run, then reverse"][:4])
+    script = f"""
+    const P = require({json.dumps(str(PHYSICS))});
+    const c = JSON.parse(require("fs").readFileSync(0, "utf8"));
+    const pr = P.predictor(c.state, 0, c.you, c.phys, c.r, c.others);
+    const b = (k) => c.inputs[Math.min(k, c.inputs.length - 1)];
+    console.log(JSON.stringify([pr.at(-0.4, b), pr.at(-3, b), pr.at(NaN, b), pr.at(1.5, b), pr.at(-0.2, b)]));
+    """
+    res = subprocess.run([NODE, "-e", script], input=json.dumps(case), capture_output=True,
+                         text=True, check=True, cwd=ROOT)
+    before, way_before, nan, later, again = json.loads(res.stdout)
+    start = case["state"]["players"][0][:2]
+    assert before == way_before == nan == again
+    assert abs(before[0] - start[0]) < 1e-6 and abs(before[1] - start[1]) < 1e-6
+    assert later != before  # (and it still predicts forwards after)
