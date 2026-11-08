@@ -93,8 +93,10 @@ class Stats:
         avg, p99 = self.tick_ms()
         all_rooms = list(rooms.rooms.values())
         regions = ping_by_region(all_rooms)
-        everyone = sorted(m.rtt for r in all_rooms for m in r.members.values()
-                          if m.connected and m.rtt is not None)
+        online = [m for r in all_rooms for m in r.members.values() if m.connected]
+        everyone = sorted(m.rtt for m in online if m.rtt is not None)
+        delays = sorted(m.delay for m in online if m.delay is not None)
+        play_min = sum(g["play_min"] for g in regions.values())
         return {
             "uptime_seconds": round(self.clock() - self.started, 1),
             "draining": rooms.draining,
@@ -118,6 +120,10 @@ class Stats:
             # Everyone's round trip (what their browsers last said), and by region
             "ping_med_ms": _pct(everyone, 0.5),
             "ping_p95_ms": _pct(everyone, 0.95),
+            # How far behind the newest states matches are drawn, and how
+            # often states stall (over the last minute, per minute of play)
+            "delay_med_ms": _pct(delays, 0.5),
+            "stalls_per_min": round(sum(g["stalls"] for g in regions.values()) / play_min, 2) if play_min else None,
             "regions": regions,
         }
 
@@ -130,26 +136,53 @@ def _pct(sorted_values, q):
 
 
 SLOW_MS = 150  # a round trip people start to feel
+STATES_PER_MIN = 30 * 60
+PLAYING_STATES = 10 * 30  # in the last minute: someone in a match (10 s of states)
+STALLING_PER_MIN = 1      # stalls a minute: someone the network's letting down
 
 
-def ping_by_region(rooms):
-    """Who's online where, and how laggy: {region: {"players", "known" (how
-    many said their ping), "med", "p95", "slow" (over SLOW_MS)}}. A region
-    is where the connection came in (Fly's region code, limits.client_region)."""
+def ping_by_region(rooms, now=None):
+    """Who's online where, and how laggy: {region: {
+        "players", "known" (how many said their ping), "med", "p95", "slow"
+        (round trips: typical, the worst 5%, how many over SLOW_MS);
+        "delay_known", "delay_med", "delay_p95": how far behind the newest
+        states their matches are drawn (the playback clock's delay), ms;
+        "play_min": minutes of states their browsers got in the last minute,
+        "stalls": how many came after a stall (over 100 ms since the last);
+        "playing": players in a match most of that minute, "stalling": how
+        many of them stalled more than STALLING_PER_MIN a minute}}.
+    A region is where the connection came in (Fly's region code,
+    limits.client_region)."""
+    now = time.monotonic() if now is None else now
     groups = {}
     for room in rooms:
         for m in room.members.values():
             if not m.connected:
                 continue
-            g = groups.setdefault(m.region or "direct", [0, []])
-            g[0] += 1
+            g = groups.setdefault(m.region or "direct", {"n": 0, "rtts": [], "delays": [], "states": 0, "stalls": 0,
+                                                          "playing": 0, "stalling": 0})
+            g["n"] += 1
             if m.rtt is not None:
-                g[1].append(m.rtt)
+                g["rtts"].append(m.rtt)
+            if m.delay is not None:
+                g["delays"].append(m.delay)
+            states, stalls = m.stall_window(now)
+            g["states"] += states
+            g["stalls"] += stalls
+            if states >= PLAYING_STATES:
+                g["playing"] += 1
+                # (more than once a minute, and more than once: one stall in
+                # the 40 s someone's been playing isn't "often")
+                if stalls > 1 and stalls / (states / STATES_PER_MIN) > STALLING_PER_MIN:
+                    g["stalling"] += 1
     out = {}
-    for region, (n, rtts) in groups.items():
-        rtts.sort()
-        out[region] = {"players": n, "known": len(rtts), "med": _pct(rtts, 0.5), "p95": _pct(rtts, 0.95),
-                       "slow": sum(1 for t in rtts if t > SLOW_MS)}
+    for region, g in groups.items():
+        rtts, delays = sorted(g["rtts"]), sorted(g["delays"])
+        out[region] = {"players": g["n"], "known": len(rtts), "med": _pct(rtts, 0.5), "p95": _pct(rtts, 0.95),
+                       "slow": sum(1 for t in rtts if t > SLOW_MS),
+                       "delay_known": len(delays), "delay_med": _pct(delays, 0.5), "delay_p95": _pct(delays, 0.95),
+                       "play_min": round(g["states"] / STATES_PER_MIN, 3), "stalls": g["stalls"],
+                       "playing": g["playing"], "stalling": g["stalling"]}
     return out
 
 
@@ -206,12 +239,17 @@ class History:
         "players_avg" (over the samples while the server ran), "players_peak",
         "med", "p95" (typical and slow round trips, ms: each sample's, averaged
         by how many players said theirs), "slow_share" (of those, how many were
-        over SLOW_MS)}]."""
+        over SLOW_MS), "delay_med", "delay_p95" (the drawing delay, the same
+        way), "stalls_per_min" (stalls per minute of play), "stalling_share"
+        (of the players in a match, how many stalled more than once a
+        minute)}]."""
         rows = self.samples(int(self.clock()) - seconds)
         acc = {}
         for _, snap in rows:
             for region, g in (snap.get("regions") or {}).items():
-                a = acc.setdefault(region, {"players": 0, "peak": 0, "known": 0, "med": 0.0, "p95": 0.0, "slow": 0})
+                a = acc.setdefault(region, {"players": 0, "peak": 0, "known": 0, "med": 0.0, "p95": 0.0, "slow": 0,
+                                            "dk": 0, "dmed": 0.0, "dp95": 0.0, "play_min": 0.0, "stalls": 0,
+                                            "playing": 0, "stalling": 0})
                 a["players"] += g.get("players", 0)
                 a["peak"] = max(a["peak"], g.get("players", 0))
                 k = g.get("known", 0)
@@ -220,11 +258,24 @@ class History:
                     a["med"] += g["med"] * k
                     a["p95"] += g["p95"] * k
                     a["slow"] += g.get("slow", 0)
+                dk = g.get("delay_known", 0)
+                if dk and g.get("delay_med") is not None:
+                    a["dk"] += dk
+                    a["dmed"] += g["delay_med"] * dk
+                    a["dp95"] += g["delay_p95"] * dk
+                a["play_min"] += g.get("play_min", 0)
+                a["stalls"] += g.get("stalls", 0)
+                a["playing"] += g.get("playing", 0)
+                a["stalling"] += g.get("stalling", 0)
         n = max(1, len(rows))
         out = [{"region": region, "players_avg": round(a["players"] / n, 2), "players_peak": a["peak"],
                 "med": round(a["med"] / a["known"]) if a["known"] else None,
                 "p95": round(a["p95"] / a["known"]) if a["known"] else None,
-                "slow_share": round(a["slow"] / a["known"], 3) if a["known"] else None}
+                "slow_share": round(a["slow"] / a["known"], 3) if a["known"] else None,
+                "delay_med": round(a["dmed"] / a["dk"]) if a["dk"] else None,
+                "delay_p95": round(a["dp95"] / a["dk"]) if a["dk"] else None,
+                "stalls_per_min": round(a["stalls"] / a["play_min"], 2) if a["play_min"] else None,
+                "stalling_share": round(a["stalling"] / a["playing"], 3) if a["playing"] else None}
                for region, a in acc.items()]
         return sorted(out, key=lambda r: -r["players_avg"])
 

@@ -116,6 +116,30 @@ class Member:
         self.reported = set()    # pids they've reported
         self.region = None       # where their connection came in (Fly's region, e.g. "lhr"), for /admin
         self.rtt = None          # their round trip in ms, as their browser last said
+        self.delay = None        # how far behind the newest states their match is drawn, ms (in a match)
+        self.net = collections.deque(maxlen=120)  # (when, states, stalls) from each ping: see stall_window
+
+    def note_network(self, now, msg):
+        """What a ping says about their network (js/net.js): the round trip,
+        and in a match the drawing delay and how many states came since the
+        last ping (and how many of those after a stall). Anything that isn't
+        a sensible number is ignored."""
+        def number(v, hi):
+            return v if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v < hi else None
+        rtt, delay = number(msg.get("rtt"), 10000), number(msg.get("delay"), 10000)
+        states, stalled = number(msg.get("states"), 1000), number(msg.get("stalls"), 1000)
+        if rtt is not None:
+            self.rtt = round(rtt)
+        if states:
+            self.delay = None if delay is None else round(delay)
+            self.net.append((now, int(states), int(min(stalled or 0, states))))
+        else:
+            self.delay = None  # (not in a match now)
+
+    def stall_window(self, now, seconds=60):
+        """(states, stalls) their browser counted over the last `seconds`."""
+        recent = [(n, s) for t, n, s in self.net if now - t <= seconds]
+        return sum(n for n, _ in recent), sum(s for _, s in recent)
 
     def rename(self, name):
         self.name = name
@@ -396,9 +420,7 @@ class Room:
         if kind == "ping":
             m = self.members.get(token)
             if m is not None:
-                rtt = msg.get("rtt")
-                if isinstance(rtt, (int, float)) and not isinstance(rtt, bool) and 0 <= rtt < 10000:
-                    m.rtt = round(rtt)
+                m.note_network(time.monotonic(), msg)
                 await m.send({"type": "pong", "t": msg.get("t")})
             return
         if kind in ("report", "client_error"):

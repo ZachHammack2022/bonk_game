@@ -638,6 +638,35 @@ function check(cond, what) {
     await setPage.reload();
     check(await setPage.evaluate(() => prefs.predictOthers === false && !predictOthers()), "unticked, it stays off after a reload");
 
+    // Every ping in a match says how smoothly states come (js/net.js
+    // stalls, for /admin): a steady connection has no stalls, one that
+    // stalls (netsim: what a lost packet does to TCP) has some
+    const pings = async (name, q) => {
+      const page = await open(name);
+      await page.goto(base + "/?" + q);
+      await page.fill("#name", "Sal");
+      await startLagged(page);
+      await page.evaluate(() => {
+        window.sentPings = [];
+        const real = window.send;
+        window.send = (msg) => { if (msg.type === "ping") window.sentPings.push(msg); return real(msg); };
+      });
+      await page.waitForTimeout(6500);
+      return page.evaluate(() => window.sentPings);
+    };
+    const steady = await pings("pings steady", "lag=60&seed=2");
+    const inMatch = steady.filter((m) => m.states > 0);
+    // (about 30 a second; the first ping of a match gets part of a second, and
+    // maybe no delay or round trip yet: it's only just started)
+    const whole = inMatch.slice(1, -1);
+    check(whole.length >= 3 && whole.every((m) => m.states >= 20 && m.states <= 40 && typeof m.delay === "number"
+      && typeof m.rtt === "number") && inMatch.every((m) => Number.isInteger(m.stalls)),
+      `in a match, each ping says the drawing delay and how many states came (${inMatch.map((m) => m.states).join(", ")})`);
+    check(inMatch.reduce((a, m) => a + m.stalls, 0) === 0, "a steady connection: no stalls");
+    const stalling = await pings("pings stalling", "lag=60&stall=400&stall_every=1.5&seed=2");
+    const stalled = stalling.reduce((a, m) => a + (m.stalls || 0), 0);
+    check(stalled > 0, `a connection that stalls: the pings count them (${stalled} in about 6 s)`);
+
     check(errors.length === 0, "no page errors" + (errors.length ? ": " + errors.join(" | ") : ""));
   } finally {
     if (browser) await browser.close();

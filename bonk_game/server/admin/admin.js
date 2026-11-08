@@ -25,6 +25,8 @@
     { title: "Matches running", sub: "peak", gauge: "matches_running", pick: "max", fmt: "int" },
     { title: "Matches started", count: "matches_started_total", fmt: "int" },
     { title: "Ping", sub: "median of everyone online", gauge: "ping_med_ms", pick: "avg", fmt: "ms" },
+    { title: "Drawing delay", sub: "median of everyone in a match", gauge: "delay_med_ms", pick: "avg", fmt: "ms" },
+    { title: "Stalls", sub: "per minute of play", gauge: "stalls_per_min", pick: "avg", fmt: "num" },
     { title: "Tick time p99", sub: "average, ms", gauge: "tick_ms_p99", pick: "avg", fmt: "ms" },
     { title: "Late ticks", sub: "rooms falling behind", count: "late_ticks_total", fmt: "int" },
     { title: "Sent on the wire", sub: "average", count: "wire_bytes_sent_total", rate: true, fmt: "bytes/s" },
@@ -223,6 +225,8 @@
       ["Connections", fmt(now.connections)],
       ["Ping", now.ping_med_ms == null ? "–" : fmt(now.ping_med_ms, "ms"),
         now.ping_p95_ms == null ? "nobody's said yet" : `slow: ${fmt(now.ping_p95_ms, "ms")}`, now.ping_med_ms > 150],
+      ["Stalls", now.stalls_per_min == null ? "–" : `${fmt(now.stalls_per_min)} / min`,
+        now.delay_med_ms == null ? "nobody in a match" : `drawing ${fmt(now.delay_med_ms, "ms")} behind`, now.stalls_per_min > STALLING],
       ["Tick time p99", fmt(now.tick_ms_p99, "ms"), `avg ${fmt(now.tick_ms_avg, "ms")}`, now.tick_ms_p99 > 20],
       ["Sending", rate == null ? "–" : fmt(rate, "bytes/s"), rate == null ? "next update" : "on the wire"],
       ["Uptime", duration(now.uptime_seconds)],
@@ -273,6 +277,7 @@
     gru: "São Paulo, BR", scl: "Santiago, CL", bog: "Bogotá, CO", eze: "Buenos Aires, AR", jnb: "Johannesburg, ZA",
     direct: "not through Fly",
   };
+  const STALLING = 1;  // stalls a minute (metrics.STALLING_PER_MIN)
   function renderRegions(nowRegions, ranged) {
     const label = RANGES.find(([s]) => s === data.range);
     $("regions-range").textContent = `now, and over the last ${label ? label[1] : duration(data.range)}`;
@@ -284,7 +289,8 @@
     const table = $("regions");
     table.textContent = "";
     const head = table.createTHead().insertRow();
-    for (const label of ["Region", "Online now", "Ping now", "Average online", "Peak", "Typical ping", "Slow ping", "Over 150 ms"]) {
+    for (const label of ["Region", "Online now", "Ping now", "Average online", "Peak", "Typical ping", "Slow ping", "Over 150 ms",
+      "Drawing delay", "Stalls / min", "Stalling often"]) {
       const th = document.createElement("th");
       th.textContent = label;
       head.appendChild(th);
@@ -305,10 +311,17 @@
       if (r.med > 150) typical.className = "bad";
       row.insertCell().textContent = ms(r.p95);
       row.insertCell().textContent = r.slow_share == null ? "–" : fmt(r.slow_share, "%");
+      row.insertCell().textContent = r.delay_med == null ? "–" : `${ms(r.delay_med)} (slow ${ms(r.delay_p95)})`;
+      const st = row.insertCell();
+      st.textContent = r.stalls_per_min == null ? "–" : fmt(r.stalls_per_min);
+      if (r.stalls_per_min > STALLING) st.className = "bad";
+      const often = row.insertCell();
+      often.textContent = r.stalling_share == null ? "–" : fmt(r.stalling_share, "%");
+      if (r.stalling_share > 0.1) often.className = "bad";
     }
     if (!rows.length) {
       const cell = body.insertRow().insertCell();
-      cell.colSpan = 8;
+      cell.colSpan = 11;
       cell.textContent = "Nobody's been online in this range.";
     }
   }
