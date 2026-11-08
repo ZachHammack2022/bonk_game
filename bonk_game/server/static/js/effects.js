@@ -145,7 +145,7 @@ function slotName(i) {
 function onEvent(ev, state) {
   const slots = app.match ? app.match.slots : [];
   switch (ev.e) {
-    case "beep": sound.play("beep"); break;
+    case "beep": sound.play("beep"); haptics.tick(); break;
     case "go": sound.play("go"); fx.say("GO!", T.accent, true); haptics.buzz("hit"); break;
     case "death": {
       const c = slots[ev.i] ? slots[ev.i].color : T.text;
@@ -280,7 +280,8 @@ function onEvent(ev, state) {
     case "sudden": fx.say("Sudden death!", T.danger); fx.kick(6); sound.play("go"); break;
     case "hit":
       critterHit(ev.x, ev.y, ev.s);
-      if (isMe(ev.by) || nearMe(ev.x, ev.y)) haptics.buzz("bump", ev.s / 18);
+      // (Only real bumps: rolling against someone isn't worth a buzz)
+      if (ev.s >= 7 && (isMe(ev.by) || nearMe(ev.x, ev.y))) haptics.buzz("bump", ev.s / 18);
       fx.burst(ev.x, ev.y, "#ffd23f", Math.round(3 + ev.s * 0.6), ev.s * 0.5, 3.5, 0.4, false, "star");
       fx.kick(Math.min(8, ev.s * 0.4));
       sound.play("hit", Math.min(1, ev.s / 18));

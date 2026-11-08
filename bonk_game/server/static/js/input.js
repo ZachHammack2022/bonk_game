@@ -135,6 +135,7 @@ function initTouch() {
     hz.setPointerCapture(e.pointerId);
     touchHeavy.id = e.pointerId;
     hb.classList.add("down");
+    haptics.tick();  // a touch screen button you can feel
     setTouch([...held.touch.slice(0, 4), 1]);
   });
   const heavyUp = (e) => {
