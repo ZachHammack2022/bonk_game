@@ -24,6 +24,7 @@
     { title: "Rooms", sub: "peak", gauge: "rooms", pick: "max", fmt: "int" },
     { title: "Matches running", sub: "peak", gauge: "matches_running", pick: "max", fmt: "int" },
     { title: "Matches started", count: "matches_started_total", fmt: "int" },
+    { title: "Ping", sub: "median of everyone online", gauge: "ping_med_ms", pick: "avg", fmt: "ms" },
     { title: "Tick time p99", sub: "average, ms", gauge: "tick_ms_p99", pick: "avg", fmt: "ms" },
     { title: "Late ticks", sub: "rooms falling behind", count: "late_ticks_total", fmt: "int" },
     { title: "Sent on the wire", sub: "average", count: "wire_bytes_sent_total", rate: true, fmt: "bytes/s" },
@@ -198,6 +199,7 @@
     for (const b of $("ranges").children) b.setAttribute("aria-pressed", String(Number(b.dataset.range) === data.range));
     renderTiles(now);
     if (data.retention) renderRetention(data.retention);
+    renderRegions(now.regions || {}, data.regions || []);
     const h = data.history;
     $("history-note").textContent = data.kept
       ? `Sampled every minute, kept ${data.keep_days} days. Gaps are when the server was stopped. Each point covers ${duration(h.step)}.`
@@ -219,6 +221,8 @@
       ["Rooms", fmt(now.rooms), now.rooms_locked ? `${now.rooms_locked} locked` : ""],
       ["Matches running", fmt(now.matches_running)],
       ["Connections", fmt(now.connections)],
+      ["Ping", now.ping_med_ms == null ? "–" : fmt(now.ping_med_ms, "ms"),
+        now.ping_p95_ms == null ? "nobody's said yet" : `slow: ${fmt(now.ping_p95_ms, "ms")}`, now.ping_med_ms > 150],
       ["Tick time p99", fmt(now.tick_ms_p99, "ms"), `avg ${fmt(now.tick_ms_avg, "ms")}`, now.tick_ms_p99 > 20],
       ["Sending", rate == null ? "–" : fmt(rate, "bytes/s"), rate == null ? "next update" : "on the wire"],
       ["Uptime", duration(now.uptime_seconds)],
@@ -254,6 +258,58 @@
         el.appendChild(s);
       }
       box.appendChild(el);
+    }
+  }
+
+  // --- where players are ---------------------------------------------------
+  // Fly.io's region codes (the ones players are likeliest to come through)
+  const REGION_NAMES = {
+    iad: "Virginia, US", ewr: "New Jersey, US", ord: "Chicago, US", atl: "Atlanta, US", mia: "Miami, US",
+    dfw: "Dallas, US", den: "Denver, US", lax: "Los Angeles, US", sjc: "San Jose, US", sea: "Seattle, US",
+    yyz: "Toronto, CA", yul: "Montreal, CA", gdl: "Guadalajara, MX", qro: "Querétaro, MX",
+    lhr: "London, UK", ams: "Amsterdam, NL", fra: "Frankfurt, DE", cdg: "Paris, FR", mad: "Madrid, ES",
+    arn: "Stockholm, SE", waw: "Warsaw, PL", otp: "Bucharest, RO",
+    sin: "Singapore", nrt: "Tokyo, JP", hkg: "Hong Kong", bom: "Mumbai, IN", syd: "Sydney, AU",
+    gru: "São Paulo, BR", scl: "Santiago, CL", bog: "Bogotá, CO", eze: "Buenos Aires, AR", jnb: "Johannesburg, ZA",
+    direct: "not through Fly",
+  };
+  function renderRegions(nowRegions, ranged) {
+    const label = RANGES.find(([s]) => s === data.range);
+    $("regions-range").textContent = `now, and over the last ${label ? label[1] : duration(data.range)}`;
+    const byRegion = new Map(ranged.map((r) => [r.region, r]));
+    for (const region of Object.keys(nowRegions)) if (!byRegion.has(region)) byRegion.set(region, { region });
+    const rows = [...byRegion.values()].sort((a, b) =>
+      ((nowRegions[b.region] || {}).players || 0) - ((nowRegions[a.region] || {}).players || 0)
+      || (b.players_avg || 0) - (a.players_avg || 0));
+    const table = $("regions");
+    table.textContent = "";
+    const head = table.createTHead().insertRow();
+    for (const label of ["Region", "Online now", "Ping now", "Average online", "Peak", "Typical ping", "Slow ping", "Over 150 ms"]) {
+      const th = document.createElement("th");
+      th.textContent = label;
+      head.appendChild(th);
+    }
+    const body = table.createTBody();
+    const ms = (v) => (v == null ? "–" : `${Math.round(v)} ms`);
+    for (const r of rows) {
+      const n = nowRegions[r.region] || {};
+      const row = body.insertRow();
+      const name = REGION_NAMES[r.region];
+      row.insertCell().textContent = name ? `${r.region} · ${name}` : r.region;
+      row.insertCell().textContent = n.players ? nf.format(n.players) : "–";
+      row.insertCell().textContent = ms(n.med);
+      row.insertCell().textContent = r.players_avg == null ? "–" : fmt(r.players_avg);
+      row.insertCell().textContent = r.players_peak == null ? "–" : nf.format(r.players_peak);
+      const typical = row.insertCell();
+      typical.textContent = ms(r.med);
+      if (r.med > 150) typical.className = "bad";
+      row.insertCell().textContent = ms(r.p95);
+      row.insertCell().textContent = r.slow_share == null ? "–" : fmt(r.slow_share, "%");
+    }
+    if (!rows.length) {
+      const cell = body.insertRow().insertCell();
+      cell.colSpan = 8;
+      cell.textContent = "Nobody's been online in this range.";
     }
   }
 

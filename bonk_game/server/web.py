@@ -442,6 +442,7 @@ async def admin_metrics(request):
         "kept": history.path != ":memory:",
         "history": history.series(seconds),
         "retention": request.app[RETENTION].report(),
+        "regions": history.regions(seconds),
     }, headers=ADMIN_HEADERS)
 
 
@@ -504,8 +505,9 @@ async def websocket(request):
         if password and not room.password_ok(token, password) and not request.app[GUESS_LIMIT].allow(ip):
             return await refuse("Too many wrong passwords. Try again in a minute.")
         try:
-            await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True,
-                            account=user["id"] if user else None, password=password)
+            member = await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True,
+                                     account=user["id"] if user else None, password=password)
+            member.region = limits.client_region(request)
         except PasswordNeeded as e:
             token = None
             return await refuse(str(e), password=True, wrong=e.wrong)

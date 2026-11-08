@@ -92,6 +92,9 @@ class Stats:
         """Everything /metrics reports. rooms: the RoomManager."""
         avg, p99 = self.tick_ms()
         all_rooms = list(rooms.rooms.values())
+        regions = ping_by_region(all_rooms)
+        everyone = sorted(m.rtt for r in all_rooms for m in r.members.values()
+                          if m.connected and m.rtt is not None)
         return {
             "uptime_seconds": round(self.clock() - self.started, 1),
             "draining": rooms.draining,
@@ -112,13 +115,50 @@ class Stats:
             "matches_started_total": self.matches_started,
             "matches_finished_total": self.matches_finished,
             "refused_old_clients_total": self.refused_old_clients,
+            # Everyone's round trip (what their browsers last said), and by region
+            "ping_med_ms": _pct(everyone, 0.5),
+            "ping_p95_ms": _pct(everyone, 0.95),
+            "regions": regions,
         }
+
+
+def _pct(sorted_values, q):
+    """A percentile of already-sorted numbers, or None if there are none."""
+    if not sorted_values:
+        return None
+    return sorted_values[min(len(sorted_values) - 1, int(len(sorted_values) * q))]
+
+
+SLOW_MS = 150  # a round trip people start to feel
+
+
+def ping_by_region(rooms):
+    """Who's online where, and how laggy: {region: {"players", "known" (how
+    many said their ping), "med", "p95", "slow" (over SLOW_MS)}}. A region
+    is where the connection came in (Fly's region code, limits.client_region)."""
+    groups = {}
+    for room in rooms:
+        for m in room.members.values():
+            if not m.connected:
+                continue
+            g = groups.setdefault(m.region or "direct", [0, []])
+            g[0] += 1
+            if m.rtt is not None:
+                g[1].append(m.rtt)
+    out = {}
+    for region, (n, rtts) in groups.items():
+        rtts.sort()
+        out[region] = {"players": n, "known": len(rtts), "med": _pct(rtts, 0.5), "p95": _pct(rtts, 0.95),
+                       "slow": sum(1 for t in rtts if t > SLOW_MS)}
+    return out
 
 
 def prometheus(snap):
     """The same numbers in Prometheus' text format (counters end in _total)."""
     lines = []
     for k, v in snap.items():
+        if not isinstance(v, (int, float)):  # (the by-region table, a ping nobody's sent yet)
+            continue
         name = "bonk_" + k
         kind = "counter" if k.endswith("_total") else "gauge"
         lines.append(f"# TYPE {name} {kind}")
@@ -160,6 +200,33 @@ class History:
     def samples(self, since):
         rows = self.db.execute("SELECT t, data FROM samples WHERE t >= ? ORDER BY t", (since,))
         return [(t, json.loads(data)) for t, data in rows]
+
+    def regions(self, seconds):
+        """Each region over the last `seconds`, busiest first: [{"region",
+        "players_avg" (over the samples while the server ran), "players_peak",
+        "med", "p95" (typical and slow round trips, ms: each sample's, averaged
+        by how many players said theirs), "slow_share" (of those, how many were
+        over SLOW_MS)}]."""
+        rows = self.samples(int(self.clock()) - seconds)
+        acc = {}
+        for _, snap in rows:
+            for region, g in (snap.get("regions") or {}).items():
+                a = acc.setdefault(region, {"players": 0, "peak": 0, "known": 0, "med": 0.0, "p95": 0.0, "slow": 0})
+                a["players"] += g.get("players", 0)
+                a["peak"] = max(a["peak"], g.get("players", 0))
+                k = g.get("known", 0)
+                if k and g.get("med") is not None:
+                    a["known"] += k
+                    a["med"] += g["med"] * k
+                    a["p95"] += g["p95"] * k
+                    a["slow"] += g.get("slow", 0)
+        n = max(1, len(rows))
+        out = [{"region": region, "players_avg": round(a["players"] / n, 2), "players_peak": a["peak"],
+                "med": round(a["med"] / a["known"]) if a["known"] else None,
+                "p95": round(a["p95"] / a["known"]) if a["known"] else None,
+                "slow_share": round(a["slow"] / a["known"], 3) if a["known"] else None}
+               for region, a in acc.items()]
+        return sorted(out, key=lambda r: -r["players_avg"])
 
     def series(self, seconds, points=240):
         """The last `seconds`, in at most `points` buckets of equal length:

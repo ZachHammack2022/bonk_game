@@ -4,6 +4,7 @@ All numbers can be changed with environment variables of the same name
 (e.g. BONK_MAX_ROOMS=100).
 """
 import os
+import re
 import time
 
 
@@ -71,6 +72,17 @@ class PerKey:
                 if b.tokens + (now - b.last) * b.rate >= b.burst]
         for k in full:
             del self.buckets[k]
+
+
+def client_region(request):
+    """Where a connection came in: the Fly.io region that took it (the
+    Fly-Region header, e.g. "lhr" for London), which is roughly where the
+    player is. "direct" when not behind Fly's proxy."""
+    if TRUST_PROXY:
+        r = request.headers.get("Fly-Region", "").strip().lower()
+        if re.fullmatch(r"[a-z0-9]{2,8}", r):
+            return r
+    return "direct"
 
 
 def client_ip(request):

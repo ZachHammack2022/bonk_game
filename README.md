@@ -137,6 +137,7 @@ Set up once: make the staging app (`./deploy/fly.sh bonk-game-staging iad` plus 
 
 - **`/admin`**: paste the metrics token and see what's happening now (players, rooms, matches, tick time, bandwidth) and charts for the last hour to 90 days, with restarts marked. It's sampled every minute into `BONK_METRICS_DB`.
   - **Who comes back**: D1, D7 and D30 retention (of the people who first joined a game on a day, how many joined one again 1, 7 and 30 days later), players per day, week and month, new players, how many play from the home screen, and a table of daily cohorts. A player is a browser: its random token, hashed with a salt kept in the database (so what's stored can't be used to play as anyone), kept 120 days.
+  - **Where players are**: a table of regions (where each connection came in: the Fly.io region that took it, roughly where the player is) with players online now, on average and at peak, and their typical and slow ping (median and worst 5%, from what each browser measures) and how many are over 150 ms, over the chosen range. Plus a ping chart and tile. It's what to look at before adding a server in another region. Kept only as totals per region.
 - **`/metrics`**: the same numbers in Prometheus format (`?format=json` for JSON), with `Authorization: Bearer <token>`.
 - **Logs**: one JSON object per line (rooms, matches, errors with tracebacks, sign-ins, reports). `fly logs -a <app>`.
 - **Player reports** at `/api/reports`, and **playtest reports** at `/api/playtest` (both with the token). See [Playtesting](#playtesting-with-friends).

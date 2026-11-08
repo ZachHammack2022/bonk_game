@@ -54,6 +54,18 @@
         </details>
       </section>
 
+      <section aria-labelledby="regions-title">
+        <div class="section-head">
+          <h2 id="regions-title">Where players are</h2>
+          <span id="regions-range" class="dim"></span>
+        </div>
+        <p class="dim ret-note">Where each connection comes in (the Fly.io region that took it, roughly where the
+          player is) and how laggy it is: the round trip each player's browser measures. Typical is the median;
+          slow is the worst 5%. Over 150 ms, people start to feel it. "direct" means not through Fly's proxy
+          (running locally).</p>
+        <div class="table-wrap"><table id="regions"></table></div>
+      </section>
+
       <section aria-labelledby="history-title">
         <div class="section-head">
           <h2 id="history-title">History</h2>
