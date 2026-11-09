@@ -173,7 +173,7 @@ def test_agent_actions_use_the_same_jump():
     assert p.y_v < -p.jump_speed / 2
 
 
-def test_players_bounce_off_each_other_a_little_softer_than_elastic():
+def test_players_bounce_off_each_other_elastically():
     from bonk_game.envs.utils.world import PLAYER_BOUNCE, World
     m, a = setup()
     b = m.make_players()[1]
@@ -185,7 +185,7 @@ def test_players_bounce_off_each_other_a_little_softer_than_elastic():
     # Separating speed is PLAYER_BOUNCE of the closing speed; momentum kept
     assert b.x_v - a.x_v == pytest.approx(PLAYER_BOUNCE * 4, abs=0.01)
     assert a.x_v + b.x_v == pytest.approx(4, abs=0.01)
-    assert 0.7 <= PLAYER_BOUNCE < 1
+    assert PLAYER_BOUNCE == 1.0  # (a bonk.io recording: 1.02)
 
 
 def pogo_height(m, p, down_steps):

@@ -127,3 +127,28 @@ def test_speed_setting_in_a_room():
         assert room.match.options["speed"] == 1.0
         await room.stop()
     asyncio.run(go())
+
+
+def test_a_hard_hit_sends_you_sliding():
+    """Measured from bonk.io: a ball standing still, hit by one running at
+    265 px/s that goes heavy, leaves at 428 px/s and slides on at that speed;
+    the ground doesn't catch it at once (world.SLIDE_SPEED)."""
+    env = TestEnv("human", "human", map_name="platform", time_scale=stepping.TIME_SCALE)
+    env.reset()
+    env.timer.limit = 0
+    a, b = env.players
+    m = env.map
+    b.x, b.y = m.RIGHT - 60, m.TOP - b.r
+    a.x, a.y = b.x - 120, m.TOP - a.r
+    for _ in range(5):
+        env.step()
+    per_s = 30 * env.time_scale
+    a.x_v = 265 / per_s
+    speeds = []
+    for _ in range(40):
+        close = abs(b.x - a.x) < 2 * a.r + 15
+        env.step([HEAVY_RIGHT if close else RIGHT, None])
+        if b.x_v > 0.5:
+            speeds.append(b.x_v * per_s)
+    assert speeds[0] == pytest.approx(428, rel=0.1)
+    assert speeds[min(5, len(speeds) - 1)] > 0.85 * speeds[0]  # still sliding a quarter of a second on
