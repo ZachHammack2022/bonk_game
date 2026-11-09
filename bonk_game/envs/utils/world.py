@@ -53,9 +53,15 @@ LIFT = math.sqrt(GRAVITY / TUNED_GRAVITY)
 #   Running (pushing the way you're already going) it grips GRIP_RUNNING
 #   instead: you get up to a decent speed, and still stop short when you let
 #   go or turn round.
+#   Going faster than you can run (SLIDE_SPEED, px per step: you've been
+#   knocked) it only grips GRIP_RUNNING too, so a hard hit sends you sliding,
+#   as bonk.io's do, instead of the ground catching you at once. (Measured
+#   from a bonk recording: a ball hit while standing still slid away at its
+#   full speed.)
 FRICTION_SCALE = 0.5
 GRIP = 150.0
 GRIP_RUNNING = 30.0
+SLIDE_SPEED = 12.0  # (running flat out gets you to about 11)
 # Moving up faster than this (px per step), a ball has left the ground: grip
 # stops at once, so it doesn't take anything off a jump
 LIFT_OFF = 2.0
@@ -63,9 +69,9 @@ LIFT_OFF = 2.0
 # doesn't collide with that category, so it passes through the others
 BALL_BITS = 0x0002
 EVERYTHING = 0xFFFF
-# Share of their closing speed two balls bounce apart with (1 would lose
-# nothing; bonk.io's balls keep roughly 70-100%)
-PLAYER_BOUNCE = 0.85
+# Share of their closing speed two balls bounce apart with: 1, they lose
+# nothing (measured from a bonk.io recording of a heavy hit: 1.02)
+PLAYER_BOUNCE = 1.0
 
 
 def to_m(px):
@@ -393,7 +399,7 @@ def grip(p, surface, normal, body, dt):
     v = body.linearVelocity
     svx, svy = speed_from_b2(v.x), speed_from_b2(v.y)
     vt = (p.x_v - svx) * tx + (p.y_v - svy) * ty
-    g = GRIP_RUNNING if p.run_dir * tx * vt > 0 else GRIP
+    g = GRIP_RUNNING if p.run_dir * tx * vt > 0 or abs(vt) > SLIDE_SPEED else GRIP
     dv = vt * (1 - math.exp(-surface.friction * g * dt))
     p.x_v -= dv * tx
     p.y_v -= dv * ty

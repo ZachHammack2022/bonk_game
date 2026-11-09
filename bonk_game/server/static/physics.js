@@ -284,7 +284,8 @@
     const sv = other.getLinearVelocity();
     const vt = (s.vx - u.fromV(sv.x)) * tx + (s.vy - u.fromV(sv.y)) * ty;
     // Running the way you're going, it grips less (world.GRIP_RUNNING)
-    const g = s.runDir * tx * vt > 0 ? B.grip_running : B.grip;
+    // (Faster than you can run, you've been knocked: you slide, world.SLIDE_SPEED)
+    const g = s.runDir * tx * vt > 0 || Math.abs(vt) > (B.slide_speed ?? Infinity) ? B.grip_running : B.grip;
     const dv = vt * (1 - Math.exp(-spec.f * g * dt));
     s.vx -= dv * tx; s.vy -= dv * ty;
     if (other.isDynamic()) {
