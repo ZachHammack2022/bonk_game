@@ -46,59 +46,74 @@ def test_pushing_the_opponent_off_the_platform_kills_them():
     assert dead == [False, True]
 
 
-def test_jumping_over_a_slider_post_drops_you_off_the_edge():
-    m = make_map("slider")
-    p, _ = m.make_players()
-    place(p, m.RIGHT - 60, m.TOP - p.r - 1)
-    died = False
-    for _ in range(300):
-        p.move_right(1)
-        if p.grounded:
-            p.move_up(2)
-        if tick(m, [p])[0]:
-            died = True
-            break
-    assert died
-    assert p.x > m.RIGHT  # went out over the right-hand edge
+def run_into_the_right_post(m, a, seconds):
+    """Hold right from the middle for `seconds`; then let go. Returns the
+    step `a` was knocked out on (or None) and how far out the right half
+    got."""
+    place(a, m.CENTER + 60, m.TOP - a.r - 1)
+    died, furthest = None, 0
+    for t in range(30 * 5):
+        if t < 30 * seconds and died is None:
+            a.move_right(a.push)
+        if died is None and tick(m, [a])[0]:
+            died = t
+            a.dies()
+        elif died is not None:
+            m.step()
+        furthest = max(furthest, m.halves[1].offset)
+    return died, furthest
 
 
-def test_slider_moves_when_pushed_and_stays_on_its_rail():
+def test_running_into_a_post_shoves_that_half_out_and_you_with_it():
     m = make_map("slider")
     a, _ = m.make_players()
-    place(a, 260, m.TOP - a.r - 1)
-    furthest = 0
-    for _ in range(200):
-        a.move_right(2)
-        tick(m, [a])
-        assert abs(m.platform.offset) <= m.TRAVEL + 0.5  # (Box2D's joint limits give a hair)
-        furthest = max(furthest, m.platform.offset)
-    assert furthest > 50  # player shoved it right (then may fly off over the post)
+    died, furthest = run_into_the_right_post(m, a, 3)
+    assert died is not None and a.x > m.width  # went out over the right-hand edge
+    assert furthest > 60
+    assert m.halves[0].offset == 0  # the other half didn't move
+    # ...and the half came back home on its own, and stopped there
+    assert m.halves[1].offset == pytest.approx(0, abs=0.5) and m.halves[1].vx == pytest.approx(0, abs=0.1)
 
 
-def test_heavy_hits_push_the_slider_harder():
+def test_a_half_comes_home_and_only_slides_outward():
+    m = make_map("slider")
+    left, right = m.halves
+    left.vx, right.vx = -14, -14  # left half out, right half in
+    for _ in range(8):
+        m.step()
+    assert left.offset < -40 and right.offset == pytest.approx(0, abs=0.5)
+    for _ in range(60):
+        m.step()
+        assert left.offset <= 0.5  # (never past home)
+    assert left.offset == pytest.approx(0, abs=0.5) and left.vx == pytest.approx(0, abs=0.1)
+
+
+def test_a_half_is_feather_light():
+    """Any ball moves it nearly at its own speed; a heavy one a bit more so."""
     def slam(mass):
         m = make_map("slider")
         a, _ = m.make_players()
-        place(a, m.LEFT - a.r - 5, m.TOP - 25)
+        post = m.halves[1].blocks[2]
+        place(a, post.cx - 30, post.cy + 10)
         a.x_v, a.m = 12, mass
-        for _ in range(5):
+        a.gravity = 0
+        for _ in range(4):
             tick(m, [a])
-        return m.platform.vx
+        return m.halves[1].vx
 
     light, heavy = slam(1), slam(5)
-    assert light > 0
-    assert heavy > 2 * light
+    assert light > 6 and heavy > light
 
 
 def test_slider_resets_between_rounds():
     m = make_map("slider")
-    m.platform.vx = 8
-    for _ in range(10):
+    m.halves[0].vx, m.halves[1].vx = -8, 8
+    for _ in range(5):
         m.step()
-    assert m.platform.offset != 0
+    assert m.halves[0].offset < 0 < m.halves[1].offset
     m.reset()
-    assert m.platform.offset == 0 and m.platform.vx == 0
-    assert m.platform.blocks[0].x1 == m.LEFT
+    assert all(h.offset == 0 and h.vx == 0 for h in m.halves)
+    assert m.halves[1].blocks[1].x1 == m.CENTER + m.HALF_WIDTH + 2
 
 
 @pytest.mark.parametrize("name", list(MAPS))

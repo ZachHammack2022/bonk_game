@@ -331,7 +331,7 @@ class World:
                 b.fall = b.p.y_v  # (how fast it's coming down, for a pogo on landing)
             self.b2.Step(dt, VELOCITY_ITERATIONS, POSITION_ITERATIONS)
             for part, prev in zip(self.parts, before):
-                part.after_substep(prev)
+                part.after_substep(prev, dt)
             for b in balls:
                 b.pull()
             for i, b in enumerate(balls):

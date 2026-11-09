@@ -161,29 +161,41 @@ class _Part:
 
 
 class SlidingPlatform(_Part):
-    """A group of blocks that slides left/right as one heavy body.
+    """A group of blocks that slides left/right as one body.
 
     It only moves horizontally (on a rail: a Box2D prismatic joint): players
     hitting it or rolling on it push it, and it pushes them back. It slowly
     comes to a stop and bounces softly off the ends of its rail.
 
+    It can also be pulled back home (to where it starts), as bonk.io's
+    springy joints do: shove it out and it comes back by itself.
+
     Args:
         blocks: the Blocks that make up the platform, at their start positions
         mass: compared to a player's mass of 1 (5 when heavy)
-        travel: how far it may slide either way from where it starts
+        travel: how far it may slide either way from where it starts, or
+            (furthest left, furthest right), e.g. (-400, 0): only leftwards
         damping: share of its speed kept each step
+        home_pull, home_spring: away from home, it's pulled back by
+            home_pull + home_spring * how far it is (px per step per step)
+        home_bounce: share of its speed it bounces back with when it gets
+            home against the end of its rail (default: end_bounce)
     """
 
     kind = "slider"
 
     def __init__(self, blocks, mass=6.0, travel=150, damping=0.992,
-                 max_speed=12, end_bounce=0.5):
+                 max_speed=12, end_bounce=0.5, home_pull=0.0, home_spring=0.0, home_bounce=None):
         self.blocks = blocks
         self.mass = mass
-        self.travel = travel
+        self.lo, self.hi = (-travel, travel) if isinstance(travel, (int, float)) else travel
+        self.travel = max(abs(self.lo), abs(self.hi))  # (for observations)
         self.damping = damping
         self.max_speed = max_speed
         self.end_bounce = end_bounce
+        self.home_pull = home_pull
+        self.home_spring = home_spring
+        self.home_bounce = end_bounce if home_bounce is None else home_bounce
         self.offset = 0.0  # how far it has slid from the start (right is +)
         self.vx = 0.0
 
@@ -201,24 +213,35 @@ class SlidingPlatform(_Part):
             add_piece(self.body, block, (self.offset, 0.0))
         set_mass(self.body, self.mass)
         world.CreatePrismaticJoint(bodyA=ground, bodyB=self.body, anchor=self.body.position, axis=(1, 0),
-                                   lowerTranslation=to_m(-self.travel - self.offset),
-                                   upperTranslation=to_m(self.travel - self.offset), enableLimit=True)
+                                   lowerTranslation=to_m(self.lo - self.offset),
+                                   upperTranslation=to_m(self.hi - self.offset), enableLimit=True)
         self._origin = [(b, piece_spec(b, (self.offset, 0.0))) for b in self.blocks]
         self._at = self._attached = (self.offset, 0.0)
 
     def describe(self):
         return {"kind": self.kind, "at": list(self._attached), "mass": self.mass, "travel": self.travel,
+                "lo": self.lo, "hi": self.hi,
                 "damping": self.damping, "max_speed": self.max_speed, "end_bounce": self.end_bounce,
+                "home_pull": self.home_pull, "home_spring": self.home_spring, "home_bounce": self.home_bounce,
                 "pieces": [spec for _, spec in self._origin]}
 
     def before_substep(self):
         return self.vx
 
-    def after_substep(self, vx_before):
+    def after_substep(self, vx_before, dt=STEP_SECONDS):
         x, _, vx, _ = self._read()
-        if abs(x) >= self.travel - 0.05 and vx_before * x > 0:
-            # Hit the end of the rail: bounce back a little
-            vx = -vx_before * self.end_bounce
+        at_lo, at_hi = x <= self.lo + 0.05, x >= self.hi - 0.05
+        # Hit an end of its rail: bounce back a little
+        if at_lo and vx_before < 0:
+            vx = -vx_before * (self.home_bounce if self.lo == 0 else self.end_bounce)
+        elif at_hi and vx_before > 0:
+            vx = -vx_before * (self.home_bounce if self.hi == 0 else self.end_bounce)
+        # Pulled back home (dt / STEP_SECONDS: how much of a step this was),
+        # but not through the end of the rail
+        if x and (self.home_pull or self.home_spring):
+            vx -= math.copysign((self.home_pull + self.home_spring * abs(x)) * dt / STEP_SECONDS, x)
+            if (at_lo and vx < 0) or (at_hi and vx > 0):
+                vx = 0.0
         vx = max(-self.max_speed, min(self.max_speed, vx))
         self._set_velocity(vx, 0.0)
         dx = x - self.offset
@@ -391,7 +414,7 @@ class Swing(_Part):
                 "mass": self.mass, "inertia": round(self.inertia, 6),
                 "friction_torque": self.friction_torque, "pieces": self._pieces}
 
-    def after_substep(self, _):
+    def after_substep(self, _, dt=None):
         x, y, vx, vy = self._read()
         self.theta = math.atan2(x - self.px, y - self.py)
         tx, ty = self.tangent()
@@ -431,7 +454,7 @@ class MovingBlocks(_Part):
     def describe(self):
         return {"kind": self.kind, "at": list(self._attached), "pieces": self._origin}
 
-    def after_substep(self, _):
+    def after_substep(self, _, dt=None):
         x, y, _, _ = self._read()
         dx, dy = x - self.ox, y - self.oy
         self.ox, self.oy = x, y
