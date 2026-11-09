@@ -466,10 +466,21 @@ button.big { width: 100%; min-height: 56px; font-size: 19px; }
 .lobby-grid .card { max-width: none; }
 .lobby-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 
-/* Chat (chat.js): a panel in the lobby... */
+/* Chat (chat.js): a panel in the lobby... It takes whatever height the
+   players leave in the window (wide screens, below), down to a few lines */
 .chat-card { gap: 10px; }
-.chat-log { list-style: none; margin: 0; padding: 4px 2px; height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
+.chat-log { list-style: none; margin: 0; padding: 4px 2px; height: clamp(120px, 28vh, 260px); overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
             font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+@media (min-width: 901px) {
+  /* The lobby fills the window: the players card is as tall as its seats,
+     and chat stretches to the bottom of the window. A short window shrinks
+     the chat first (to about 3 lines); only then does the page scroll. */
+  #lobby { min-height: 100vh; min-height: 100dvh; padding-bottom: 24px; }
+  .lobby-grid { flex: 1 0 auto; }
+  .lobby-col:first-child { align-self: stretch; }
+  .chat-card { flex: 1 1 0; }  /* (never shorter than its smallest chat, below) */
+  .chat-log { flex: 1 1 0; height: auto; min-height: 72px; }
+}
 .chat-log li b { font-weight: 600; }
 .chat-system { color: var(--faint); font-size: 13px; }
 .chat-empty { margin: auto 0; text-align: center; }
