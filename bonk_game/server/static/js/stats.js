@@ -32,6 +32,7 @@ function renderStats() {
   const s = p.stats;
   const body = $("stats-body");
   body.innerHTML = "";
+  renderMyRating();  // (rating.js)
   $("stats-since").textContent = s.first_at
     ? `${s.matches} match${s.matches === 1 ? "" : "es"} since ${new Date(s.first_at * 1000).toLocaleDateString()}.`
     : "";

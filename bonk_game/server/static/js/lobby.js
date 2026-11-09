@@ -149,6 +149,9 @@ function renderLobby() {
       const tag = [you && "you", seatInfo.id === L.host && "host"].filter(Boolean).join(" · ");
       const li = seat(seatInfo.color, shownName(seatInfo.id, seatInfo.name), tag, you,
                       seatInfo.pattern, seatInfo.own_color, seatInfo.hat);
+      // Signed-in players' rank badge (rating.js)
+      const member = L.members.find((x) => x.id === seatInfo.id);
+      if (member && member.rating) li.querySelector(".tag").prepend(rankBadge(member.rating));
       if (you) {
         const ball = li.querySelector(".ball");
         ball.classList.add("pick");

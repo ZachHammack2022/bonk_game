@@ -27,6 +27,7 @@
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
       <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+      <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5v1a3 3 0 0 0 3 3M16 6h3v1a3 3 0 0 1-3 3M12 13v4M8 20h8M10 17h4"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
       <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.3-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
@@ -34,7 +35,7 @@
   </svg>
   <!-- Home: pick a name, make a room or join one -->
   <section id="home" class="screen">
-    <div class="home-top"><button id="open-profile" class="me-button" data-me="ball" title="Your profile: ball, stats, settings"><span class="me-button-ball"></span><span class="me-button-name">Profile</span></button></div>
+    <div class="home-top"><button id="open-leaderboard" class="ghost leaderboard-button" title="Who's the best: the leaderboard"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg>Leaderboard</button><button id="open-profile" class="me-button" data-me="ball" title="Your profile: ball, stats, settings"><span class="me-button-ball"></span><span class="me-button-name">Profile</span></button></div>
     <h1 class="logo">b<span class="logo-ball"></span>nk</h1>
     <p class="tagline">a tiny physics brawler, with friends</p>
     <div class="card home-card">
@@ -117,6 +118,33 @@
         </div>
       </div>
       <button id="games-more" class="ghost hidden"></button>
+    </div>
+  </section>
+
+  <!-- The leaderboard: the best signed-in players by rating (rating.js) -->
+  <section id="leaderboard" class="screen hidden">
+    <div class="browse board">
+      <header class="browse-head">
+        <button id="board-back" class="ghost" title="Back to the start page"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>Back</button>
+        <div class="browse-title">
+          <h1>Leaderboard</h1>
+          <p id="board-summary" class="dim small" aria-live="polite"></p>
+        </div>
+      </header>
+      <div id="board-you" class="card board-you hidden"></div>
+      <div class="games board-table" role="table" aria-label="Leaderboard">
+        <div class="board-head" role="row">
+          <span role="columnheader">#</span>
+          <span role="columnheader">Player</span>
+          <span role="columnheader">Rank</span>
+          <span role="columnheader" class="num">Rating</span>
+          <span role="columnheader" class="num">Games</span>
+          <span role="columnheader" class="num">Wins</span>
+        </div>
+        <ol id="board-list" class="board-list" role="rowgroup"></ol>
+        <p id="board-empty" class="games-empty hidden"></p>
+      </div>
+      <p class="dim small board-help">Every match you play to the end against other signed-in players changes your rating: win to go up, finish behind people to go down. Bots and guests don't count. You're on the board after <span class="board-placement">3</span> matches.</p>
     </div>
   </section>
 
@@ -307,6 +335,7 @@
     <div id="results" class="overlay hidden">
       <div class="card results-card">
         <div id="winner"></div>
+        <p id="rating-change" class="rating-change hidden" aria-live="polite"></p>
         <ol id="standings"></ol>
         <ul id="awards" class="awards hidden"></ul>
         <div class="results-watch">
@@ -381,6 +410,7 @@
       </div>
       <!-- Your stats: from your profile, kept in this browser or your account -->
       <div id="stats" class="me-pane stats-pane hidden" role="tabpanel">
+        <div id="stats-rating" class="rating-card"></div>
         <p id="stats-since" class="dim small"></p>
         <div id="stats-body"></div>
         <p id="stats-where" class="dim small">Kept in this browser. Move them to another one with a file.</p>
@@ -454,6 +484,7 @@
   <script src="/static/js/looks.js"></script>
   <script src="/static/js/super.js"></script>
   <script src="/static/js/people.js"></script>
+  <script src="/static/js/rating.js"></script>
   <script src="/static/js/chat.js"></script>
   <script src="/static/js/account.js"></script>
   <script src="/static/js/install.js"></script>

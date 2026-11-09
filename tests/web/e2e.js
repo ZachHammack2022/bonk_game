@@ -337,6 +337,12 @@ function check(cond, what) {
 
     // A phone joins by searching for the code
     const phone = await open("phone", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    // The leaderboard page (rating.js): this server has no sign-in, so it says so
+    await phone.goto(base + "/leaderboard");
+    await phone.waitForFunction(() => document.querySelector("#board-summary").textContent.includes("Sign-in is off"));
+    check(await phone.isVisible("#leaderboard") && await phone.isHidden("#home"), "the leaderboard page has its own address");
+    await phone.click("#board-back");
+    check(await phone.isVisible("#home"), "and Back goes home");
     await phone.goto(base + "/");
     await phone.fill("#name", "Cat");
     await phone.click("#find");

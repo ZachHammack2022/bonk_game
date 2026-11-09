@@ -53,11 +53,15 @@ function showResults(msg, quiet) {
     const score = document.createElement("span");
     score.className = "score";
     score.textContent = unit(msg.scores[i]);
-    li.append(ball, name, score);
+    li.append(ball, name);
+    const chip = ratingChip(msg, i);  // (rating.js)
+    if (chip) li.append(chip);
+    li.append(score);
     if (s.kind === "human" && s.id && s.id !== me.id ) li.append(personButton(s.id, s.base ? s.base.name : s.name));
     ol.appendChild(li);
   }
   renderAwards(msg, slots);
+  renderRatingChange(msg, slots);
   $("results").classList.remove("hidden");
   $("emotes").classList.add("hidden");
   const quick = !!(app.lobby && app.lobby.quick);

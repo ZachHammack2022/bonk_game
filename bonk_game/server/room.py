@@ -109,6 +109,7 @@ class Member:
         self.last_report = None  # when they last sent a playtest report
         self.errors_sent = 0     # client errors logged for them
         self.account = None      # their account id, when signed in (accounts.py)
+        self.rating = None       # their rating badge (rating.badge), when signed in
         self.own_color = None    # a colour of their own ("#rrggbb"): signed in only
         self.pid = secrets.token_hex(4)  # how the others see them (the token is a secret)
         self.names = collections.deque([name], maxlen=5)  # names they've used here, for reports
@@ -179,6 +180,8 @@ class Room:
         self.auto_task = None      # (the next one, when it's due)
         self.waiting = []          # tokens waiting to take over a bot's seat in this match
         self.match_accounts = []   # slot -> account of whoever plays it (for match history)
+        self.rated_accounts = []   # slot -> account of who played it from the start (rated)
+        self.ratings = None        # signed-in players' ratings (accounts.Accounts: rating, rate)
         self.recent = collections.deque(maxlen=moderation.RECENT_KEPT)  # for reports
         self.chat = collections.deque(maxlen=CHAT_KEPT)  # the latest chat lines
         self.created = time.monotonic()
@@ -245,6 +248,7 @@ class Room:
                 clean, notice = self._name(token, name)
                 m.rename(clean)
         m.account = account
+        m.rating = self._rating(account)
         self.note("join", who=m.name, account=account)
         if self.host is None or self.host not in self.members:
             self.host = token
@@ -363,7 +367,8 @@ class Room:
             "room": self.code,
             "title": lobby.room_title(self.settings, self.members[self.host].name if self.host in self.members else None),
             "host": self.pid(self.host),
-            "members": [{"id": m.pid, "name": m.name, "connected": m.connected}
+            "members": [{"id": m.pid, "name": m.name, "connected": m.connected,
+                         **({"rating": m.rating} if m.rating else {})}
                         for m in self.members.values()],
             "settings": self.settings,
             "bot_options": self.bot_options(),
@@ -739,6 +744,7 @@ class Room:
         # Who's signed in, as the match starts (a stand-in bot plays for
         # anyone who drops out; the match still counts for them)
         self.match_accounts = [self.members[t].account for t in humans] + [None] * len(bots)
+        self.rated_accounts = list(self.match_accounts)  # (dropping in mid-match isn't rated)
         self.waiting = [m.token for m in self.connected if m.token not in humans]
         self.results = None
         self.ending = None
@@ -791,6 +797,8 @@ class Room:
                 self.results["at"] = int(began_at)
                 self.results["slots"] = match.describe()["slots"]
                 self._record(match_accounts)
+                if match.finished:
+                    self._rate(match_accounts)
         except asyncio.CancelledError:
             why = "stopped"
             raise
@@ -887,6 +895,41 @@ class Room:
             except Exception as e:  # never lose the results over it
                 metrics.event("error", logging.ERROR, room=self.code, where="record", error=repr(e))
 
+    def _rating(self, account):
+        """A signed-in player's rating badge, or None."""
+        if account is None or self.ratings is None:
+            return None
+        try:
+            return self.ratings.rating(account)
+        except Exception as e:  # (never keep anyone out over it)
+            metrics.event("error", logging.ERROR, room=self.code, where="rating", error=repr(e))
+            return None
+
+    def _rate(self, accounts):
+        """Rate the match (rating.py): the signed-in people who played it from
+        the start. Their changes go in the results (by slot) and their new
+        ratings show in the lobby."""
+        if self.ratings is None:
+            return
+        res = self.results
+        teams = [s.get("team") for s in res["slots"]]
+        players = [{"id": a, "place": res["summaries"][k]["place"], "won": res["summaries"][k]["won"],
+                    "team": teams[k] if k < len(teams) else None}
+                   for k, a in enumerate(accounts) if a is not None and a == self.rated_accounts[k]]
+        if len({p["id"] for p in players}) != len(players):
+            return  # (one account in two seats: can't happen, but don't rate it)
+        try:
+            changes = self.ratings.rate(players)
+        except Exception as e:  # never lose the results over it
+            metrics.event("error", logging.ERROR, room=self.code, where="rate", error=repr(e))
+            return
+        if not changes:
+            return
+        res["ratings"] = {str(k): changes[a] for k, a in enumerate(accounts) if a in changes}
+        for m in self.members.values():
+            if m.account in changes:
+                m.rating = self._rating(m.account)
+
     async def stop(self):
         if self.auto_task is not None:
             self.auto_task.cancel()
@@ -942,6 +985,7 @@ class RoomManager:
         self.agents = agents
         self.recorder = recorder   # (see Room)
         self.profile_of = None     # (see Room)
+        self.ratings = None        # (see Room)
         self.rng = rng or random.Random()
         self.draining = False      # shutting down: no new rooms or matches
 
@@ -960,6 +1004,7 @@ class RoomManager:
         elif not valid_code(code) or code in self.rooms:
             raise ValueError(f"bad room code {code!r}")
         self.rooms[code] = Room(code, self.agents, self.recorder, self.profile_of)
+        self.rooms[code].ratings = self.ratings
         metrics.STATS.rooms_created += 1
         metrics.event("room_created", room=code, rooms=len(self.rooms))
         return self.rooms[code]

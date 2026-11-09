@@ -824,3 +824,65 @@ html.installed-app #stage { box-sizing: border-box; padding: var(--safe-t) var(-
 html.installed-app .game-bar { left: calc(12px + var(--safe-l)); bottom: calc(12px + var(--safe-b)); }
 html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); bottom: auto; }
 .install-button .small { font-weight: 400; }
+
+/* Ratings (rating.js): rank badges, the leaderboard, your rating */
+.rank-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px;
+              font-size: 11.5px; font-weight: 700; line-height: 1.5; white-space: nowrap; width: max-content;
+              color: var(--tier-ink); background: var(--tier-bg); border: 1px solid var(--tier-line);
+              font-variant-numeric: tabular-nums; vertical-align: middle; }
+.rank-badge .gem { color: var(--tier); font-size: 1.05em; }
+.rank-badge.placing { border-style: dashed; }
+.rank-badge.top { box-shadow: 0 0 0 2px #ffd23f, 0 2px 8px rgba(224, 168, 0, 0.35); }
+.rank-badge .crown { font-weight: 800; color: #b07d00; padding-right: 4px; margin-right: 2px; border-right: 1px solid var(--tier-line); }
+.rank-badge.big { font-size: 15px; padding: 4px 14px 4px 10px; gap: 6px; }
+.tier-bronze   { --tier: #c07a45; --tier-ink: #7a4421; --tier-bg: #fbeee4; --tier-line: #ecc8ad; }
+.tier-silver   { --tier: #8d99ae; --tier-ink: #4a5468; --tier-bg: #eef1f6; --tier-line: #cfd6e2; }
+.tier-gold     { --tier: #e0a800; --tier-ink: #6e5100; --tier-bg: #fff4cc; --tier-line: #f3d66b; }
+.tier-platinum { --tier: #23a99c; --tier-ink: #0f5f57; --tier-bg: #ddf5f2; --tier-line: #9fdcd5; }
+.tier-diamond  { --tier: #4f8cff; --tier-ink: #1f4fb0; --tier-bg: #e3edff; --tier-line: #a9c4ff; }
+.tier-champion { --tier: #d0389a; --tier-ink: #8a1a63; --tier-bg: #fde4f3; --tier-line: #f2a6d4; }
+.seat .tag .rank-badge { margin-right: 6px; font-size: 11px; }
+.seat .tag { display: flex; align-items: center; flex-wrap: wrap; row-gap: 2px; }
+
+.home-top { display: flex; gap: 8px; align-items: center; }
+.leaderboard-button { gap: 6px; }
+
+.board-you { flex-direction: row; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 18px; }
+.board-you p { margin: 0; flex: 1; min-width: 200px; }
+.board-head, .board-row { display: grid; grid-template-columns: 44px minmax(0, 2.4fr) minmax(130px, 1.2fr) 70px 64px 56px;
+                          align-items: center; gap: 12px; padding: 0 18px; }
+.board-head { min-height: 38px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 11px;
+              font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.board-list { list-style: none; margin: 0; padding: 0; }
+.board-row { min-height: 52px; border-bottom: 1px solid var(--line); }
+.board-row:last-child { border-bottom: 0; }
+.board-row:nth-child(even) { background: rgba(148, 163, 190, 0.04); }
+.board-row.you { background: var(--accent-soft); }
+.board-rank { font-weight: 700; color: var(--dim); font-variant-numeric: tabular-nums; }
+.board-row.top-1 .board-rank { color: #e0a800; }
+.board-row.top-2 .board-rank { color: #8d99ae; }
+.board-row.top-3 .board-rank { color: #c07a45; }
+.board-row.top .board-rank::before { content: "🏆 "; font-size: 13px; }
+.board-row.top-2 .board-rank::before { content: "🥈 "; }
+.board-row.top-3 .board-rank::before { content: "🥉 "; }
+.board-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.board-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.board-who canvas { flex: none; }
+.board-head .num, .board-row .num { text-align: right; justify-self: end; font-variant-numeric: tabular-nums; }
+.board-row .rating { font-weight: 700; }
+.board-help { margin: 0; text-align: center; }
+@media (max-width: 640px) {
+  .board-head, .board-row { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 0 12px; row-gap: 2px; }
+  .board-head > :nth-child(n+4), .board-row > :nth-child(n+4) { display: none; }
+  .board-row { min-height: 56px; padding-top: 8px; padding-bottom: 8px; }
+}
+
+.rating-card { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.rating-card p { margin: 0; flex: 1; min-width: 180px; }
+.rating-card:empty { display: none; }
+
+.rating-change { margin: -4px 0 4px; display: flex; gap: 6px; align-items: center; justify-content: center; font-weight: 600; }
+.rating-change .change, .rating-chip { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--dim); }
+.rating-change .change.up, .rating-chip.up { color: var(--ok); }
+.rating-change .change.down, .rating-chip.down { color: var(--danger); }
+.rating-chip { font-size: 12px; }
