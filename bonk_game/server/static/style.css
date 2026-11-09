@@ -346,7 +346,7 @@ button.big { width: 100%; min-height: 56px; font-size: 19px; }
 .games { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; box-shadow: var(--shadow); }
 .games-head, .game-row {
   display: grid;
-  grid-template-columns: minmax(160px, 2.4fr) minmax(110px, 1fr) minmax(110px, 1.2fr) 84px minmax(100px, 1.1fr) 112px 84px;
+  grid-template-columns: minmax(160px, 2.4fr) minmax(110px, 1fr) minmax(110px, 1.2fr) 84px minmax(100px, 1.1fr) 112px 64px 84px;
   align-items: center; gap: 12px; padding: 0 18px;
 }
 .games-head { min-height: 38px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 11px;
@@ -378,6 +378,11 @@ button.big { width: 100%; min-height: 56px; font-size: 19px; }
 .pill.lobby { background: rgba(126, 214, 170, 0.12); color: var(--ok); }
 .pill.on { background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
 .g-join { align-items: flex-end; }
+.ping-val { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--faint); }
+.ping-val::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px;
+                    vertical-align: 1px; background: currentColor; opacity: 0; }
+.ping-val.good { color: var(--ok); } .ping-val.ok { color: #e0a33a; } .ping-val.bad { color: var(--danger); }
+.ping-val.good::before, .ping-val.ok::before, .ping-val.bad::before { opacity: 1; }
 .g-join button { min-height: 32px; padding: 0 16px; font-size: 14px; }
 .g-join button.join { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
 .g-join button.join:hover { background: var(--accent); color: var(--accent-ink); }
@@ -394,10 +399,11 @@ button.big { width: 100%; min-height: 56px; font-size: 19px; }
   .games-head { display: none; }
   .g-lock { display: none !important; }
   .game-row.locked .g-game b::after { content: " 🔒"; font-size: 12px; }
-  .game-row { grid-template-columns: 1fr auto; grid-template-areas: "game join" "mode status" "map players";
+  .game-row { grid-template-columns: 1fr auto; grid-template-areas: "game join" "mode status" "map players" "ping ping";
               row-gap: 6px; padding: 12px 14px; }
   .g-game { grid-area: game; } .g-join { grid-area: join; } .g-mode { grid-area: mode; }
   .g-map { grid-area: map; } .g-status { grid-area: status; align-items: flex-end; } .g-players { grid-area: players; align-items: flex-end; }
+  .g-ping { grid-area: ping; }
 }
 
 /* Lists of people (settings) */

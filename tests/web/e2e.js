@@ -344,6 +344,10 @@ function check(cond, what) {
     await phone.fill("#browse-search", code.toLowerCase());
     await phone.waitForFunction(() => document.querySelectorAll("#games-list .game-row").length === 1);
     check(true, "searching a code finds its game");
+    // (Ann and Bob have been pinging the server: their room shows it)
+    await phone.waitForFunction(() => /^\d+ ms$/.test(document.querySelector("#games-list .ping-val").textContent), null, { timeout: 8000 });
+    check(true, "the game list shows the players' ping");
+    await shot(phone, "phone-browse");
     await phone.press("#browse-search", "Enter");
     await phone.waitForSelector("#pw-dialog:not(.hidden)");
     check(true, "joining by code asks for the password");

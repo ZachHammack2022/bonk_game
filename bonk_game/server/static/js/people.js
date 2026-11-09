@@ -74,6 +74,7 @@ function filteredGames() {
     mode: (r) => [r.mode, r.map],
     map: (r) => [r.map, r.mode],
     status: (r) => [r.playing ? 1 : 0, r.elapsed || 0],
+    ping: (r) => [r.ping == null ? Infinity : r.ping],  // (unknown last, going up)
   }[browse.sort];
   const cmp = (a, b) => {
     const ka = key(a), kb = key(b);
@@ -185,8 +186,15 @@ function gameRow(r) {
     lock.setAttribute("aria-label", "Private");
   }
 
+  // The players' round trip: green when smooth, amber, red when laggy
+  const ping = document.createElement("span");
+  ping.className = "ping-val " + (r.ping == null ? "" : r.ping < 80 ? "good" : r.ping < 160 ? "ok" : "bad");
+  ping.textContent = r.ping == null ? "–" : `${r.ping} ms`;
+  const pingCell = cell("g-ping", ping);
+  pingCell.title = r.ping == null ? "No ping yet" : `The players' round trip to the server: about ${r.ping} ms`;
+
   row.append(game, cell("g-players", dots, count), cell("g-mode", mode, goal), lock, cell("g-map", r.map),
-    cell("g-status", pill), cell("g-join", b));
+    cell("g-status", pill), pingCell, cell("g-join", b));
   return row;
 }
 

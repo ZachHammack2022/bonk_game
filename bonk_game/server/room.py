@@ -914,7 +914,16 @@ class Room:
                 "open": self.has_space(),
                 "power_ups": bool(s.get("power_ups")), "gravity": s.get("gravity", "normal"),
                 "speed": s.get("speed", "normal"),
-                "quick": self.quick, "host": host.name if host else None}
+                "quick": self.quick, "host": host.name if host else None,
+                "ping": self.ping()}
+
+    def ping(self):
+        """The players' round trip to the server (ms, the middle one of the
+        people here, as their browsers last said), or None before anyone's
+        said. Everyone plays on this one server, so this is how laggy the
+        people in the room are, not how laggy it would be for you."""
+        rtts = sorted(m.rtt for m in self.connected if m.rtt is not None)
+        return rtts[len(rtts) // 2] if rtts else None
 
     def has_space(self):
         """Is there room to play here (now or in the next match)?"""
