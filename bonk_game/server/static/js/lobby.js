@@ -114,9 +114,17 @@ function renderLobby() {
   if (mode.round_time) rest.push(`Round time ${roundTimeLabel(s.round_time, mapInfo)}`);
   if (s.gravity !== "normal") rest.push(`${s.gravity[0].toUpperCase() + s.gravity.slice(1)} gravity`);
   if ((s.speed || "normal") !== "normal") rest.push(`${s.speed[0].toUpperCase() + s.speed.slice(1)} speed`);
-  rest.push(powerSummary(Wm.power_kinds || [], s));
+  // (Power-ups on or off is the checkbox; this says which, when not all)
+  const power = powerSummary(Wm.power_kinds || [], s);
+  if (s.power_ups && power !== "Power-ups on") rest.push(power);
   $("sum-rest").textContent = rest.join(" · ");
-  $("open-game-settings-text").textContent = host ? "Change map, mode & rules" : "See all settings";
+  $("open-game-settings-text").textContent = "All settings";
+
+  // The quick controls on the panel: copies of the dialog's map, mode and
+  // power-ups, kept in step with them
+  for (const id of ["map", "mode"]) mirrorSelect($(id), $(`quick-${id}`));
+  $("quick-power-ups").checked = !!s.power_ups;
+  $("quick-power-ups").disabled = !host;
   const teams = s.mode === "teams";
   const mine = L.seats.find((x) => x.id === me.id);
   $("switch-team").classList.toggle("hidden", !teams || !mine);
@@ -498,6 +506,27 @@ $("round-time").addEventListener("change", () => send({ type: "settings", round_
 $("gravity").addEventListener("change", () => send({ type: "settings", gravity: $("gravity").value }));
 $("speed").addEventListener("change", () => send({ type: "settings", speed: $("speed").value }));
 $("power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("power-ups").checked }));
+$("quick-map").addEventListener("change", () => send({ type: "settings", map: $("quick-map").value }));
+$("quick-mode").addEventListener("change", () => send({ type: "settings", mode: $("quick-mode").value }));
+$("quick-power-ups").addEventListener("change", () => send({ type: "settings", power_ups: $("quick-power-ups").checked }));
+
+// Copy a dropdown's options (text, disabled, which is picked) into another
+function mirrorSelect(from, to) {
+  const opts = Array.from(from.options, (o) => [o.value, o.textContent, o.disabled]);
+  const key = JSON.stringify(opts);
+  if (to.dataset.key !== key) {
+    to.dataset.key = key;
+    to.replaceChildren(...opts.map(([value, text, disabled]) => {
+      const o = document.createElement("option");
+      o.value = value;
+      o.textContent = text;
+      o.disabled = disabled;
+      return o;
+    }));
+  }
+  to.value = from.value;
+  to.disabled = from.disabled;
+}
 
 // Which power-ups can turn up: a chip each (the room needs at least one)
 function chosenKinds(all, s) {

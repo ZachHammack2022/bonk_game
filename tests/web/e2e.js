@@ -158,6 +158,15 @@ function check(cond, what) {
     await host.click("#game-settings-done");
     check((await host.textContent("#sum-map")) === "Classic" && (await host.textContent("#sum-rest")).includes("First to 1"),
       "the lobby sums up the settings");
+    // Map, mode and power-ups can be changed right on the lobby, no dialog
+    check((await host.inputValue("#quick-map")) === "classic" && (await guest.isDisabled("#quick-map")),
+      "the lobby's map dropdown follows the settings (the guest can't change it)");
+    const powerWas = await host.isChecked("#quick-power-ups");
+    await host.click("#quick-power-ups");
+    await guest.waitForFunction((w) => document.querySelector("#quick-power-ups").checked === !w, powerWas);
+    await host.click("#quick-power-ups");
+    await guest.waitForFunction((w) => document.querySelector("#power-ups").checked === w, powerWas);
+    check(true, "power-ups switch from the lobby, for everyone");
     // Just the two of them, no bots: nobody scores (and ends this first-to-1
     // match) until the guest rolls into a wall on purpose, after the checks
     // that need the match on
