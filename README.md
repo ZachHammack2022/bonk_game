@@ -97,7 +97,7 @@ Everyone in a room can chat (in the lobby, and over the match for a few seconds)
 | Classic | 2-8 | A box with a bouncy floor and ceiling and deadly side walls. You can fly. Push people into the walls. |
 | Floating Platform | 2-6 | One platform. Knock them off. |
 | Sliding Platform | 2-6 | A platform with bumper posts that slides on a rail; rock it to fling people. |
-| Sinking Swing | 2-6 | A bouncy floor with a launch pad that sinks away, and a swing hanging from far above to survive on. |
+| Sinking Swing | 2-6 | A flat, bouncy floor that sinks away, and a swing hanging from far above to survive on. |
 | Ramp Rumble | 2-8 | A halfpipe with springy bumpers overhead. |
 | Grand Stage | 4-10 | A wide stage for a crowd, with bumpers in the corners. |
 | Double Decker | 4-10 | A short upper deck above a long lower one. |

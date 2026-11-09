@@ -307,10 +307,10 @@ class SliderMap(OpenMap):
 
 
 class SwingMap(OpenMap):
-    """Sinking floor with a pit and a launch pad, and a swing to escape to.
+    """A flat, bouncy floor that sinks, and a swing to escape to (as bonk.io's
+    version of the map has it).
 
-    After a short grace period the whole floor (including the pit and its
-    launch pad) starts sinking, and eventually drops off the bottom of the
+    After a short grace period the whole floor starts sinking, and eventually drops off the bottom of the
     screen. The swing hanging in the middle is the only safe spot left, but
     it can be kicked and players can knock each other out of it.
     """
@@ -322,9 +322,6 @@ class SwingMap(OpenMap):
     FLOOR_Y = 400
     FLOOR_THICKNESS = 16
     FLOOR_LEFT, FLOOR_RIGHT = 110, 570
-    HOLE_LEFT, HOLE_RIGHT = 296, 384  # gap in the floor over the pit
-    PIT_DEPTH = 56
-    WALL = 6  # thickness of the pit walls
 
     SINK_DELAY = 150  # steps before the floor starts to sink (5s at 30 fps)
     # Pixels per step: 7 px a second at the default speed, as bonk.io's
@@ -334,7 +331,6 @@ class SwingMap(OpenMap):
     # floor driven at that speed is the same thing, and the browser predicts
     # it exactly.
     SINK_SPEED = 0.31
-    LAUNCH_SPEED = 25  # enough to fly from the pit up to the swing
     SEAT_Y = 280  # the middle of the swing's seat, hanging still
     ROPE = 500
     # The map is built around jumping up into the swing, so it keeps the
@@ -348,8 +344,6 @@ class SwingMap(OpenMap):
     n_extra_obs = 3  # floor depth, swing angle, swing angular velocity
 
     FLOOR_COLOR = theme.PLATFORM
-    PIT_COLOR = theme.PIT
-    PAD_COLOR = theme.PAD
 
     def __init__(self):
         # Hung as in bonk.io: from 500 px up, far above the top of the screen
@@ -358,24 +352,13 @@ class SwingMap(OpenMap):
 
     def _build_floor(self):
         top, t = self.FLOOR_Y, self.FLOOR_THICKNESS
-        pit_bottom = top + self.PIT_DEPTH
         # bonk's "Falling floor": bounciness 0.8. You bounce on it, and pump
         # each bounce higher: down as you fall, up as you land. (Its friction,
         # 0.5, is off for players there, "Fric Players: No": balls slide)
         floor = dict(restitution=0.8, friction=0.04)
-        return [
-            Block(self.FLOOR_LEFT, top, self.HOLE_LEFT, top + t, self.FLOOR_COLOR, **floor),
-            Block(self.HOLE_RIGHT, top, self.FLOOR_RIGHT, top + t, self.FLOOR_COLOR, **floor),
-            # Pit walls hang down from the edges of the hole
-            Block(self.HOLE_LEFT - self.WALL, top + t, self.HOLE_LEFT, pit_bottom,
-                  self.PIT_COLOR, **floor),
-            Block(self.HOLE_RIGHT, top + t, self.HOLE_RIGHT + self.WALL, pit_bottom,
-                  self.PIT_COLOR, **floor),
-            # Launch pad at the bottom of the pit
-            Block(self.HOLE_LEFT - self.WALL, pit_bottom, self.HOLE_RIGHT + self.WALL,
-                  pit_bottom + 10, self.PAD_COLOR, restitution=0.0,
-                  launch=self.LAUNCH_SPEED),
-        ]
+        # One flat piece, all the way across (it used to have a pit in the
+        # middle with a launch pad: a jump reaches the swing without one)
+        return [Block(self.FLOOR_LEFT, top, self.FLOOR_RIGHT, top + t, self.FLOOR_COLOR, **floor)]
 
     @property
     def floor(self):
@@ -389,7 +372,7 @@ class SwingMap(OpenMap):
     def reset(self):
         super().reset()
         self.blocks = self._build_floor()
-        # The floor (pit and pad included) moves as one, at a speed set each step
+        # The floor moves at a speed set each step
         self.sinking = MovingBlocks(self.blocks)
         self.swing.reset()
         self.bodies = [self.swing]
@@ -402,7 +385,7 @@ class SwingMap(OpenMap):
         super().step(move)
 
     def extra_obs(self):
-        depth = min(self.sink / (self.height - self.FLOOR_Y + self.PIT_DEPTH), 1.0)
+        depth = min(self.sink / (self.height - self.FLOOR_Y), 1.0)
         return np.clip(np.array([
             depth * 2 - 1,
             self.swing.theta / (np.pi / 2),
