@@ -6,7 +6,8 @@
 // order by index.html (no build step):
 //   report.js    playtest reports: ping, late states, rubber-banding, errors
 // (netsim.js, loaded before core.js, pretends the network is worse: ?net=mobile;
-// clock.js says what moment of the match to draw)
+// clock.js says what moment of the match to draw; dropdown.js draws the list
+// a dropdown opens in the page's own style)
 //   core.js      colours, helpers, app state, your profile, home screen, connection
 //   lobby.js     the lobby and the ball pickers
 //   results.js   the results screen
