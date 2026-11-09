@@ -239,11 +239,24 @@
         <button id="open-game-settings-map" class="preview-button" title="Game settings" aria-label="Game settings">
           <canvas id="map-preview" class="map-preview" width="340" height="240" aria-hidden="true"></canvas>
         </button>
+        <!-- The settings people change most, right here (the host changes
+             them; everyone else sees them). The rest are in the dialog -->
+        <div class="quick-settings">
+          <div class="quick-field">
+            <label for="quick-map">Map</label>
+            <select id="quick-map"></select>
+          </div>
+          <div class="quick-field">
+            <label for="quick-mode">Mode</label>
+            <select id="quick-mode"></select>
+          </div>
+          <label class="check" title="Pickups that turn up during the match"><input id="quick-power-ups" type="checkbox"> Power-ups</label>
+        </div>
         <div class="game-summary">
-          <div class="game-title"><b id="sum-map"></b> <span id="sum-mode"></span></div>
+          <div class="game-title hidden"><b id="sum-map"></b> <span id="sum-mode"></span></div>
           <p id="sum-rest" class="dim small"></p>
         </div>
-        <button id="open-game-settings"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg><span id="open-game-settings-text">Game settings</span></button>
+        <button id="open-game-settings"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg><span id="open-game-settings-text">All settings</span></button>
         <div class="start-box">
           <div id="need-players" class="need hidden">
             <p id="need-text"></p>
