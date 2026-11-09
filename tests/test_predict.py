@@ -105,6 +105,13 @@ def swinging(theta, omega=0.0, rider=True):
     return others
 
 
+def half_moving(vx, side):
+    """One half of the Sliding Platform ring (-1 left, +1 right) sliding."""
+    def others(env):
+        env.map.halves[0 if side < 0 else 1].vx = vx
+    return others
+
+
 def slider_moving(vx):
     def others(env):
         env.map.platform.vx = vx
@@ -134,6 +141,9 @@ CASES = {
     "bumped by another ball": ("platform", [NONE] * 12, put(340, 279), ball_coming(260, 279, 14)),
     "run into another ball": ("platform", [R] * 12, put(260, 279), ball_coming(360, 279, 0)),
     "ride the sliding platform": ("slider", [NONE] * 15, put(340, 279), slider_moving(6)),
+    # The ring's halves: shove one out by its post; one coming home
+    "shove a half out by its post": ("slider", [R] * 20, put(600, 279), None),
+    "stand by a half coming home": ("slider", [NONE] * 20, put(300, 279), half_moving(-12, -1)),
     "roll down a ramp": ("ramps", [NONE] * 15, put(200, 250), None),
     # The swing: a stiff pendulum that tilts as it swings (bodies.Swing)
     "ride the swing": ("swing", [NONE] * 20, put(340, 290), swinging(0.25)),

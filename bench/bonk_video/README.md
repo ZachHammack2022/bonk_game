@@ -51,3 +51,18 @@ How each was worked out:
   level, so a floor driven down at the same speed is the same thing (and
   the browser predicts it exactly). Friction 0.5 doesn't apply to players
   there (Fric Players: No), so ours stays slippery.
+
+## Sliding Platform (a second recording)
+
+Rebuilt from a bonk.io map of a wrestling ring (its decoration left out),
+recorded the same way. Each half of the ring (an arm between the two ropes,
+a corner block and a leaning post) is one body: free moving, density 0.01,
+bounciness -999 (none), friction 0.5 (off for players), no drag, on a
+springy joint (spring force 500, spring length 9999).
+
+Tracking the ends of the arms frame by frame: run into a post and that half
+slides out (200-380 px), carrying you over the edge if you keep pushing;
+once you're off it, it comes home with about 500 px/s² plus 2.5/s² for each
+px out (fitted to four returns, 2-3 px rms), home in about 0.75 s, and stops
+against the other half. Ours (`maps.SliderMap`): halves of mass 0.06 balls
+on one-way rails, pulled home by just that, sizes from the recording.

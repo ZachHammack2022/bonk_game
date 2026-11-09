@@ -119,16 +119,16 @@ def test_kill_bumper_kills():
 
 def test_pieces_move_with_a_sliding_platform():
     m = make_map("slider")
-    post = m.platform.blocks[1]
+    post = m.platform.blocks[2]
     assert isinstance(post, OrientedBlock)
     x = post.cx
     m.platform.vx = 5
     m.step()
-    assert post.cx == pytest.approx(x + 5 * m.platform.damping, rel=0.01)
+    assert post.cx == pytest.approx(x + 5, rel=0.05)  # (less what the pull home took off)
     assert post.cx - x == pytest.approx(m.platform.offset)
 
 
 def test_slider_posts_lean_outward():
     m = make_map("slider")
-    left, right = m.platform.blocks[1], m.platform.blocks[2]
+    left, right = m.halves[0].blocks[2], m.halves[1].blocks[2]
     assert left.angle < 0 < right.angle

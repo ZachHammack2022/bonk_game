@@ -95,7 +95,7 @@
     if (d.kind === "slider") {
       setMass(part.body, d.mass);
       world.createJoint(new planck.PrismaticJoint({
-        enableLimit: true, lowerTranslation: u.m(-d.travel - d.at[0]), upperTranslation: u.m(d.travel - d.at[0]),
+        enableLimit: true, lowerTranslation: u.m((d.lo ?? -d.travel) - d.at[0]), upperTranslation: u.m((d.hi ?? d.travel) - d.at[0]),
       }, ground, part.body, at, planck.Vec2(1, 0)));
     } else if (d.kind === "swing") {
       part.body.setMassData({ mass: d.mass, center: planck.Vec2(0, 0), I: d.inertia });
@@ -122,14 +122,23 @@
     part.vx = s[2]; part.vy = s[3];
   }
 
-  // After each Box2D step: the parts' own limits (bodies.py after_substep)
-  function partRules(sim, part, before) {
+  // After each Box2D step of dt seconds: the parts' own rules (bodies.py
+  // after_substep)
+  function partRules(sim, part, before, dt) {
     const { u } = sim, d = part.d, body = part.body;
     const p = body.getPosition(), v = body.getLinearVelocity();
     if (d.kind === "slider") {
-      const x = p.x * sim.B.ppm;
+      const x = p.x * sim.B.ppm, lo = d.lo ?? -d.travel, hi = d.hi ?? d.travel;
       let vx = u.fromV(v.x);
-      if (Math.abs(x) >= d.travel - 0.05 && before * x > 0) vx = -before * d.end_bounce;
+      const atLo = x <= lo + 0.05, atHi = x >= hi - 0.05;
+      // Hit an end of its rail: bounce back a little
+      if (atLo && before < 0) vx = -before * (lo === 0 ? d.home_bounce ?? d.end_bounce : d.end_bounce);
+      else if (atHi && before > 0) vx = -before * (hi === 0 ? d.home_bounce ?? d.end_bounce : d.end_bounce);
+      // Pulled back home, but not through the end of the rail
+      if (x && (d.home_pull || d.home_spring)) {
+        vx -= Math.sign(x) * (d.home_pull + d.home_spring * Math.abs(x)) * dt / sim.B.step_seconds;
+        if ((atLo && vx < 0) || (atHi && vx > 0)) vx = 0;
+      }
       vx = Math.max(-d.max_speed, Math.min(d.max_speed, vx));
       body.setLinearVelocity(planck.Vec2(u.toV(vx), 0));
       part.vx = vx;
@@ -344,7 +353,7 @@
       const before = sim.parts.map((pt) => pt.vx);
       for (const s of sim.balls) s.fall = s.vy;  // (for a pogo on landing)
       sim.world.step(dt, sim.B.velocity_iterations, sim.B.position_iterations);
-      sim.parts.forEach((pt, j) => partRules(sim, pt, before[j]));
+      sim.parts.forEach((pt, j) => partRules(sim, pt, before[j], dt));
       for (const s of sim.balls) rules(sim, s, dt);
     }
     for (const s of sim.balls) endStep(s);

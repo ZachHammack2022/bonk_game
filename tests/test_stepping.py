@@ -43,23 +43,24 @@ def test_pushing_a_ball_is_a_steady_shove_not_a_launch():
 def test_a_ball_rides_a_fast_sliding_platform():
     env = env_on("slider")
     a, b = env.players
-    plat = env.map.platform
-    top = plat.blocks[0].y1
-    a.x, a.y, b.x, b.y = 340, top - 21, 300, top - 21
+    plat = env.map.platform  # (the right half of the ring)
+    corner = plat.blocks[1]
+    top = corner.y1
+    a.x, a.y, b.x, b.y = (corner.x1 + corner.x2) / 2, top - 21, 300, top - 21
     for _ in range(10):
         env.step()
     gaps = []
     for t in range(40):
         plat.vx = 12 if (t // 10) % 2 == 0 else -12
         env.step()
-        gaps.append(plat.blocks[0].y1 - (a.y + a.r))
+        gaps.append(corner.y1 - (a.y + a.r))
     assert a.alive and max(abs(g) for g in gaps) < 2
 
 
 def test_moving_parts_move_the_same_in_substeps_or_whole_steps():
     whole, split = make_map("slider"), make_map("slider")
     whole.platform.vx = split.platform.vx = 9
-    for _ in range(20):
+    for _ in range(8):  # (out and still on its way: it's pulled home after)
         whole.step()
         split.step(move=False)
         for _ in range(stepping.SUBSTEPS):

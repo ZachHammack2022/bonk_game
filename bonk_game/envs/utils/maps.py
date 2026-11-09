@@ -248,62 +248,96 @@ class PlatformMap(OpenMap):
 
 
 class SliderMap(OpenMap):
-    """A heavy platform on a rail that players push around.
+    """A ring whose two halves slide out, as a bonk.io map has it.
 
-    Every hit and every roll shoves the platform the other way, so players
-    can rock it back and forth to build momentum and fling each other off.
-    Outward-leaning posts at both ends act as bumpers you can bounce off.
+    You stand on a long bar (the top rope). Under it, between it and a
+    second bar, each half of the ring has an arm reaching to the middle,
+    with a corner block and a leaning post on its outer end. The halves are
+    feather-light: run into a post, or ride a corner, and you shove that
+    half out sideways, taking you with it over the edge if you keep going.
+    Let go and it's pulled back home, where it stops against the middle.
+
+    Measured from a recording of the map in bonk.io (November 2026), with
+    its settings for a half: free moving, density 0.01, no bounce, a springy
+    joint (spring force 500). Out of the way, a half comes back with about
+    500 px/s^2 (plus a little more the further out it is) and is home in
+    about 0.75 s. Sizes are the recording's, with balls the size of ours.
     """
 
     name = "slider"
     title = "Sliding Platform"
-    description = "Hits push the platform. Rock it to build momentum and fling your opponent."
+    description = "Each half of the ring slides out when you shove its post. Ride it out, or push someone off with it."
 
-    LEFT, RIGHT = 200, 480
-    TOP = 300
-    THICKNESS = 16
-    POST_WIDTH, POST_HEIGHT = 10, 46
-    POST_LEAN = 18  # degrees the posts lean outward
-    TRAVEL = 140  # how far it can slide either way
+    CENTER = 340
+    TOP = 300              # top of the bar you stand on
+    BAR_THICKNESS = 12     # the two bars (ropes)
+    HALF_WIDTH = 254       # the bars reach this far either side of the middle
+    ARM_TOP, ARM_BOTTOM = 314, 334    # each half's arm, between the bars
+    BOTTOM_BAR = 338       # top of the lower bar
+    CORNER_WIDTH = 78      # corner blocks, the full height of the ring
+    POST_WIDTH, POST_HEIGHT = 12, 113
+    POST_LEAN = 7.4        # degrees the posts lean outward
+    POST_IN = 10           # the post's foot, in from the corner's outer edge
+    TRAVEL = 400           # how far a half can slide out
+    HALF_MASS = 0.06       # a ball is 1 (bonk's density 0.01)
+    # Pulled home: 500 px/s^2, plus 2.5 per second^2 for each px out, at the
+    # default speed (22.5 steps a second); in px per step per step
+    HOME_PULL = 500 / 22.5 ** 2
+    HOME_SPRING = 2.5 / 22.5 ** 2
 
-    spawn_box = (LEFT + 10, RIGHT - 10, 200, TOP - 2)
+    spawn_box = (CENTER - HALF_WIDTH + 14, CENTER + HALF_WIDTH - 14, 200, TOP - 2)
     players = (2, 6)
-    n_extra_obs = 2  # platform offset and velocity
-
+    n_extra_obs = 4  # each half: how far out, and how fast
 
     def __init__(self):
         super().__init__()
 
+    def _half(self, side):
+        """The left (-1) or right (+1) half: arm, corner block and post."""
+        c, hw = self.CENTER, self.HALF_WIDTH
+        inner = c + side * 2.5                    # (a hair from the other arm)
+        edge = c + side * (hw + 2)                # the corner's inner edge
+        outer = edge + side * self.CORNER_WIDTH  # and its outer one
+        bottom = self.BOTTOM_BAR + self.BAR_THICKNESS
+        half = dict(restitution=0.0, friction=0.04)  # (bonk: no bounce; its friction's off for players)
+        x1, x2 = sorted((inner, edge))
+        # (The halves are all one colour, apart from the bars you stand on,
+        # so you can see what moves)
+        arm = Block(x1, self.ARM_TOP, x2, self.ARM_BOTTOM, self.POST_COLOR, **half)
+        x1, x2 = sorted((edge, outer))
+        corner = Block(x1, self.TOP, x2, bottom, self.POST_COLOR, **half)
+        # The post's foot sits a little into the corner so there's no gap
+        post = OrientedBlock.standing(outer - side * self.POST_IN, self.TOP + 3, self.POST_WIDTH,
+                                      self.POST_HEIGHT + 3, side * self.POST_LEAN, self.POST_COLOR, **half)
+        travel = (-self.TRAVEL, 0) if side < 0 else (0, self.TRAVEL)
+        return SlidingPlatform([arm, corner, post], mass=self.HALF_MASS, travel=travel, damping=1.0,
+                               max_speed=24, end_bounce=0.3, home_pull=self.HOME_PULL,
+                               home_spring=self.HOME_SPRING, home_bounce=0.0)
+
     def reset(self):
         super().reset()
-        surface = dict(restitution=0.3, friction=0.08)
-        post = dict(restitution=0.6, friction=0.0)
-        top, pw, ph = self.TOP, self.POST_WIDTH, self.POST_HEIGHT
-        self.platform = SlidingPlatform([
-            Block(self.LEFT, top, self.RIGHT, top + self.THICKNESS, self.PLATFORM_COLOR, **surface),
-            # Posts lean outward, so they catch you like the lip of a bowl.
-            # Their feet sit a little into the platform so there's no gap.
-            OrientedBlock.standing(self.LEFT + pw / 2, top + 3, pw, ph + 3, -self.POST_LEAN,
-                                   self.POST_COLOR, **post),
-            OrientedBlock.standing(self.RIGHT - pw / 2, top + 3, pw, ph + 3, self.POST_LEAN,
-                                   self.POST_COLOR, **post),
-        ], mass=6.0, travel=self.TRAVEL)
-        self.bodies = [self.platform]
+        c, hw, top, t = self.CENTER, self.HALF_WIDTH, self.TOP, self.BAR_THICKNESS
+        bar = dict(restitution=0.3, friction=0.04)
+        self.blocks = [
+            Block(c - hw, top, c + hw, top + t, self.PLATFORM_COLOR, **bar),
+            Block(c - hw, self.BOTTOM_BAR, c + hw, self.BOTTOM_BAR + t, self.PLATFORM_COLOR, **bar),
+        ]
+        self.halves = [self._half(-1), self._half(1)]
+        self.bodies = list(self.halves)
+
+    @property
+    def platform(self):
+        """(The right half: what used to be the one sliding platform)"""
+        return self.halves[1]
 
     def safe_x_range(self):
-        return self.LEFT + self.platform.offset, self.RIGHT + self.platform.offset
+        return self.CENTER - self.HALF_WIDTH, self.CENTER + self.HALF_WIDTH
 
     def extra_obs(self):
-        return np.clip(np.array([
-            self.platform.offset / self.TRAVEL,
-            self.platform.vx / self.platform.max_speed,
-        ]), -1, 1)
-
-    def render(self, painter):
-        # The rail the platform slides along
-        painter.rail(self.LEFT - self.TRAVEL, self.RIGHT + self.TRAVEL,
-                     self.TOP + self.THICKNESS + 10)
-        super().render(painter)
+        values = []
+        for h in self.halves:
+            values += [h.offset / h.travel, h.vx / h.max_speed]
+        return np.clip(np.array(values), -1, 1)
 
 
 class SwingMap(OpenMap):
