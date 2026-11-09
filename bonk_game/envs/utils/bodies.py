@@ -235,30 +235,79 @@ class SlidingPlatform(_Part):
 
 
 class Swing(_Part):
-    """A pendulum with a cup-shaped seat hanging from a fixed pivot.
+    """A seat hanging from a pivot, as bonk.io makes one: two wooden planks
+    leaning apart in a V, joined rigidly to a pivot far above (a Box2D
+    revolute joint, like bonk's "rotating" joint). The whole thing is one
+    stiff pendulum: the seat tilts with the rope as it swings.
 
-    The seat stays level (like a real swing seat) while the rope (a Box2D
-    distance joint) swings. Players bump it to set it moving, heavier
-    players kick harder, and a player sitting in the cup gets carried along
-    with it.
+    There's no floor to the seat: the gap between the planks' feet is a bit
+    narrower than a ball, so a ball wedges in and pokes out underneath.
+
+    The joint has a motor trying to hold it still with a limited torque
+    (bonk's motor with "max speed" 0): a constant friction. So it swings
+    out once when you land in it and eases back without swinging through,
+    and it stops wherever gravity can't beat the friction, a little off
+    centre. A light seat on its own barely moves back; a heavy ball swings
+    it more.
+
+    Measured from bonk.io (a recording of the Sinking Swing rebuilt there,
+    November 2026): a 500 px rope swings in about 7.3 s at the default speed;
+    planks 60 x 9.5 px leaning 10 degrees, 57 px apart; with a ball in it,
+    the friction slows the swing by 0.135 rad/s^2 of real time.
+
+    Args:
+        pivot_x, pivot_y: the pivot (px; it can be off the screen)
+        length: from the pivot down to the middle of the seat
+        seat_width: how wide the V opens at the top (px). The feet stay a
+            ball-catching gap apart; a wider seat leans its planks out more.
+        mass: the seat's mass, in balls (bonk's density 0.3 wood: 0.27)
+        restitution, friction: the planks' (bonk's: bounciness 0, and its
+            friction 0.5 is off for players, "Fric Players: No")
+        friction_torque: the motor's torque (Box2D N m) holding the joint.
+            47 swings a ball in the seat back as the recording does, within
+            a third of a degree, at the default speed (bench/bonk_video)
     """
 
     kind = "swing"
 
-    def __init__(self, pivot_x, pivot_y, length, seat_width=96, lip_height=18,
-                 thickness=8, mass=4.0, damping=0.997, max_omega=0.12,
-                 restitution=0.15, friction=0.35):
+    PLANK_LENGTH = 60
+    PLANK_THICKNESS = 9.5
+    FOOT_GAP = 37  # between the planks' feet: a ball (40 across) wedges in
+    DEFAULT_WIDTH = 77  # (bonk's: planks leaning 10 degrees)
+
+    def __init__(self, pivot_x, pivot_y, length, seat_width=DEFAULT_WIDTH, mass=0.27,
+                 friction_torque=47.0, restitution=0.0, friction=0.04, max_omega=0.12):
         self.px, self.py = pivot_x, pivot_y
         self.length = length
         self.seat_width = seat_width
-        self.lip_height = lip_height
-        self.thickness = thickness
         self.mass = mass
-        self.damping = damping
-        self.max_omega = max_omega
+        self.friction_torque = friction_torque
         self.restitution = restitution
         self.friction = friction
+        # Not a limit any more: what the swing's speed is measured against
+        # in observations (rad per step)
+        self.max_omega = max_omega
+        self.lean = self._lean(seat_width)
+        a = math.radians(self.lean)
+        # Each plank's centre, either side of the seat's middle
+        self.plank_offset = (self.FOOT_GAP / 2 + self.PLANK_LENGTH / 2 * math.sin(a)
+                       + self.PLANK_THICKNESS / 2 * math.cos(a))
         self.reset()
+
+    @classmethod
+    def _lean(cls, width):
+        """How far each plank leans out (degrees) for the top to open
+        `width` px, the feet staying FOOT_GAP apart."""
+        L, t = cls.PLANK_LENGTH, cls.PLANK_THICKNESS
+        lo, hi = -10.0, 60.0
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            a = math.radians(mid)
+            if cls.FOOT_GAP + 2 * L * math.sin(a) + 2 * t * math.cos(a) < width:
+                lo = mid
+            else:
+                hi = mid
+        return lo
 
     def reset(self):
         self.theta = 0.0  # angle of the rope from straight down (radians)
@@ -266,7 +315,7 @@ class Swing(_Part):
 
     # --- kinematics ---------------------------------------------------
     def seat_pos(self):
-        """Centre of the top of the seat."""
+        """The middle of the seat (between the planks)."""
         return (self.px + self.length * math.sin(self.theta),
                 self.py + self.length * math.cos(self.theta))
 
@@ -283,44 +332,74 @@ class Swing(_Part):
         return self.seat_pos()
 
     # --- shape --------------------------------------------------------
-    def rects(self):
-        """Seat base and the two lips that make it a cup, as (x1, y1, x2, y2)."""
-        sx, sy = self.seat_pos()
-        half, t, lip = self.seat_width / 2, self.thickness, self.lip_height
-        base = (sx - half, sy, sx + half, sy + t)
-        left_lip = (sx - half, sy - lip, sx - half + t, sy)
-        right_lip = (sx + half - t, sy - lip, sx + half, sy)
-        return [base, left_lip, right_lip]
+    def planks(self, theta=None):
+        """The two planks where they are now (OrientedBlocks), tilted with
+        the rope."""
+        from bonk_game.ui import theme
+        theta = self.theta if theta is None else theta
+        sx, sy = self.seat_pos() if theta == self.theta else (
+            self.px + self.length * math.sin(theta), self.py + self.length * math.cos(theta))
+        c, s = math.cos(theta), math.sin(theta)
+        out = []
+        for side in (-1, 1):
+            # (The seat turns by -theta on screen: a point (x, y) from its
+            # middle goes to (x cos + y sin, -x sin + y cos))
+            x = side * self.plank_offset
+            out.append(OrientedBlock(sx + x * c, sy - x * s, self.PLANK_THICKNESS, self.PLANK_LENGTH,
+                                     side * self.lean - math.degrees(theta), theme.WOOD,
+                                     restitution=self.restitution, friction=self.friction))
+        return out
 
     def attach(self, world, ground):
+        from Box2D import b2
         sx, sy = self.seat_pos()
-        self.body = world.CreateDynamicBody(position=(to_m(sx), to_m(sy)), fixedRotation=True,
-                                            linearDamping=damping_per_second(self.damping))
-        seat = [Block(*r, None, restitution=self.restitution, friction=self.friction) for r in self.rects()]
+        self.body = world.CreateDynamicBody(position=(to_m(sx), to_m(sy)), angle=-self.theta)
+        seat = self.planks(0.0)
+        rest = (self.px, self.py + self.length)
         for piece in seat:
-            add_piece(self.body, piece, (sx, sy))
-        self._pieces = [piece_spec(piece, (sx, sy)) for piece in seat]
-        set_mass(self.body, self.mass)
-        world.CreateDistanceJoint(bodyA=ground, bodyB=self.body, anchorA=(to_m(self.px), to_m(self.py)),
-                                  anchorB=self.body.position, frequencyHz=0, dampingRatio=0)
+            add_piece(self.body, piece, rest)
+        self._pieces = [piece_spec(piece, rest) for piece in seat]
+        # Mass as given, spread as the planks are (Box2D's inertia for
+        # density 1, scaled)
+        md = self.body.massData
+        self.inertia = md.I * self.mass / md.mass
+        md.mass, md.I, md.center = self.mass, self.inertia, (0, 0)
+        self.body.massData = md
+        self.joint = world.CreateRevoluteJoint(
+            bodyA=ground, bodyB=self.body, anchor=(to_m(self.px), to_m(self.py)),
+            enableMotor=True, motorSpeed=0.0, maxMotorTorque=self.friction_torque)
+        assert isinstance(self.joint, b2.revoluteJoint)
         self._at = self._attached = (sx, sy)
+        self._known = (self.theta, 0.0)  # (a swing set going by hand gets its speed in push)
+
+    def push(self):
+        # Only if something set theta or omega by hand since we read them:
+        # a body that's being pushed around mid-swing (by a ball's grip, say)
+        # isn't quite turning about the pivot yet, and the joint sorts that
+        # out over the next steps, here and in the browser (physics.js sets
+        # the seat once, from the server's state)
+        if self._known == (self.theta, self.omega):
+            return
+        x, y = self.x_y()
+        self.body.transform = ((to_m(x), to_m(y)), -self.theta)
+        vx, vy = self.velocity()
+        self.body.linearVelocity = (speed_to_b2(vx), speed_to_b2(vy))
+        self.body.angularVelocity = -self.omega / STEP_SECONDS
+        self._known = (self.theta, self.omega)
 
     def describe(self):
         return {"kind": self.kind, "at": [round(v, 3) for v in self._attached],
                 "pivot": [self.px, self.py], "length": self.length,
-                "mass": self.mass, "damping": self.damping, "max_omega": self.max_omega,
-                "pieces": self._pieces}
+                "mass": self.mass, "inertia": round(self.inertia, 6),
+                "friction_torque": self.friction_torque, "pieces": self._pieces}
 
     def after_substep(self, _):
         x, y, vx, vy = self._read()
         self.theta = math.atan2(x - self.px, y - self.py)
         tx, ty = self.tangent()
-        omega = (vx * tx + vy * ty) / self.length
-        if abs(omega) > self.max_omega:
-            omega = math.copysign(self.max_omega, omega)
-            self._set_velocity(*(v * omega * self.length for v in (tx, ty)))
-        self.omega = omega
+        self.omega = (vx * tx + vy * ty) / self.length
         self._at = self.seat_pos()
+        self._known = (self.theta, self.omega)
 
     def render(self, painter):
         painter.swing(self)

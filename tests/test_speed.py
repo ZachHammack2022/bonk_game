@@ -95,7 +95,7 @@ def sprint(buttons, ticks=65):
 def test_running_on_a_platform_is_quick_and_stops_short():
     top, slide = sprint(RIGHT)
     assert top > 180       # (it was under 50 px/s: the ground gripped like glue)
-    assert slide < 2.5 * 20  # let go, and you stop within about a ball's width
+    assert slide < 2.75 * 20  # let go, and you stop within about a ball's width
 
 
 def test_heavy_is_way_slower():

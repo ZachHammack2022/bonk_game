@@ -97,12 +97,12 @@ Everyone in a room can chat (in the lobby, and over the match for a few seconds)
 | Classic | 2-8 | A box with a bouncy floor and ceiling and deadly side walls. You can fly. Push people into the walls. |
 | Floating Platform | 2-6 | One platform. Knock them off. |
 | Sliding Platform | 2-6 | A platform with bumper posts that slides on a rail; rock it to fling people. |
-| Sinking Swing | 2-6 | A floor with a launch pad that sinks away, and a swing to survive on. |
+| Sinking Swing | 2-6 | A bouncy floor with a launch pad that sinks away, and a swing hanging from far above to survive on. |
 | Ramp Rumble | 2-8 | A halfpipe with springy bumpers overhead. |
 | Grand Stage | 4-10 | A wide stage for a crowd, with bumpers in the corners. |
 | Double Decker | 4-10 | A short upper deck above a long lower one. |
 
-Apart from Classic, the maps float in open space, bonk-style: fall off the bottom or go off the sides and you're out until the next round. "Up" is a small hop, and held in the air it hovers, so you float but can't climb. These numbers were measured from a recording of bonk.io. Rounds last 45 seconds (Classic gives you 30 to score); then it's **sudden death** and red walls close in.
+Apart from Classic, the maps float in open space, bonk-style: fall off the bottom or go off the sides and you're out until the next round. "Up" is a small hop, and held in the air it hovers, so you float but can't climb. These numbers were measured from a recording of bonk.io, and so was gravity: about 380 px/s² at the default speed, half what it used to be. Jumps, launch pads and bumpers still reach the heights they always did; they just float up and down more slowly ([`bench/bonk_video`](bench/bonk_video/README.md)). Rounds last 45 seconds (Classic gives you 30 to score); then it's **sudden death** and red walls close in.
 
 You can make your own maps as JSON files: see [Making maps](#making-maps).
 
@@ -471,7 +471,7 @@ Maps can be JSON files. Every `*.json` in `bonk_game/maps/`, in a `maps/` folder
 | `slope` | `"center": [x, y], "size": [w, h], "angle": degrees` (positive is clockwise) |
 | `post` | `"foot": [x, y], "size": [w, h], "lean": degrees` (positive leans right) |
 | `bumper` | `"center": [x, y], "radius": r` |
-| `swing` | `"pivot": [x, y], "length": 245, "seat_width": 96` |
+| `swing` | `"pivot": [x, y], "length": 245, "seat_width": 77` (a stiff pendulum with a V-shaped seat that tilts as it swings; `seat_width`, 60-150, is how wide the V opens) |
 | `slider` | `"travel": 140, "mass": 6, "rail": true, "pieces": [pieces that move together]` |
 
 `block`, `slope`, `post` and `bumper` also take `"bounce"` (0-1.5, default 0.3), `"friction"` (0-1, default 0.04), `"launch"` (a speed: pads fire you out of their top, bumpers away from their centre), `"kill": true`, and `"color"` (`platform`, `post`, `pad`, `pit`, `wood`, `hazard`, `rail`, or `[r, g, b]`).

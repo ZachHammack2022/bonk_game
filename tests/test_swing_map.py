@@ -93,9 +93,11 @@ def test_heavy_players_kick_the_swing_harder():
         tick(m, [p])
         return m.swing.omega
 
+    # (The seat is light, a quarter of a ball, as bonk's is: any ball
+    # shoves it most of the way to its own speed, a heavy one a bit more)
     light, heavy = kick(1), kick(5)
     assert light > 0
-    assert heavy > 2 * light
+    assert heavy > 1.1 * light
 
 
 def test_up_is_a_jump_not_flight():
@@ -192,4 +194,4 @@ def test_agent_up_actions_jump_on_jump_maps():
         tick(m, [p])
     assert p.grounded
     arena.apply_action(p, 3)  # up
-    assert p.y_v == -m.jump_speed
+    assert p.y_v == -p.jump_speed  # (the map's jump_speed times world.LIFT)

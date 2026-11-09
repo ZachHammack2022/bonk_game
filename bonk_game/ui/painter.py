@@ -208,11 +208,9 @@ class Painter:
 
     def swing(self, swing):
         sx, sy = swing.seat_pos()
-        half = swing.seat_width / 2
-        for end_x in (sx - half + 2, sx + half - 2):
-            self.line((swing.px, swing.py), (end_x, sy - swing.lip_height), theme.ROPE, 2.5)
-        for x1, y1, x2, y2 in swing.rects():
-            self.block(x1, y1, x2, y2, theme.WOOD, "wood")
+        self.line((swing.px, swing.py), (sx, sy), theme.ROPE, 2.5)
+        for plank in swing.planks():
+            self.oriented_block(plank, theme.WOOD, "wood")
         px, py = self.pt(swing.px, swing.py)
         self.circle(px, py, self.ln(6), darken(theme.ROPE, 0.3))
         self.circle(px, py, self.ln(3), lighten(theme.ROPE, 0.3))

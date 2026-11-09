@@ -372,7 +372,7 @@ class Match:
             "box2d": {
                 "ppm": world.PPM, "step_seconds": world.STEP_SECONDS, "base_gravity": world.GRAVITY,
                 "friction_scale": world.FRICTION_SCALE, "grip": world.GRIP,
-                "grip_running": world.GRIP_RUNNING, "lift_off": world.LIFT_OFF,
+                "grip_running": world.GRIP_RUNNING, "lift_off": world.LIFT_OFF, "lift": world.LIFT,
                 "player_bounce": world.PLAYER_BOUNCE,
                 "velocity_iterations": world.VELOCITY_ITERATIONS,
                 "position_iterations": world.POSITION_ITERATIONS,

@@ -10,7 +10,7 @@ import numpy as np
 from bonk_game.envs.utils import arena
 from bonk_game.envs.utils.bodies import Block, MovingBlocks, OrientedBlock, SlidingPlatform, Swing
 from bonk_game.envs.utils.player import new_rng, player
-from bonk_game.envs.utils.world import World
+from bonk_game.envs.utils.world import LIFT, World
 from bonk_game.ui import theme
 
 
@@ -77,7 +77,7 @@ class Map:
         for p in players:
             p.v_range = self.max_speed
             p.can_fly = self.can_fly
-            p.jump_speed = self.jump_speed
+            p.jump_speed = self.jump_speed * LIFT  # (world.LIFT: same heights)
             p.push = self.push_force
             p.hover = self.hover
         return players
@@ -327,8 +327,16 @@ class SwingMap(OpenMap):
     WALL = 6  # thickness of the pit walls
 
     SINK_DELAY = 150  # steps before the floor starts to sink (5s at 30 fps)
-    SINK_SPEED = 0.35  # pixels per step
+    # Pixels per step: 7 px a second at the default speed, as bonk.io's
+    # "Falling floor" sinks (measured from a recording). There it's a free
+    # body with density 999 and linear drag 20: nothing a player does moves
+    # it, and it falls at a steady speed, never tilting (spin drag 999). A
+    # floor driven at that speed is the same thing, and the browser predicts
+    # it exactly.
+    SINK_SPEED = 0.31
     LAUNCH_SPEED = 25  # enough to fly from the pit up to the swing
+    SEAT_Y = 280  # the middle of the swing's seat, hanging still
+    ROPE = 500
     # The map is built around jumping up into the swing, so it keeps the
     # original big jump (~174 px) instead of the bonk.io hop and hover
     jump_speed = 23.5
@@ -344,13 +352,17 @@ class SwingMap(OpenMap):
     PAD_COLOR = theme.PAD
 
     def __init__(self):
-        self.swing = Swing(pivot_x=arena.WIDTH / 2, pivot_y=24, length=245)
+        # Hung as in bonk.io: from 500 px up, far above the top of the screen
+        self.swing = Swing(pivot_x=arena.WIDTH / 2, pivot_y=self.SEAT_Y - self.ROPE, length=self.ROPE)
         super().__init__()
 
     def _build_floor(self):
         top, t = self.FLOOR_Y, self.FLOOR_THICKNESS
         pit_bottom = top + self.PIT_DEPTH
-        floor = dict(restitution=0.4, friction=0.04)
+        # bonk's "Falling floor": bounciness 0.8. You bounce on it, and pump
+        # each bounce higher: down as you fall, up as you land. (Its friction,
+        # 0.5, is off for players there, "Fric Players: No": balls slide)
+        floor = dict(restitution=0.8, friction=0.04)
         return [
             Block(self.FLOOR_LEFT, top, self.HOLE_LEFT, top + t, self.FLOOR_COLOR, **floor),
             Block(self.HOLE_RIGHT, top, self.FLOOR_RIGHT, top + t, self.FLOOR_COLOR, **floor),

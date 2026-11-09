@@ -82,6 +82,9 @@
     const part = { d, body: null };
     if (d.kind === "mover") {
       part.body = world.createBody({ type: "kinematic", position: at });
+    } else if (d.kind === "swing") {
+      // A stiff pendulum that turns as it swings (bodies.Swing)
+      part.body = world.createBody({ type: "dynamic", position: at });
     } else {
       part.body = world.createBody({
         type: "dynamic", position: at, fixedRotation: true,
@@ -95,18 +98,27 @@
         enableLimit: true, lowerTranslation: u.m(-d.travel - d.at[0]), upperTranslation: u.m(d.travel - d.at[0]),
       }, ground, part.body, at, planck.Vec2(1, 0)));
     } else if (d.kind === "swing") {
-      setMass(part.body, d.mass);
-      world.createJoint(new planck.DistanceJoint({ frequencyHz: 0, dampingRatio: 0 }, ground, part.body,
-        planck.Vec2(u.m(d.pivot[0]), u.m(d.pivot[1])), at));
+      part.body.setMassData({ mass: d.mass, center: planck.Vec2(0, 0), I: d.inertia });
+      // The joint's motor holds it with a limited torque: a constant friction
+      world.createJoint(new planck.RevoluteJoint({ enableMotor: true, motorSpeed: 0, maxMotorTorque: d.friction_torque },
+        ground, part.body, planck.Vec2(u.m(d.pivot[0]), u.m(d.pivot[1]))));
     }
     return part;
   }
 
   // Put a moving part where the server says it is: [x, y, vx, vy]
   function placePart(sim, part, s) {
-    const { u } = sim;
-    part.body.setTransform(planck.Vec2(u.m(s[0]), u.m(s[1])), 0);
+    const { u } = sim, d = part.d;
+    let angle = 0, spin = 0;
+    if (d.kind === "swing") {
+      // Turned with the rope (Swing.push): theta from straight down
+      const th = Math.atan2(s[0] - d.pivot[0], s[1] - d.pivot[1]);
+      const omega = (s[2] * Math.cos(th) - s[3] * Math.sin(th)) / d.length;  // rad per step
+      angle = -th; spin = -omega / sim.B.step_seconds;
+    }
+    part.body.setTransform(planck.Vec2(u.m(s[0]), u.m(s[1])), angle);
     part.body.setLinearVelocity(planck.Vec2(u.toV(s[2]), u.toV(s[3])));
+    part.body.setAngularVelocity(spin);
     part.vx = s[2]; part.vy = s[3];
   }
 
@@ -121,15 +133,6 @@
       vx = Math.max(-d.max_speed, Math.min(d.max_speed, vx));
       body.setLinearVelocity(planck.Vec2(u.toV(vx), 0));
       part.vx = vx;
-    } else if (d.kind === "swing") {
-      const x = p.x * sim.B.ppm - d.pivot[0], y = p.y * sim.B.ppm - d.pivot[1];
-      const th = Math.atan2(x, y);
-      const tx = Math.cos(th), ty = -Math.sin(th);
-      const omega = (u.fromV(v.x) * tx + u.fromV(v.y) * ty) / d.length;
-      if (Math.abs(omega) > d.max_omega) {
-        const s = Math.sign(omega) * d.max_omega * d.length;
-        body.setLinearVelocity(planck.Vec2(u.toV(s * tx), u.toV(s * ty)));
-      }
     }
   }
 
@@ -311,7 +314,7 @@
     if (s.grounded && s.jumpBuffer && !s.ph.can_fly) tryJump(s, s.fall);
     const cap = s.ph.max_speed;
     s.vx = Math.max(-cap, Math.min(cap, s.vx));
-    s.vy = Math.max(-cap, Math.min(cap, s.vy));
+    s.vy = Math.max(-cap * (B.lift ?? 1), Math.min(cap, s.vy));  // (going up: world.LIFT of it)
     if (s.ph.clamp_bottom != null) s.y = Math.min(s.ph.clamp_bottom - (s.r ?? 0), s.y);
     body.setLinearVelocity(planck.Vec2(u.toV(s.vx), u.toV(s.vy)));
     body.setTransform(planck.Vec2(u.m(s.x), u.m(s.y)), 0);

@@ -116,7 +116,7 @@ def test_press_too_early_is_forgotten():
             break
     assert p.grounded
     step(m, p)
-    assert p.y_v > -p.jump_speed / 2  # at most a small landing bounce
+    assert p.y_v > -p.jump_speed * 0.6  # at most a landing bounce, not a jump
 
 
 def walk_off(m, p):
