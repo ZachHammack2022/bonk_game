@@ -11,6 +11,8 @@ stored, in one SQLite file (BONK_DB):
 - sessions: a hash of each sign-in's cookie, whose account it is, when it
             ends (SESSION_DAYS). The cookie itself is never stored.
 - profiles: each account's profile, as JSON
+- ratings:  each account's rating (rating.py), once they've played a rated
+            match: the rating, matches, wins, their best, when last rated
 
 Everything goes through Accounts, so moving to another database later only
 changes this file. The calls are quick (one small row each), so they run on
@@ -22,7 +24,7 @@ import secrets
 import sqlite3
 import time
 
-from bonk_game.server import moderation, profiles
+from bonk_game.server import moderation, profiles, rating
 
 SESSION_DAYS = 90
 SCHEMA = """
@@ -44,6 +46,15 @@ CREATE TABLE IF NOT EXISTS profiles (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     data    TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ratings (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    rating     REAL NOT NULL,
+    games      INTEGER NOT NULL,
+    wins       INTEGER NOT NULL,
+    peak       REAL NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ratings_rank ON ratings(rating DESC);
 """
 # What a browser may change in its account's profile. Stats and history are
 # the server's: it records each match an account plays (record()).
@@ -173,3 +184,64 @@ class Accounts:
         if p is None:
             return None
         return self._save(uid, profiles.record(p, entry))
+
+    # --- ratings (rating.py) ----------------------------------------------------
+    def _rating_row(self, uid):
+        row = self.db.execute("SELECT rating, games, wins, peak FROM ratings WHERE user_id = ?", (uid,)).fetchone()
+        return dict(row) if row else None
+
+    def rating(self, uid):
+        """An account's rating badge (rating.badge), with its place on the
+        leaderboard ("rank": None until it's placed)."""
+        row = self._rating_row(uid)
+        out = rating.badge(row)
+        out["rank"] = None
+        if row is not None and row["games"] >= rating.PLACEMENT:
+            out["rank"] = 1 + self.db.execute(
+                "SELECT COUNT(*) FROM ratings WHERE games >= ? AND rating > ?",
+                (rating.PLACEMENT, row["rating"])).fetchone()[0]
+        return out
+
+    def rate(self, players):
+        """Rate a match. players: [{"id": account, "place", "team", "won"}],
+        signed-in players only. Returns {account: {"before", "after", "change",
+        **badge}} for each, or {} when fewer than two of them played."""
+        if len(players) < 2:
+            return {}
+        now = self._now()
+        rows = {p["id"]: self._rating_row(p["id"]) or
+                {"rating": rating.START, "games": 0, "wins": 0, "peak": rating.START} for p in players}
+        changes = rating.update([{**p, "rating": rows[p["id"]]["rating"], "games": rows[p["id"]]["games"]}
+                                 for p in players])
+        out = {}
+        with self.db:
+            self.db.execute("BEGIN")
+            for p in players:
+                row = rows[p["id"]]
+                new = {"rating": row["rating"] + changes[p["id"]], "games": row["games"] + 1,
+                       "wins": row["wins"] + bool(p.get("won"))}
+                new["peak"] = max(row["peak"], new["rating"]) if row["games"] else new["rating"]
+                self.db.execute("INSERT OR REPLACE INTO ratings VALUES (?, ?, ?, ?, ?, ?)",
+                                (p["id"], new["rating"], new["games"], new["wins"], new["peak"], now))
+                out[p["id"]] = {**rating.badge(new), "before": round(row["rating"]),
+                                "change": round(new["rating"]) - round(row["rating"])}
+        return out
+
+    def leaderboard(self, limit=100):
+        """The best placed players: [{rank, id, name, ball, **badge}], and how
+        many are placed. id is the profile's id (never the account's)."""
+        rows = self.db.execute(
+            "SELECT r.user_id, r.rating, r.games, r.wins, r.peak, p.data FROM ratings r "
+            "JOIN profiles p ON p.user_id = r.user_id WHERE r.games >= ? "
+            "ORDER BY r.rating DESC, r.games DESC, r.user_id LIMIT ?", (rating.PLACEMENT, limit)).fetchall()
+        total = self.db.execute("SELECT COUNT(*) FROM ratings WHERE games >= ?",
+                                (rating.PLACEMENT,)).fetchone()[0]
+        out, rank, last = [], 0, None
+        for k, row in enumerate(rows):
+            if last is None or row["rating"] < last:  # (equal ratings share a place)
+                rank, last = k + 1, row["rating"]
+            p = profiles.validate(json.loads(row["data"])) or profiles.empty("acct-" + row["user_id"])
+            out.append({"rank": rank, "you": False, "account": row["user_id"], "name": p["name"] or "Player",
+                        "ball": {k2: p[k2] for k2 in ("color", "own_color", "pattern", "hat")},
+                        **rating.badge(dict(row))})
+        return out, total

@@ -51,7 +51,7 @@ from joserfc import jwt
 from joserfc.errors import JoseError
 from joserfc.jwk import KeySet
 
-from bonk_game.server import cosmetics, limits, metrics
+from bonk_game.server import cosmetics, limits, metrics, rating
 from bonk_game.server.accounts import SESSION_DAYS, Accounts
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -324,6 +324,24 @@ async def me(request):
     return web.json_response(_me(request, user_for(request)), headers={"Cache-Control": "no-store"})
 
 
+async def leaderboard(request):
+    """The leaderboard (rating.py): the best 100 signed-in players, and, when
+    you're signed in, your own rating and place ("you")."""
+    accounts = request.app.get(ACCOUNTS)
+    out = {"accounts": accounts is not None, "players": [], "total": 0, "you": None,
+           "placement": rating.PLACEMENT}
+    if accounts is not None:
+        rows, out["total"] = accounts.leaderboard()
+        user = user_for(request)
+        for r in rows:
+            account = r.pop("account")  # (never sent: only whether it's yours)
+            r["you"] = user is not None and account == user["id"]
+        out["players"] = rows
+        if user is not None:
+            out["you"] = accounts.rating(user["id"])
+    return web.json_response(out, headers={"Cache-Control": "no-store"})
+
+
 async def update_profile(request):
     user = _signed_in(request)
     body = await _json_body(request)
@@ -364,6 +382,7 @@ def setup(app, config=None, accounts=None):
     app.router.add_get("/auth/google/callback", google_callback)
     app.router.add_post("/auth/logout", logout)
     app.router.add_get("/api/me", me)
+    app.router.add_get("/api/leaderboard", leaderboard)
     app.router.add_put("/api/me/profile", update_profile)
     app.router.add_post("/api/me/merge", merge_profile)
     app.router.add_delete("/api/me", delete_account)

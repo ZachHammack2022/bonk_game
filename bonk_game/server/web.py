@@ -14,6 +14,9 @@ Routes:
                          has a password, never the password), people online
     POST /api/quickplay  a public room to join -> {"room": "ABCD"} (room.py)
     GET  /api/rooms/<code>   {"room": "ABCD", "players": 3} or 404
+    GET  /leaderboard    the leaderboard (the page itself); /api/leaderboard is
+                         its data: the best signed-in players by rating, and
+                         yours when signed in (auth.py, rating.py)
     GET  /ws/<code>      WebSocket for one browser in a room
     GET  /healthz        "ok"
     GET  /metrics        numbers for whoever runs the server (Prometheus
@@ -641,6 +644,7 @@ def make_app(rooms=None, auth_config=None, accounts=None, history=None):
     app.router.add_get("/", index)
     app.router.add_get("/r/{code}", index)
     app.router.add_get("/play", index)        # the game browser
+    app.router.add_get("/leaderboard", index)  # the leaderboard
     app.router.add_post("/api/rooms", create_room)
     app.router.add_get("/api/public", public_rooms)
     app.router.add_post("/api/quickplay", quick_play)
@@ -661,6 +665,8 @@ def make_app(rooms=None, auth_config=None, accounts=None, history=None):
         app[ROOMS].recorder = accounts.record  # signed-in players' match history
     if accounts is not None and app[ROOMS].profile_of is None:
         app[ROOMS].profile_of = accounts.profile  # what they've unlocked (cosmetics.py)
+    if accounts is not None and app[ROOMS].ratings is None:
+        app[ROOMS].ratings = accounts  # signed-in players' ratings (rating.py)
     app.router.add_static("/static/", STATIC)
     app.on_startup.append(_start_background)
     app.on_shutdown.append(_shutdown)

@@ -156,7 +156,7 @@ function status(text) {
   $("status").classList.toggle("hidden", !text);
 }
 function show(screen) {
-  for (const id of ["home", "browse", "lobby", "game"]) $(id).classList.toggle("hidden", id !== screen);
+  for (const id of ["home", "browse", "leaderboard", "lobby", "game"]) $(id).classList.toggle("hidden", id !== screen);
   watchPublic(screen === "home" || screen === "browse");  // (people.js)
 }
 
@@ -350,6 +350,10 @@ function route() {
       return;
     }
     openRoom(m[1], false, pw || undefined);
+  } else if (/^\/leaderboard\/?$/.test(location.pathname)) {
+    showInvite(null);
+    leaveRoom();
+    openLeaderboard(false);  // (rating.js)
   } else if (/^\/play\/?$/.test(location.pathname)) {
     showInvite(null);
     leaveRoom();
