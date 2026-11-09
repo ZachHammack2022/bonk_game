@@ -123,9 +123,10 @@ def test_room_host_settings_and_permissions():
         assert a.last("welcome")["room"] == "ABCD"
         assert [m["name"] for m in b.last("lobby")["members"]] == ["Ann", "Bob"]
 
-        await room.handle("b", {"type": "settings", "map": "swing"})
+        assert room.settings["map"] == "swing"  # (new rooms start on Sinking Swing)
+        await room.handle("b", {"type": "settings", "map": "platform"})
         assert b.last("error")["message"].startswith("Only the host")
-        assert room.settings["map"] == "platform"
+        assert room.settings["map"] == "swing"
 
         await room.handle("a", {"type": "settings", "map": "swing", "first_to": 3,
                                 "bots": ["bot:easy", "bot:hard"]})

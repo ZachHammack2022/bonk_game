@@ -28,7 +28,7 @@ PATTERNS = cosmetics.IDS["pattern"]
 # else's, so balls stay easy to tell apart
 MIN_COLOR_GAP = 70
 HEX_COLOR = re.compile(r"^#[0-9a-f]{6}$")
-DEFAULT_MAP = "platform"
+DEFAULT_MAP = "swing"  # (Sinking Swing: new rooms start on it)
 # Room settings besides the map, mode and goal
 ROUND_TIMES = (None, 0, 20, 30, 45, 60, 90)   # seconds before sudden death; None: the map's own
 GRAVITY = {"low": 0.6, "normal": 1.0, "high": 1.4}
@@ -59,9 +59,11 @@ def default_settings():
 
 def quick_settings():
     """A room Quick play makes when no open room has space: Knockouts
-    (people can drop in at any time) on Platform, with bots to play against."""
-    return {**default_settings(), "mode": "knockouts", "first_to": modes.MODES["knockouts"].goal_default,
-            "bots": ["bot:medium"] * QUICK_BOTS}
+    (people can drop in at any time) on Platform, with bots to play against.
+    (Not Sinking Swing: its floor is gone by the end of a round, so nobody
+    could respawn, and Knockouts needs that.)"""
+    return {**default_settings(), "map": "platform", "mode": "knockouts",
+            "first_to": modes.MODES["knockouts"].goal_default, "bots": ["bot:medium"] * QUICK_BOTS}
 
 
 def clean_room_name(name):
@@ -106,7 +108,7 @@ def default_goal(mode, map_name):
 
 
 def map_order():
-    first = ["platform", "slider", "swing", "ramps", "classic"]
+    first = ["swing", "platform", "slider", "ramps", "classic"]
     return [n for n in first if n in MAPS] + sorted(n for n in MAPS if n not in first)
 
 

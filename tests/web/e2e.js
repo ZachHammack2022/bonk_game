@@ -143,6 +143,16 @@ function check(cond, what) {
 
     // Host sets up a quick match (in the Game settings dialog)
     await host.click("#open-game-settings");
+    // Dropdowns open a list in the page's own style (js/dropdown.js), not the browser's
+    await host.click("#map");
+    check(await host.isVisible(".dropdown-menu") && await host.locator(".dropdown-item.selected").count() === 1,
+      "a dropdown opens the page's own list, with the chosen one ticked");
+    await host.keyboard.press("Escape");
+    check(await host.isHidden(".dropdown-menu") && await host.evaluate(() => document.activeElement.id) === "map",
+      "Escape closes it, back on the dropdown");
+    await host.click("#first-to");
+    await host.click('.dropdown-item:text-is("1")');
+    check(await host.isHidden(".dropdown-menu") && await host.inputValue("#first-to") === "1", "clicking an option picks it");
     await host.selectOption("#map", "classic");
     await host.selectOption("#first-to", "1");
     await host.click("#game-settings-done");

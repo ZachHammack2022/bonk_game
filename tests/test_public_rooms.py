@@ -40,7 +40,7 @@ def test_every_room_is_listed_by_its_name_and_never_with_its_password():
         [listed] = rooms.listed()
         assert pw not in json.dumps(rooms.browse())
         assert listed == {"room": room.code, "name": "Friday night", "locked": True,
-                          "map": "Floating Platform", "map_id": "platform",
+                          "map": "Sinking Swing", "map_id": "swing",
                           "mode": "Free-for-all", "mode_id": "ffa", "goal": "First to 5", "people": 1,
                           "bots": 1, "most": 6, "names": ["Ann"], "playing": False, "elapsed": None,
                           "open": True, "power_ups": False, "gravity": "normal", "speed": "normal", "quick": False,
