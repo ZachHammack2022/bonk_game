@@ -19,8 +19,9 @@ import math
 
 START = 1000          # where everyone starts
 K = 32                # how far one match moves you once you're placed
-K_NEW = 48            # ... and in your first PLACEMENT matches (to find your level)
-PLACEMENT = 5         # matches before you're on the leaderboard
+K_NEW = 64            # ... and in your first PLACEMENT matches: twice as far, to
+                      # move new players toward their level before they're on the board
+PLACEMENT = 3         # matches before you're on the leaderboard
 SCALE = 400           # Elo: 400 points apart, the better player wins 10 to 1
 
 # (lowest rating, id, title): the badge for a rating
