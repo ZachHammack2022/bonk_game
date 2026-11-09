@@ -200,6 +200,7 @@ class Accounts:
             out["rank"] = 1 + self.db.execute(
                 "SELECT COUNT(*) FROM ratings WHERE games >= ? AND rating > ?",
                 (rating.PLACEMENT, row["rating"])).fetchone()[0]
+        out["top"] = row is not None and rating.crowned(out["rank"], row["rating"])
         return out
 
     def rate(self, players):
@@ -225,6 +226,8 @@ class Accounts:
                                 (p["id"], new["rating"], new["games"], new["wins"], new["peak"], now))
                 out[p["id"]] = {**rating.badge(new), "before": round(row["rating"]),
                                 "change": round(new["rating"]) - round(row["rating"])}
+        for uid in out:  # (who's #1 now)
+            out[uid]["top"] = self.rating(uid)["top"]
         return out
 
     def leaderboard(self, limit=100):
@@ -244,4 +247,5 @@ class Accounts:
             out.append({"rank": rank, "you": False, "account": row["user_id"], "name": p["name"] or "Player",
                         "ball": {k2: p[k2] for k2 in ("color", "own_color", "pattern", "hat")},
                         **rating.badge(dict(row))})
+            out[-1]["top"] = rating.crowned(rank, row["rating"])
         return out, total

@@ -832,6 +832,8 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
               font-variant-numeric: tabular-nums; vertical-align: middle; }
 .rank-badge .gem { color: var(--tier); font-size: 1.05em; }
 .rank-badge.placing { border-style: dashed; }
+.rank-badge.top { box-shadow: 0 0 0 2px #ffd23f, 0 2px 8px rgba(224, 168, 0, 0.35); }
+.rank-badge .crown { font-weight: 800; color: #b07d00; padding-right: 4px; margin-right: 2px; border-right: 1px solid var(--tier-line); }
 .rank-badge.big { font-size: 15px; padding: 4px 14px 4px 10px; gap: 6px; }
 .tier-bronze   { --tier: #c07a45; --tier-ink: #7a4421; --tier-bg: #fbeee4; --tier-line: #ecc8ad; }
 .tier-silver   { --tier: #8d99ae; --tier-ink: #4a5468; --tier-bg: #eef1f6; --tier-line: #cfd6e2; }

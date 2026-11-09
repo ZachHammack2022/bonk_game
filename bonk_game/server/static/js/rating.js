@@ -19,7 +19,7 @@ const TIERS = {
 function rankBadge(r, opts = {}) {
   const t = TIERS[r.tier] || TIERS.silver;
   const b = document.createElement("span");
-  b.className = `rank-badge tier-${r.tier}` + (r.placing ? " placing" : "") + (opts.big ? " big" : "");
+  b.className = `rank-badge tier-${r.tier}` + (r.placing ? " placing" : "") + (opts.big ? " big" : "") + (r.top ? " top" : "");
   const gem = document.createElement("span");
   gem.className = "gem";
   gem.setAttribute("aria-hidden", "true");
@@ -27,9 +27,16 @@ function rankBadge(r, opts = {}) {
   const text = document.createElement("span");
   text.textContent = opts.title === false ? String(r.rating) : `${t.title} ${r.rating}`;
   b.append(gem, text);
+  // The best player on the leaderboard (if they're Gold or better): a #1 crown
+  if (r.top) {
+    const crown = document.createElement("span");
+    crown.className = "crown";
+    crown.textContent = "👑 #1";
+    b.prepend(crown);
+  }
   b.title = r.placing
     ? `${t.title}, rating ${r.rating}. ${r.placing} more match${r.placing === 1 ? "" : "es"} to get on the leaderboard`
-    : `${t.title}, rating ${r.rating}`;
+    : `${t.title}, rating ${r.rating}` + (r.top ? ". Number 1 on the leaderboard" : "");
   return b;
 }
 

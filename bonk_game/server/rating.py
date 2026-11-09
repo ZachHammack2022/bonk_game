@@ -35,6 +35,18 @@ TIERS = (
 )
 
 
+# The best player on the leaderboard wears a #1 crown on their badge, as
+# long as they're at least this good (so it means something while few
+# people are on the board)
+CROWN_MIN = 1050
+
+
+def crowned(rank, r):
+    """Does the player at this leaderboard place (None: not on it) with
+    this rating get the #1 crown?"""
+    return rank == 1 and round(r) >= CROWN_MIN
+
+
 def tier(r):
     """The tier id for a rating."""
     return next(t for lo, t, _ in TIERS if r >= lo)
@@ -47,7 +59,7 @@ def badge(row):
         row = {"rating": START, "games": 0, "wins": 0, "peak": START}
     r = round(row["rating"])
     return {"rating": r, "tier": tier(r), "games": row["games"], "wins": row["wins"],
-            "peak": round(row["peak"]), "placing": max(0, PLACEMENT - row["games"])}
+            "peak": round(row["peak"]), "placing": max(0, PLACEMENT - row["games"]), "top": False}
 
 
 def expected(a, b):

@@ -74,7 +74,8 @@ def accounts_with(*names):
 def test_accounts_keep_ratings_and_place_on_the_leaderboard():
     a, (ann, bob, cat) = accounts_with("Ann", "Bob", "Cat")
     assert a.rating(ann) == {"rating": rating.START, "tier": "silver", "games": 0, "wins": 0,
-                             "peak": rating.START, "placing": rating.PLACEMENT, "rank": None}
+                             "peak": rating.START, "placing": rating.PLACEMENT, "rank": None,
+                             "top": False}
     assert a.leaderboard() == ([], 0)
     out = a.rate([{"id": ann, "place": 1, "won": True, "team": None},
                   {"id": bob, "place": 2, "won": False, "team": None}])
@@ -153,3 +154,24 @@ def test_the_leaderboard_api():
             assert not any("account" in p or p["you"] for p in d["players"])  # (no account ids)
             assert (await client.get("/leaderboard")).status == 200
     run(go())
+
+
+def test_the_best_player_wears_a_crown_once_theyre_gold():
+    assert rating.crowned(1, rating.CROWN_MIN) and not rating.crowned(1, rating.CROWN_MIN - 1)
+    assert not rating.crowned(2, 2000) and not rating.crowned(None, 2000)
+    a, (ann, bob) = accounts_with("Ann", "Bob")
+    ann_won = [{"id": ann, "place": 1, "won": True, "team": None},
+               {"id": bob, "place": 2, "won": False, "team": None}]
+    draw = [{**p, "place": 1, "won": False} for p in ann_won]
+    for _ in range(rating.PLACEMENT):
+        out = a.rate(draw)
+    # Both #1 on the board (level), but not good enough for the crown (still
+    # at the start, in Silver)
+    assert a.rating(ann)["rank"] == 1 and a.rating(ann)["rating"] < rating.CROWN_MIN
+    assert not out[ann]["top"] and not a.leaderboard()[0][0]["top"]
+    while a.rating(ann)["rating"] < rating.CROWN_MIN:
+        out = a.rate(ann_won)
+    assert out[ann]["top"] and not out[bob]["top"]
+    assert a.rating(ann)["top"] and not a.rating(bob)["top"]
+    rows, _ = a.leaderboard()
+    assert [r["top"] for r in rows] == [True, False]
