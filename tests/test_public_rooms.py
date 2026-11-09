@@ -44,7 +44,9 @@ def test_every_room_is_listed_by_its_name_and_never_with_its_password():
                           "mode": "Free-for-all", "mode_id": "ffa", "goal": "First to 5", "people": 1,
                           "bots": 1, "most": 6, "names": ["Ann"], "playing": False, "elapsed": None,
                           "open": True, "power_ups": False, "gravity": "normal", "speed": "normal", "quick": False,
-                          "host": "Ann"}
+                          "host": "Ann", "ping": None}
+        room.members["a"].note_network(0, {"rtt": 84.4})
+        assert rooms.listed()[0]["ping"] == 84
         await room.disconnect("a")
         assert rooms.listed() == []  # (nobody there)
     run(go())
