@@ -83,7 +83,7 @@ def test_the_room_logs_reports_with_where_they_came_from(caplog):
     assert len(reports) == 1 and len(errors) == playtest.ERRORS_PER_PERSON
     r = reports[0]
     assert (r["room"], r["name"], r["map"], r["mode"], r["players"], r["people"], r["feel"]) == \
-        ("ABCD", "Ann", "platform", "ffa", 2, 1, "smooth")
+        ("ABCD", "Ann", "swing", "ffa", 2, 1, "smooth")
     logged = [json.loads(rec.getMessage()) for rec in caplog.records]
     assert [e["event"] for e in logged].count("playtest") == 1
     assert any(e["event"] == "client_error" and e["message"] == "boom 0" for e in logged)
