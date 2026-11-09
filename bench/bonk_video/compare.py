@@ -3,10 +3,10 @@ measure.py from a screen recording of the Sinking Swing rebuilt in bonk.io).
 
     python -m bench.bonk_video.compare
 
-Prints gravity, how fast the floor sinks, and the swing coming back after a
-ball lands in it, from the recording and from our game. Everything is in
-our pixels (the recording's ball is 26 px across its radius, ours 20) and
-real seconds at the default game speed.
+Prints gravity, how fast the floor sinks and the swing's period, from the
+recording and from our game, and how long a ride on our swing keeps going.
+Everything is in our pixels (the recording's ball is 26 px across its
+radius, ours 20) and real seconds at the default game speed.
 """
 import json
 import math
@@ -42,15 +42,18 @@ def recorded_sink(d, scale):
     return np.polyfit(t, np.array([b for _, b in fl]) * scale, 1)[0]
 
 
-def recorded_swing_back(d):
-    """(seconds since the swing's furthest point, rope angle in degrees)
-    from there to the end of the recording."""
+def recorded_period(d):
+    """The swing's period (s), from the recording: a quarter of a swing
+    from the ball landing in the seat (the rope starts to move) to the
+    furthest it went. (You were steering in the seat as well, so it's
+    rough: within a few percent.)"""
     rope = [(f["frame"], f["rope"]) for f in d["frames"] if f["rope"] is not None]
+    start = next(k for k, a in rope if a > 0.5)
     peak = max(rope, key=lambda r: r[1])[0]
-    return [((k - peak) / d["fps"], a) for k, a in rope if k >= peak]
+    return 4 * (peak - start) / d["fps"]
 
 
-def our_swing_back(start_deg, seconds, swing=None):
+def our_swing(start_deg, seconds, swing=None):
     """Our swing let go at start_deg with a ball sitting in it: rope angle
     (degrees) every tick (30 a second) for `seconds`."""
     m = make_map("swing")
@@ -71,19 +74,15 @@ def our_swing_back(start_deg, seconds, swing=None):
     return out
 
 
-def swing_error(d=None, swing=None):
-    """How far our swing coming back is from the recording's (rms degrees),
-    and both, sampled every half second."""
-    d = d or load()[0]
-    rec = recorded_swing_back(d)
-    t = np.array([a for a, _ in rec])
-    ours = our_swing_back(rec[0][1], t[-1], swing)
-    sim = np.interp(t, np.arange(1, len(ours) + 1) / 30, ours)
-    theirs = np.array([b for _, b in rec])
-    rms = float(np.sqrt(np.mean((sim - theirs) ** 2)))
-    every = [(round(float(a), 1), round(float(b), 1), round(float(c), 1))
-             for a, b, c in zip(t[::30], theirs[::30], sim[::30])]
-    return rms, every
+def our_period(angles):
+    """The period (s) of a swing, from where it crosses the middle."""
+    cross = [i / 30 for i, (a, b) in enumerate(zip(angles, angles[1:])) if a * b < 0]
+    return 2 * (cross[-1] - cross[0]) / (len(cross) - 1)
+
+
+def furthest(angles, t0, t1):
+    """How far out it swung (degrees) between t0 and t1 seconds."""
+    return max(abs(a) for a in angles[int(t0 * 30):int(t1 * 30)])
 
 
 def main():
@@ -93,11 +92,10 @@ def main():
           f" (it was {world.TUNED_GRAVITY * STEPS_PER_SECOND ** 2:.0f})")
     m = make_map("swing")
     print(f"floor sinks: recording {recorded_sink(d, scale):.1f} px/s, ours {m.SINK_SPEED * STEPS_PER_SECOND:.1f}")
-    rms, every = swing_error(d)
-    print(f"swing coming back with a ball in it (rope angle, degrees): {rms:.2f} rms apart")
-    print("| seconds | recording | ours |\n|---|---|---|")
-    for t, a, b in every:
-        print(f"| {t} | {a} | {b} |")
+    swing = our_swing(20, 40)
+    print(f"swing period: recording {recorded_period(d):.2f} s, ours {our_period(swing):.2f}")
+    print("a ball riding it, let go at 20 degrees out: swinging "
+          + ", ".join(f"{furthest(swing, t - 4, t):.0f} degrees out at {t} s" for t in (10, 20, 40)))
 
 
 if __name__ == "__main__":

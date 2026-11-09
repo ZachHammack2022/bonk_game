@@ -243,17 +243,15 @@ class Swing(_Part):
     There's no floor to the seat: the gap between the planks' feet is a bit
     narrower than a ball, so a ball wedges in and pokes out underneath.
 
-    The joint has a motor trying to hold it still with a limited torque
-    (bonk's motor with "max speed" 0): a constant friction. So it swings
-    out once when you land in it and eases back without swinging through,
-    and it stops wherever gravity can't beat the friction, a little off
-    centre. A light seat on its own barely moves back; a heavy ball swings
-    it more.
+    It swings freely, back and forth like any pendulum: a push or a ball
+    landing in it sets it going, and it keeps going on its own. A small
+    friction on the joint (a Box2D motor holding it with a little torque)
+    takes a ride on it down slowly, over about a minute, and lets an empty
+    seat settle back in the middle.
 
     Measured from bonk.io (a recording of the Sinking Swing rebuilt there,
-    November 2026): a 500 px rope swings in about 7.3 s at the default speed;
-    planks 60 x 9.5 px leaning 10 degrees, 57 px apart; with a ball in it,
-    the friction slows the swing by 0.135 rad/s^2 of real time.
+    November 2026): a 500 px rope swings in about 7.3 s at the default speed
+    (ours: 7.35 s); planks 60 x 9.5 px leaning 10 degrees, 57 px apart.
 
     Args:
         pivot_x, pivot_y: the pivot (px; it can be off the screen)
@@ -263,9 +261,9 @@ class Swing(_Part):
         mass: the seat's mass, in balls (bonk's density 0.3 wood: 0.27)
         restitution, friction: the planks' (bonk's: bounciness 0, and its
             friction 0.5 is off for players, "Fric Players: No")
-        friction_torque: the motor's torque (Box2D N m) holding the joint.
-            47 swings a ball in the seat back as the recording does, within
-            a third of a degree, at the default speed (bench/bonk_video)
+        friction_torque: the joint's friction (Box2D N m). 2: a ride
+            swinging 20 degrees out is still swinging 7 degrees out after
+            40 s; an empty seat stops within 2 degrees of the middle
     """
 
     kind = "swing"
@@ -276,7 +274,7 @@ class Swing(_Part):
     DEFAULT_WIDTH = 77  # (bonk's: planks leaning 10 degrees)
 
     def __init__(self, pivot_x, pivot_y, length, seat_width=DEFAULT_WIDTH, mass=0.27,
-                 friction_torque=47.0, restitution=0.0, friction=0.04, max_omega=0.12):
+                 friction_torque=2.0, restitution=0.0, friction=0.04, max_omega=0.12):
         self.px, self.py = pivot_x, pivot_y
         self.length = length
         self.seat_width = seat_width

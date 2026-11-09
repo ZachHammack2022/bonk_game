@@ -21,7 +21,8 @@ screen-recorded (11.5 s at 60 fps), with the editor's settings:
 | floor bounce | 0.8 | 0.8 | 0.4 |
 | rope | 500 px, from far above the screen | 500 px | 245 px, pivot on screen |
 | seat | two planks in a V, 60 x 9.5 px, leaning 10°; tilts with the rope | the same | a flat tray that stayed level |
-| swing coming back with a ball in it | eases back over 3.5 s, no swing through | within 0.24° of it | swung on and on |
+| swing period | 7.2 s | 7.35 s | 3.6 s |
+| swinging | freely, back and forth | the same, a ride slowly losing height over a minute | the same, faster |
 
 How each was worked out:
 
@@ -38,12 +39,13 @@ How each was worked out:
 - **The rope is a stiff pendulum.** bonk's rotating joint holds the seat
   rigidly to the pivot, so the seat tilts with the rope (17° of rope gave
   about 17° of tilt in the recording). Ours is a Box2D revolute joint.
-- **The motor is friction.** A motor with max speed 0 and a limited torque
-  is a constant friction on the joint. The swing coming back fits that
-  (0.05° apart), and not a drag that grows with speed (0.3°). It also means
-  it stops a little off centre, as the recording does (3.6°), and that an
-  empty seat, being light, stays about where it's knocked. Our torque, 47,
-  was fitted to the recording.
+- **It swings freely.** In the recording the swing eased back without
+  swinging through, but that was the player steering in the seat: bonk's
+  swing goes back and forth on its own once pushed. So the joint has only
+  a little friction (torque 2): a ride let go 20° out still swings 7° out
+  after 40 s, and an empty seat settles back in the middle. The period
+  (from the ball landing to the furthest point, a quarter swing) is the
+  recording's.
 - **The falling floor.** Density 999 means nothing a player does moves
   it, drag 20 makes it fall at a steady speed, and spin drag 999 keeps it
   level, so a floor driven down at the same speed is the same thing (and
