@@ -151,9 +151,6 @@ function gameRow(r) {
 
   const mode = document.createElement("span");
   mode.textContent = r.mode;
-  const goal = document.createElement("span");
-  goal.className = "dim small";
-  goal.textContent = r.goal;
 
   // A dot per seat: people filled, bots hollow, free seats faint
   const dots = document.createElement("span");
@@ -193,7 +190,7 @@ function gameRow(r) {
   const pingCell = cell("g-ping", ping);
   pingCell.title = r.ping == null ? "No ping yet" : `The players' round trip to the server: about ${r.ping} ms`;
 
-  row.append(game, cell("g-players", dots, count), cell("g-mode", mode, goal), lock, cell("g-map", r.map),
+  row.append(game, cell("g-players", dots, count), cell("g-mode", mode), lock, cell("g-map", r.map),
     cell("g-status", pill), pingCell, cell("g-join", b));
   return row;
 }

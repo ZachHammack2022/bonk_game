@@ -376,7 +376,7 @@ button.big { width: 100%; min-height: 56px; font-size: 19px; }
 .seat-dots i.b { border-color: var(--dim); }
 .pill { display: inline-block !important; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; width: max-content; }
 .pill.lobby { background: rgba(126, 214, 170, 0.12); color: var(--ok); }
-.pill.on { background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
+.pill.on { background: var(--accent-soft); color: var(--accent-ink); font-variant-numeric: tabular-nums; }
 .g-join { align-items: flex-end; }
 .ping-val { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--faint); }
 .ping-val::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px;
@@ -384,8 +384,11 @@ button.big { width: 100%; min-height: 56px; font-size: 19px; }
 .ping-val.good { color: var(--ok); } .ping-val.ok { color: #e0a33a; } .ping-val.bad { color: var(--danger); }
 .ping-val.good::before, .ping-val.ok::before, .ping-val.bad::before { opacity: 1; }
 .g-join button { min-height: 32px; padding: 0 16px; font-size: 14px; }
-.g-join button.join { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
-.g-join button.join:hover { background: var(--accent); color: var(--accent-ink); }
+/* Join: the same solid yellow as the page's main buttons, dark text on it */
+.g-join button.join { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700;
+                      box-shadow: 0 3px 0 var(--accent-deep); }
+.g-join button.join:hover { background: #ffdb5c; border-color: #ffdb5c; }
+.g-join button.join:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--accent-deep); }
 .games-empty { padding: 40px 16px; text-align: center; color: var(--dim); }
 .games-empty p { margin: 0 0 16px; }
 .row-buttons { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
