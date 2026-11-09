@@ -122,3 +122,14 @@ $("chat-game-input").addEventListener("blur", () => setTimeout(() => {
   if (document.activeElement !== $("chat-game-input") && !$("chat-game-input").value) closeGameChat();
 }, 0));
 $("open-chat").addEventListener("click", (e) => { e.currentTarget.blur(); openGameChat(); });
+
+// The lobby's chat grows and shrinks with the window (style.css): if you
+// were reading the newest lines, keep them in view as it does
+{
+  const log = $("chat-log");
+  let pinned = true;
+  log.addEventListener("scroll", () => { pinned = log.scrollHeight - log.scrollTop - log.clientHeight < 30; });
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => { if (pinned) log.scrollTop = log.scrollHeight; }).observe(log);
+  }
+}

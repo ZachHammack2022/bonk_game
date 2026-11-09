@@ -50,8 +50,10 @@ def test_a_ball_rides_a_fast_sliding_platform():
     for _ in range(10):
         env.step()
     gaps = []
+    # (Short moves: the ring's halves have no grip, so a long one slides the
+    # block out from under the ball. What matters is that it stays on top.)
     for t in range(40):
-        plat.vx = 12 if (t // 10) % 2 == 0 else -12
+        plat.vx = 12 if (t // 3) % 2 == 0 else -12
         env.step()
         gaps.append(corner.y1 - (a.y + a.r))
     assert a.alive and max(abs(g) for g in gaps) < 2

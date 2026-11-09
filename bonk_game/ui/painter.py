@@ -40,9 +40,10 @@ def _gradient(size):
     return _backgrounds[size]
 
 
-def _edge_glow(size, thickness):
-    """Red glow fading in from the left, right and bottom edges."""
-    key = (size, thickness)
+def _edge_glow(size, thickness, sides=True):
+    """Red glow fading in from the left, right and bottom edges (sides
+    False: the bottom one only)."""
+    key = (size, thickness, sides)
     if key not in _edge_glows:
         w, h = size
         k = 4  # build small, then smooth-scale up
@@ -52,7 +53,7 @@ def _edge_glow(size, thickness):
         small.fill((*theme.DANGER, 0))
         alpha = pygame.surfarray.pixels_alpha(small)
         for x in range(sw):
-            ex = max(0.0, 1 - min(x, sw - 1 - x) / t)
+            ex = max(0.0, 1 - min(x, sw - 1 - x) / t) if sides else 0.0
             for y in range(sh):
                 ey = max(0.0, 1 - (sh - 1 - y) / t)
                 alpha[x, y] = int(60 * max(ex, ey) ** 2)
@@ -114,9 +115,22 @@ class Painter:
     def background(self):
         self.surface.blit(_gradient(self.surface.get_size()), (0, 0))
 
-    def danger_edges(self):
-        """Red glow on the screen edges you die past (open maps)."""
-        self.surface.blit(_edge_glow(self.surface.get_size(), self.ln(16)), (0, 0))
+    def danger_edges(self, sides=True):
+        """Red glow on the screen edges you die past (open maps; sides
+        False: only the bottom one is deadly)."""
+        self.surface.blit(_edge_glow(self.surface.get_size(), self.ln(16), sides), (0, 0))
+
+    def spring(self, x1, y1, x2, y2, color, coils=14, amp=7):
+        """A zigzag coil spring from (x1, y1) to (x2, y2)."""
+        dx, dy = x2 - x1, y2 - y1
+        n = math.hypot(dx, dy) or 1
+        nx, ny = -dy / n, dx / n
+        pts = [self.pt(x1, y1)]
+        for i in range(1, coils):
+            k, side = i / coils, (1 if i % 2 else -1) * amp
+            pts.append(self.pt(x1 + dx * k + nx * side, y1 + dy * k + ny * side))
+        pts.append(self.pt(x2, y2))
+        pygame.draw.lines(self.surface, color, False, pts, self.ln(3))
 
     def block(self, x1, y1, x2, y2, color, kind="solid"):
         """A rounded, shaded slab. kind: solid, hazard, pad or wood."""
@@ -282,13 +296,19 @@ class Painter:
         pygame.draw.polygon(self.surface, (255, 255, 255), tri)
         pygame.draw.polygon(self.surface, darken(p.color, 0.5), tri, max(1, self.ln(1.2)))
 
-    def offscreen_marker(self, p, world_w):
-        """Arrow on the top edge pointing at a player who is above the screen."""
-        if p.y + p.r >= 0:
-            return
-        x = min(max(p.x, 14), world_w - 14)
-        tip = self.pt(x, 4)
+    def offscreen_marker(self, p, world_w, world_h=480):
+        """Arrow on the edge pointing at a player who is off the screen:
+        above it, or past a side (on maps where you can be)."""
         s = self.ln(9)
-        pygame.draw.polygon(self.surface, p.color, [tip, (tip[0] - s, tip[1] + s * 1.4), (tip[0] + s, tip[1] + s * 1.4)])
-        pygame.draw.polygon(self.surface, darken(p.color, 0.5),
-                            [tip, (tip[0] - s, tip[1] + s * 1.4), (tip[0] + s, tip[1] + s * 1.4)], max(1, self.ln(1.5)))
+        if p.y + p.r < 0:
+            tip = self.pt(min(max(p.x, 14), world_w - 14), 4)
+            tri = [tip, (tip[0] - s, tip[1] + s * 1.4), (tip[0] + s, tip[1] + s * 1.4)]
+        elif p.x + p.r < 0 or p.x - p.r > world_w:
+            left = p.x < 0
+            tip = self.pt(4 if left else world_w - 4, min(max(p.y, 14), world_h - 14))
+            d = s * 1.4 if left else -s * 1.4
+            tri = [tip, (tip[0] + d, tip[1] - s), (tip[0] + d, tip[1] + s)]
+        else:
+            return
+        pygame.draw.polygon(self.surface, p.color, tri)
+        pygame.draw.polygon(self.surface, darken(p.color, 0.5), tri, max(1, self.ln(1.5)))

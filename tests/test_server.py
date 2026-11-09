@@ -18,7 +18,7 @@ from bonk_game.server.scene import level_shapes
 aiohttp = pytest.importorskip("aiohttp")
 from bonk_game.server.web import VERSION  # noqa: E402
 
-SHAPE_TYPES = {"edges", "rect", "poly", "ball", "line", "pivot", "rail"}
+SHAPE_TYPES = {"edges", "rect", "poly", "ball", "line", "pivot", "rail", "spring"}
 
 
 def bots(n, level="medium"):

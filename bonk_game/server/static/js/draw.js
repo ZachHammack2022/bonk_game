@@ -174,14 +174,19 @@ function buildScenery(level) {
   scenery.w = canvas.width; scenery.h = canvas.height; scenery.q = quality.level; scenery.dirty = false;
 }
 
-function drawEdges() {
+// The red glow on the screen edges that knock you out (sides: false on a
+// map where you can go past the sides and come back: just the bottom)
+function drawEdges(sides = true) {
   const t = 22, c = "rgba(255,110,140,0.22)", z = "rgba(255,110,140,0)";
-  let g = ctx.createLinearGradient(0, 0, t, 0);
-  g.addColorStop(0, c); g.addColorStop(1, z);
-  ctx.fillStyle = g; ctx.fillRect(0, 0, t, H);
-  g = ctx.createLinearGradient(W, 0, W - t, 0);
-  g.addColorStop(0, c); g.addColorStop(1, z);
-  ctx.fillStyle = g; ctx.fillRect(W - t, 0, t, H);
+  let g;
+  if (sides) {
+    g = ctx.createLinearGradient(0, 0, t, 0);
+    g.addColorStop(0, c); g.addColorStop(1, z);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, t, H);
+    g = ctx.createLinearGradient(W, 0, W - t, 0);
+    g.addColorStop(0, c); g.addColorStop(1, z);
+    ctx.fillStyle = g; ctx.fillRect(W - t, 0, t, H);
+  }
   g = ctx.createLinearGradient(0, H, 0, H - t);
   g.addColorStop(0, c); g.addColorStop(1, z);
   ctx.fillStyle = g; ctx.fillRect(0, H - t, W, t);
@@ -197,7 +202,13 @@ const MATERIALS = {
   hazard: { body: "#ff8a8a", deep: "#e65c6c", top: "#ffb0b0", shine: "#ffd6d6" },
 };
 const POST_HEX = "#68789c";
+// A painted toy block in its own colour (the Sliding Platform's halves)
+const toyMaterials = {};
+function toyMaterial(c) {
+  return toyMaterials[c] || (toyMaterials[c] = { body: c, deep: darken(c, 0.18), top: lighten(c, 0.22), shine: lighten(c, 0.55) });
+}
 function materialOf(s) {
+  if (s.k === "toy") return toyMaterial(s.c);
   if (s.k === "hazard") return MATERIALS.hazard;
   if (s.k === "pad") return MATERIALS.pad;
   if (s.k === "wood") return MATERIALS.wood;
@@ -299,14 +310,31 @@ function drawRail(s) {
 
 function drawShape(s) {
   switch (s.t) {
-    case "edges": return drawEdges();
+    case "edges": return drawEdges(s.s !== 0);
     case "rect": return drawRect(s);
     case "poly": return drawPoly(s);
     case "ball": return drawBumper(s);
     case "line": return line(s.a, s.b, s.c, s.w);
     case "pivot": circle(s.x, s.y, 6, darken(T.rope, 0.3)); return circle(s.x, s.y, 3, lighten(T.rope, 0.3));
     case "rail": return drawRail(s);
+    case "spring": return drawSpring(s);
   }
+}
+
+// A coil spring from s.a to s.b (the Sliding Platform's): it stretches as
+// the end moves away
+function drawSpring(s) {
+  const [x1, y1] = s.a, [x2, y2] = s.b, n = 14, amp = 7;
+  const len = Math.hypot(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / len, ny = (x2 - x1) / len;
+  ctx.beginPath(); ctx.moveTo(x1, y1);
+  for (let i = 1; i < n; i++) {
+    const k = i / n, side = i % 2 ? amp : -amp;
+    ctx.lineTo(x1 + (x2 - x1) * k + nx * side, y1 + (y2 - y1) * k + ny * side);
+  }
+  ctx.lineTo(x2, y2);
+  ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.strokeStyle = darken(s.c, 0.2); ctx.lineWidth = 4.5; ctx.stroke();
+  ctx.strokeStyle = s.c; ctx.lineWidth = 2.5; ctx.stroke();
 }
 
 function drawWalls(walls, t) {
@@ -468,10 +496,17 @@ function drawYouMarker(x, y, r, color) {
   ctx.fillStyle = color; ctx.fill();
 }
 
+// An arrow on the edge for a ball that's off the screen: above it, or past
+// a side (on a map where you can be, and come back)
 function drawOffscreen(x, y, r, color) {
-  if (y + r >= 0) return;
-  const tx = clamp(x, 14, W - 14), s = 9;
-  poly([[tx, 4], [tx - s, 4 + s * 1.4], [tx + s, 4 + s * 1.4]], color);
+  const s = 9;
+  if (y + r < 0) {
+    const tx = clamp(x, 14, W - 14);
+    poly([[tx, 4], [tx - s, 4 + s * 1.4], [tx + s, 4 + s * 1.4]], color);
+  } else if (x + r < 0 || x - r > W) {
+    const left = x < 0, tx = left ? 4 : W - 4, ty = clamp(y, 14, H - 14), d = left ? s * 1.4 : -s * 1.4;
+    poly([[tx, ty], [tx + d, ty - s], [tx + d, ty + s]], color);
+  }
 }
 
 function text(str, size, color, x, y, opts = {}) {
@@ -566,6 +601,7 @@ function blendShape(a, b, t) {
     case "ball": { const [x, y] = pt([a.x, a.y], [b.x, b.y]); return { ...b, x, y }; }
     case "line": return { ...b, a: pt(a.a, b.a), b: pt(a.b, b.b) };
     case "rail": return { ...b, x1: lerp(a.x1, b.x1, t), x2: lerp(a.x2, b.x2, t) };
+    case "spring": return { ...b, a: pt(a.a, b.a), b: pt(a.b, b.b) };
     default: return b;
   }
 }
