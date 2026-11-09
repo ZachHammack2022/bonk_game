@@ -7,6 +7,7 @@ draws the same thing as the desktop game.
 
 Shapes (all in world coordinates, 680 x 480, y down):
     {"t": "edges"}                                   red glow on deadly screen edges
+                                                     ("s": 0: the bottom one only)
     {"t": "rect", "r": [x1, y1, x2, y2], "c": "#rrggbb", "k": kind}
     {"t": "poly", "p": [[x, y] x4], "l": lip, "c": ..., "k": kind}
                                                      rotated slab: its corners, and
@@ -18,7 +19,9 @@ Shapes (all in world coordinates, 680 x 480, y down):
     {"t": "line", "a": [x, y], "b": [x, y], "c", "w"}
     {"t": "pivot", "x", "y"}                         the swing's pivot
     {"t": "rail", "x1", "x2", "y"}
-kind is "solid", "hazard", "pad" or "wood".
+    {"t": "spring", "a": [x, y], "b": [x, y], "c"}   a coil spring between two points
+kind is "solid", "hazard", "pad", "wood" or "toy" (a painted toy block in
+its own colour "c").
 """
 from bonk_game.ui import theme
 
@@ -46,8 +49,18 @@ class ShapeRecorder:
     def __init__(self):
         self.shapes = []
 
-    def danger_edges(self):
-        self.shapes.append({"t": "edges"})
+    def danger_edges(self, sides=True):
+        self.shapes.append({"t": "edges"} if sides else {"t": "edges", "s": 0})
+
+    def oriented_block(self, block, color, kind="solid"):
+        self.shapes.append({"t": "poly", "p": _pts(block.corners()),
+                            "l": _r(min(3, block.h / 3)), "c": hex_color(color), "k": kind})
+
+    def bumper(self, x, y, r, color, kind="solid"):
+        self.shapes.append({"t": "ball", "x": _r(x), "y": _r(y), "r": _r(r), "c": hex_color(color), "k": kind})
+
+    def spring(self, x1, y1, x2, y2, color):
+        self.shapes.append({"t": "spring", "a": [_r(x1), _r(y1)], "b": [_r(x2), _r(y2)], "c": hex_color(color)})
 
     def block(self, x1, y1, x2, y2, color, kind="solid"):
         self.shapes.append({"t": "rect", "r": [_r(x1), _r(y1), _r(x2), _r(y2)], "c": hex_color(color), "k": kind})

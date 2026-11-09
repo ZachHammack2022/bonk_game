@@ -64,15 +64,53 @@ def run_into_the_right_post(m, a, seconds):
     return died, furthest
 
 
-def test_running_into_a_post_shoves_that_half_out_and_you_with_it():
+def test_running_into_a_post_shoves_that_half_out_and_you_ride_it_back():
+    """As in bonk: past the side of the screen and back, still in play."""
     m = make_map("slider")
     a, _ = m.make_players()
-    died, furthest = run_into_the_right_post(m, a, 3)
-    assert died is not None and a.x > m.width  # went out over the right-hand edge
-    assert furthest > 60
+    died, furthest = run_into_the_right_post(m, a, 2)
+    assert died is None
+    assert furthest > 200 and a.x < m.width  # it went a long way out, and brought you back
     assert m.halves[0].offset == 0  # the other half didn't move
-    # ...and the half came back home on its own, and stopped there
+    # ...and the half came home on its own, and stopped there
     assert m.halves[1].offset == pytest.approx(0, abs=0.5) and m.halves[1].vx == pytest.approx(0, abs=0.1)
+    assert abs(a.y - (m.TOP - a.r)) < 3  # standing on the ring again
+
+
+def test_no_deadly_sides_on_the_ring_only_the_bottom():
+    m = make_map("slider")
+    a, _ = m.make_players()
+    for x in (-150, m.width + 150):
+        place(a, x, 200)
+        assert not m.killed(a)  # past a side of the screen: still in play
+    place(a, -150, m.height + 40)
+    assert m.killed(a)  # fallen off the bottom
+    # (other open maps keep theirs)
+    other = make_map("platform")
+    b, _ = other.make_players()
+    place(b, other.width + 150, 200)
+    assert other.killed(b)
+
+
+def test_touching_a_spring_knocks_you_out():
+    """Each half's arm (drawn as a spring) is deadly: out of reach between
+    the bars, but out in the open once its half slides out."""
+    m = make_map("slider")
+    a, _ = m.make_players()
+    right = m.halves[1]
+    right.vx = 20
+    for _ in range(10):
+        m.step()
+    right.vx = 0
+    gap = (m.CENTER + m.HALF_WIDTH + right.blocks[1].x1) / 2  # past the bars, before the corner
+    assert right.blocks[1].x1 - (m.CENTER + m.HALF_WIDTH) > 3 * a.r
+    place(a, gap, m.TOP - 30)
+    died = None
+    for t in range(30):
+        if tick(m, [a])[0]:
+            died = t
+            break
+    assert died is not None and a.y < m.ARM_BOTTOM + a.r  # on the spring, not the bottom of the screen
 
 
 def test_a_half_comes_home_and_only_slides_outward():

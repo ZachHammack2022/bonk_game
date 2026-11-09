@@ -210,17 +210,20 @@ class OpenMap(Map):
         self.steps += 1
         super().step(move)
 
+    # Do the left and right edges of the screen knock you out? (A map
+    # that's wider than the screen in play, like the Sliding Platform ring,
+    # turns them off: you can go past the side and come back.)
+    side_walls = True
+
     def out_of_bounds(self, p):
-        return (p.y - p.r > self.height
-                or p.x + p.r < 0
-                or p.x - p.r > self.width
-                or p.y < self.KILL_TOP)
+        sides = self.side_walls and (p.x + p.r < 0 or p.x - p.r > self.width)
+        return p.y - p.r > self.height or sides or p.y < self.KILL_TOP
 
     def killed(self, p):
         return super().killed(p) or self.out_of_bounds(p)
 
     def render(self, painter):
-        painter.danger_edges()
+        painter.danger_edges(sides=self.side_walls)
         for body in self.bodies:
             body.render(painter)
         for block in self.blocks:
@@ -254,8 +257,10 @@ class SliderMap(OpenMap):
     second bar, each half of the ring has an arm reaching to the middle,
     with a corner block and a leaning post on its outer end. The halves are
     feather-light: run into a post, or ride a corner, and you shove that
-    half out sideways, taking you with it over the edge if you keep going.
-    Let go and it's pulled back home, where it stops against the middle.
+    half out sideways, past the side of the screen, and ride it back as it's
+    pulled home, where it stops against the middle. There are no deadly
+    sides here: you're out if you fall off the bottom, go way too high, or
+    touch a spring (each half's arm, out in the open once it slides out).
 
     Measured from a recording of the map in bonk.io (November 2026), with
     its settings for a half: free moving, density 0.01, no bounce, a springy
@@ -288,6 +293,13 @@ class SliderMap(OpenMap):
     spawn_box = (CENTER - HALF_WIDTH + 14, CENTER + HALF_WIDTH - 14, 200, TOP - 2)
     players = (2, 6)
     n_extra_obs = 4  # each half: how far out, and how fast
+    # A half carries you out past the side of the screen and back, as in
+    # bonk: only falling off the bottom knocks you out here
+    side_walls = False
+    # The toy-box look: wooden bars, a painted block for each half, and a
+    # spring from the middle to each block (what pulls it home, and deadly:
+    # see _half)
+    HALF_COLORS = ((255, 209, 102), (127, 209, 174))  # left, right
 
     def __init__(self):
         super().__init__()
@@ -299,11 +311,15 @@ class SliderMap(OpenMap):
         edge = c + side * (hw + 2)                # the corner's inner edge
         outer = edge + side * self.CORNER_WIDTH  # and its outer one
         bottom = self.BOTTOM_BAR + self.BAR_THICKNESS
-        half = dict(restitution=0.0, friction=0.04)  # (bonk: no bounce; its friction's off for players)
+        # bonk: no bounce, and its friction's off for players ("Fric Players:
+        # No"). It has to be: a half is so light that any grip at all would
+        # let a ball standing on it hold it out, when it should slide home
+        # under you and bring you back with its post
+        half = dict(restitution=0.0, friction=0.0)
         x1, x2 = sorted((inner, edge))
-        # (The halves are all one colour, apart from the bars you stand on,
-        # so you can see what moves)
-        arm = Block(x1, self.ARM_TOP, x2, self.ARM_BOTTOM, self.POST_COLOR, **half)
+        # The arm (drawn as a spring) knocks you out if you touch it. Between
+        # the bars nobody can; when its half slides out, it's out in the open
+        arm = Block(x1, self.ARM_TOP, x2, self.ARM_BOTTOM, self.POST_COLOR, kill=True)
         x1, x2 = sorted((edge, outer))
         corner = Block(x1, self.TOP, x2, bottom, self.POST_COLOR, **half)
         # The post's foot sits a little into the corner so there's no gap
@@ -332,6 +348,27 @@ class SliderMap(OpenMap):
 
     def safe_x_range(self):
         return self.CENTER - self.HALF_WIDTH, self.CENTER + self.HALF_WIDTH
+
+    def render(self, painter):
+        painter.danger_edges(sides=False)
+        mid = (self.ARM_TOP + self.ARM_BOTTOM) / 2
+        # The springs, in the channel between the bars (they stand in for
+        # the arms, which you never touch)
+        for h in self.halves:
+            corner = h.blocks[1]
+            end = corner.x2 if corner.x2 < self.CENTER else corner.x1
+            start = self.CENTER + (-6 if end < self.CENTER else 6)
+            painter.spring(start, mid, end, mid, theme.HAZARD)
+        painter.bumper(self.CENTER, mid, 6, theme.HAZARD, "toy")
+        c, hw, t = self.CENTER, self.HALF_WIDTH, self.BAR_THICKNESS
+        for y in (self.TOP, self.BOTTOM_BAR):
+            painter.block(c - hw, y, c + hw, y + t, theme.WOOD, "wood")
+        for h, color in zip(self.halves, self.HALF_COLORS):
+            _, corner, post = h.blocks
+            painter.oriented_block(post, theme.WOOD, "toy")
+            tip = (post.cx + post.sin * post.h / 2, post.cy - post.cos * post.h / 2)
+            painter.bumper(*tip, 10, color, "toy")
+            painter.block(corner.x1, corner.y1, corner.x2, corner.y2, color, "toy")
 
     def extra_obs(self):
         values = []
