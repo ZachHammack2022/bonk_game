@@ -57,8 +57,21 @@ def empty(id_):
             "name": "", "color": None, "own_color": None, "pattern": "plain",
             "trail": "none", "hat": "none", "ko": "pop", "muted": False, "prefs": {},
             "stats": {"matches": 0, "wins": 0, "kos": 0, "falls": 0, "deaths": 0, "pickups": 0,
-                      "best_hit": 0, "awards": {}, "modes": {}, "maps": {}, "first_at": None, "last_at": None},
+                      "best_hit": 0, "awards": {}, "feats": {}, "modes": {}, "maps": {},
+                      "first_at": None, "last_at": None},
             "history": []}
+
+
+def _clean_counts(d, most=20):
+    """{key: count}: a match's highlights (feats), or their totals."""
+    return {k: _int(d[k]) for k in sorted(d)[:most] if _key(k)} if isinstance(d, dict) else {}
+
+
+def _add_counts(a, b):
+    out = dict(a)
+    for k, v in b.items():
+        out[k] = out.get(k, 0) + v
+    return out
 
 
 def _clean_tally(t):
@@ -79,6 +92,7 @@ def _clean_entry(e):
         out[k] = _int(e.get(k), 0, 1000)
     out["best_hit"] = _num(e.get("best_hit"))
     out["awards"] = [a for a in e.get("awards", []) if _key(a)][:10] if isinstance(e.get("awards"), list) else []
+    out["feats"] = {k: min(v, 1000) for k, v in _clean_counts(e.get("feats")).items() if v}
     return out
 
 
@@ -112,6 +126,7 @@ def validate(p):
     st["best_hit"] = _num(s.get("best_hit"))
     aw = s.get("awards")
     st["awards"] = {k: _int(aw[k]) for k in sorted(aw)[:20] if _key(k)} if isinstance(aw, dict) else {}
+    st["feats"] = _clean_counts(s.get("feats"))
     st["modes"] = _clean_tally(s.get("modes"))
     st["maps"] = _clean_tally(s.get("maps"))
     st["first_at"] = _int(s["first_at"], 0, TIME) if _finite(s.get("first_at")) else None
@@ -145,6 +160,7 @@ def record(p, entry):
              "kos": s["kos"] + e["kos"], "falls": s["falls"] + e["falls"],
              "deaths": s["deaths"] + e["deaths"], "pickups": s["pickups"] + e["pickups"],
              "best_hit": max(s["best_hit"], e["best_hit"]), "awards": awards,
+             "feats": _add_counts(s["feats"], e["feats"]),
              "modes": _tally(s["modes"], e["mode"], e["won"]), "maps": _tally(s["maps"], e["map"], e["won"]),
              "first_at": e["at"] if s["first_at"] is None else min(s["first_at"], e["at"]),
              "last_at": max(s["last_at"] or 0, e["at"])}
@@ -173,6 +189,7 @@ def merge(a, b):
     stats["awards"] = dict(s["awards"])
     for k, v in t["awards"].items():
         stats["awards"][k] = stats["awards"].get(k, 0) + v
+    stats["feats"] = _add_counts(s["feats"], t["feats"])
     stats["modes"] = _add_tallies(s["modes"], t["modes"])
     stats["maps"] = _add_tallies(s["maps"], t["maps"])
     firsts = [x for x in (s["first_at"], t["first_at"]) if x is not None]
