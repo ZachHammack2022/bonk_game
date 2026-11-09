@@ -57,7 +57,7 @@ class player():
         self.jump_speed = 0
         self.push = 2  # sideways and down push from an input (map.push_force)
         self.hover = 0.0  # jump maps: share of gravity "up" cancels in the air
-        self.gravity = 1.5  # added to the vertical speed every step (world.GRAVITY)
+        self.gravity = 0.75  # added to the vertical speed every step (world.GRAVITY)
         # How much of a physics step passes each tick (stepping.TIME_SCALE):
         # scales pushes from inputs and heavy wearing off, as the world scales
         # movement and gravity (world.World.step)

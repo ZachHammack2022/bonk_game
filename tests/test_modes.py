@@ -187,9 +187,10 @@ def test_settings_change_and_are_checked():
 
 
 def test_low_gravity_reaches_the_match_and_prediction():
+    from bonk_game.envs.utils.world import GRAVITY
     m = Match("platform", bots(2), 2, gravity=0.6)
-    assert m.physics()["gravity"] == pytest.approx(0.9)
-    assert all(p.gravity == pytest.approx(0.9) for p in m.env.players)
+    assert m.physics()["gravity"] == pytest.approx(0.6 * GRAVITY)
+    assert all(p.gravity == pytest.approx(0.6 * GRAVITY) for p in m.env.players)
 
 
 def test_round_time_setting():

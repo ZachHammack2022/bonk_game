@@ -67,13 +67,11 @@ class ShapeRecorder:
 
     def swing(self, swing):
         sx, sy = swing.seat_pos()
-        half = swing.seat_width / 2
-        for end_x in (sx - half + 2, sx + half - 2):
-            self.shapes.append({"t": "line", "a": [_r(swing.px), _r(swing.py)],
-                                "b": [_r(end_x), _r(sy - swing.lip_height)],
-                                "c": hex_color(theme.ROPE), "w": 2.5})
-        for x1, y1, x2, y2 in swing.rects():
-            self.block(x1, y1, x2, y2, theme.WOOD, "wood")
+        self.shapes.append({"t": "line", "a": [_r(swing.px), _r(swing.py)], "b": [_r(sx), _r(sy)],
+                            "c": hex_color(theme.ROPE), "w": 2.5})
+        for plank in swing.planks():
+            self.shapes.append({"t": "poly", "p": _pts(plank.corners()), "l": 3, "c": hex_color(theme.WOOD),
+                                "k": "wood"})
         self.shapes.append({"t": "pivot", "x": _r(swing.px), "y": _r(swing.py)})
 
     def rail(self, x1, x2, y):

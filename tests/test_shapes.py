@@ -6,7 +6,7 @@ import pytest
 from bonk_game.envs.utils.bodies import Block, Bumper, OrientedBlock
 from bonk_game.envs.utils.maps import make_map
 from bonk_game.envs.utils.player import player
-from bonk_game.envs.utils.world import World
+from bonk_game.envs.utils.world import LIFT, World
 
 
 def ball(x, y, vx=0.0, vy=0.0):
@@ -80,7 +80,7 @@ def test_angled_launch_pad_fires_along_its_face():
     nx, ny = pad.up
     p = ball(340 + nx * 27, 300 + ny * 27, 0, 3)
     run([pad], p)
-    assert p.x_v * nx + p.y_v * ny == pytest.approx(20, abs=1.5)
+    assert p.x_v * nx + p.y_v * ny == pytest.approx(20 * LIFT, abs=1.5)  # (world.LIFT)
     assert p.x_v < 0 and p.y_v < 0  # up and to the left
 
 
@@ -88,7 +88,7 @@ def test_flat_launch_pad_fires_straight_up():
     pad = Block(300, 400, 380, 410, None, restitution=0.0, launch=25)
     p = ball(340, 378, 2, 4)
     run([pad], p)
-    assert p.y_v == pytest.approx(-25, abs=1.5)
+    assert p.y_v == pytest.approx(-25 * LIFT, abs=1.5)
     assert p.x_v == pytest.approx(2, abs=0.1)
 
 
@@ -107,7 +107,7 @@ def test_launch_bumper_fires_away_from_its_centre():
     p.gravity = 0
     run([b], p)
     assert p.x_v > 0 and p.y_v < 0
-    assert math.hypot(p.x_v, p.y_v) == pytest.approx(15, abs=1)
+    assert math.hypot(p.x_v, p.y_v) == pytest.approx(15 * LIFT, abs=1)
 
 
 def test_kill_bumper_kills():

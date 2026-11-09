@@ -92,6 +92,19 @@ def ball_coming(x, y, vx):
     return others
 
 
+def swinging(theta, omega=0.0, rider=True):
+    """The Sinking Swing's seat swung out to `theta`, moving at `omega`
+    (rad per step), with you sitting in it (rider)."""
+    def others(env):
+        sw = env.map.swing
+        sw.theta, sw.omega = theta, omega
+        if rider:
+            me = env.players[0]
+            sx, sy = sw.seat_pos()
+            me.x, me.y, (me.x_v, me.y_v) = sx + 17 * math.sin(theta), sy + 17 * math.cos(theta), sw.velocity()
+    return others
+
+
 def slider_moving(vx):
     def others(env):
         env.map.platform.vx = vx
@@ -103,7 +116,11 @@ CASES = {
     "run, then reverse": ("platform", [R] * 6 + [L] * 8, put(340, 270), None),
     "jump and land": ("platform", [U] + [NONE] * 24, put(340, 270), None),
     "jump while running": ("platform", [R, U] + [R] * 10, put(280, 270), None),
-    "jump and hover": ("platform", [U] * 30, put(340, 270), None),
+    # (From standing. Dropped onto the platform with "up" held, Box2D and
+    # planck.js can land in different steps, so one jumps a step later; at
+    # some drop heights, before gravity changed too: reconciliation smooths
+    # it out, see js/net.js)
+    "jump and hover": ("platform", [U] * 30, put(340, 279), None),
     "hover on the way down": ("platform", [NONE] * 3 + [U] * 12, put(340, 150), None),
     "heavy then move": ("platform", [H] + [L] * 10, put(380, 270), None),
     "run holding heavy": ("platform", [HR] * 12, put(280, 270), None),
@@ -118,6 +135,11 @@ CASES = {
     "run into another ball": ("platform", [R] * 12, put(260, 279), ball_coming(360, 279, 0)),
     "ride the sliding platform": ("slider", [NONE] * 15, put(340, 279), slider_moving(6)),
     "roll down a ramp": ("ramps", [NONE] * 15, put(200, 250), None),
+    # The swing: a stiff pendulum that tilts as it swings (bodies.Swing)
+    "ride the swing": ("swing", [NONE] * 20, put(340, 290), swinging(0.25)),
+    "ride the swing back": ("swing", [NONE] * 20, put(340, 290), swinging(0.1, -0.03)),
+    "rock the swing from in it": ("swing", [L] * 10 + [R] * 10, put(340, 290), swinging(0.0)),
+    "bump the empty seat": ("swing", [R] * 16, put(285, 228), swinging(0.0, rider=False)),
 }
 
 

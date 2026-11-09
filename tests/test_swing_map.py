@@ -71,15 +71,18 @@ def test_rider_stays_in_a_big_swing():
     assert math.dist((p.x, p.y), m.swing.seat_pos()) < 2 * p.r
 
 
-def test_launch_pad_fires_players_out_of_the_pit():
+def test_the_floor_is_flat_all_the_way_across():
+    """As in bonk.io: one platform, no pit in the middle."""
     m = make_map("swing")
+    assert len(m.floor) == 1
+    f = m.floor[0]
+    assert (f.x1, f.y1, f.x2) == (m.FLOOR_LEFT, m.FLOOR_Y, m.FLOOR_RIGHT)
+    # A ball under the swing stands on it like anywhere else
     p, _ = m.make_players()
-    place(p, (m.HOLE_LEFT + m.HOLE_RIGHT) / 2, m.FLOOR_Y + 30)
-    lowest_y = p.y
-    for _ in range(40):
+    place(p, m.swing.seat_pos()[0], m.FLOOR_Y - p.r - 1)
+    for _ in range(10):
         tick(m, [p])
-        lowest_y = min(lowest_y, p.y)
-    assert lowest_y < m.FLOOR_Y - 80
+    assert p.grounded and abs(p.y - (m.FLOOR_Y - p.r)) < 2
 
 
 def test_heavy_players_kick_the_swing_harder():
@@ -93,9 +96,11 @@ def test_heavy_players_kick_the_swing_harder():
         tick(m, [p])
         return m.swing.omega
 
+    # (The seat is light, a quarter of a ball, as bonk's is: any ball
+    # shoves it most of the way to its own speed, a heavy one a bit more)
     light, heavy = kick(1), kick(5)
     assert light > 0
-    assert heavy > 2 * light
+    assert heavy > 1.1 * light
 
 
 def test_up_is_a_jump_not_flight():
@@ -192,4 +197,4 @@ def test_agent_up_actions_jump_on_jump_maps():
         tick(m, [p])
     assert p.grounded
     arena.apply_action(p, 3)  # up
-    assert p.y_v == -m.jump_speed
+    assert p.y_v == -p.jump_speed  # (the map's jump_speed times world.LIFT)

@@ -66,11 +66,13 @@ def test_slider_moves_when_pushed_and_stays_on_its_rail():
     m = make_map("slider")
     a, _ = m.make_players()
     place(a, 260, m.TOP - a.r - 1)
+    furthest = 0
     for _ in range(200):
         a.move_right(2)
         tick(m, [a])
         assert abs(m.platform.offset) <= m.TRAVEL + 0.5  # (Box2D's joint limits give a hair)
-    assert m.platform.offset > 50  # player shoved it right
+        furthest = max(furthest, m.platform.offset)
+    assert furthest > 50  # player shoved it right (then may fly off over the post)
 
 
 def test_heavy_hits_push_the_slider_harder():

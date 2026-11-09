@@ -163,7 +163,7 @@ def _body(spec, where):
         _check_keys(spec, {"type", "pivot", "length", "seat_width"}, where)
         px, py = _numbers(_get(spec, "pivot", where), 2, f"{where}.pivot")
         length = _number(_get(spec, "length", where), f"{where}.length", 40)
-        seat = _number(spec.get("seat_width", 96), f"{where}.seat_width", 50)
+        seat = _number(spec.get("seat_width", Swing.DEFAULT_WIDTH), f"{where}.seat_width", 60, 150)
         return lambda: Swing(pivot_x=px, pivot_y=py, length=length, seat_width=seat)
 
     _check_keys(spec, {"type", "pieces", "travel", "mass", "rail"}, where)

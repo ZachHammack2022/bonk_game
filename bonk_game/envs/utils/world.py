@@ -32,7 +32,17 @@ STEP_SECONDS = 1 / 30      # one physics step at normal speed (time_scale 1)
 SUBSTEPS = 4               # Box2D steps per physics step
 VELOCITY_ITERATIONS = 8
 POSITION_ITERATIONS = 3
-GRAVITY = 1.5              # px per step per step: what a ball feels with no power-ups
+# px per step per step: what a ball feels with no power-ups. Measured from
+# bonk.io (a November 2026 recording of the Sinking Swing rebuilt there: the
+# ball's fall and the swing's period agree): about 380 px/s^2 at the default
+# speed, with balls the size of ours. It used to be 1.5, twice as strong.
+GRAVITY = 0.75
+# The maps' jump speeds, launch pads and bumpers were made for gravity 1.5.
+# They leave at LIFT times their speed, so they reach the same heights as
+# they did (a height goes with speed^2 / gravity): the same places are in
+# reach, the arcs are just floatier.
+TUNED_GRAVITY = 1.5
+LIFT = math.sqrt(GRAVITY / TUNED_GRAVITY)
 # A surface's "friction" (0-1, from the maps) does two things:
 # - Box2D's contact friction is friction * FRICTION_SCALE: what lets a ball
 #   ride the swing or shove the sliding platform by rolling on it;
@@ -83,7 +93,7 @@ def material(m):
     if m.kill:
         out["k"] = 1
     if m.launch is not None:
-        out["l"] = round(m.launch, 3)
+        out["l"] = round(m.launch * LIFT, 3)
         out["u"] = None if m.up is None else [round(v, 4) for v in m.up]
     return out
 
@@ -361,7 +371,9 @@ class World:
             p.try_jump(landing=ball.fall)
         cap = p.v_range * p.speed_mult
         p.x_v = max(-cap, min(cap, p.x_v))
-        p.y_v = max(-cap, min(cap, p.y_v))
+        # (Going up, LIFT of it: nothing climbs higher than it did before
+        # gravity was halved, a pogo bounce or a pad included)
+        p.y_v = max(-cap * LIFT, min(cap, p.y_v))
         if p.clamp_bottom and p.y > p.bottom - p.r:
             p.y = p.bottom - p.r
         ball.body.linearVelocity = (speed_to_b2(p.x_v), speed_to_b2(p.y_v))
@@ -390,9 +402,10 @@ def grip(p, surface, normal, body, dt):
 
 
 def launch(p, surface, nx, ny):
-    """Fire the ball off a launch pad or bumper at `surface.launch` (px per
-    step, relative to the surface). Pads fire out of their top face, only
-    when landed on; bumpers straight away from where they were hit."""
+    """Fire the ball off a launch pad or bumper at `surface.launch` times
+    LIFT (px per step, relative to the surface). Pads fire out of their top
+    face, only when landed on; bumpers straight away from where they were hit."""
+    speed = surface.launch * LIFT
     up = surface.up
     if up is not None:
         if nx * up[0] + ny * up[1] <= 0.5:
@@ -400,9 +413,9 @@ def launch(p, surface, nx, ny):
         nx, ny = up
     svx, svy = getattr(surface, "vx", 0.0), getattr(surface, "vy", 0.0)
     vn = (p.x_v - svx) * nx + (p.y_v - svy) * ny
-    if vn < surface.launch:
-        p.x_v += (surface.launch - vn) * nx
-        p.y_v += (surface.launch - vn) * ny
+    if vn < speed:
+        p.x_v += (speed - vn) * nx
+        p.y_v += (speed - vn) * ny
 
 
 # --- pieces ---------------------------------------------------------------------

@@ -36,8 +36,10 @@ def action_for(dx, dy, heavy, rng=random):
 LEVELS = {
     "easy": dict(reaction=0.5, aim_error=30, heavy_chance=0.3, heavy_closing=4.0,
                  caution=0.55, hop=0.01, defend=False),
+    # (Hops less than it did: since gravity was halved a hop keeps you in the
+    # air longer, unable to brake, and at 0.04 medium did no better than easy)
     "medium": dict(reaction=0.7, aim_error=14, heavy_chance=0.55, heavy_closing=3.0,
-                   caution=0.8, hop=0.04, defend=False),
+                   caution=0.8, hop=0.02, defend=False),
     # The original bot, plus bracing for heavy hits
     "hard": dict(reaction=0.85, aim_error=0, heavy_chance=1.0, heavy_closing=2.5,
                  caution=1.0, hop=0.04, defend=True),
@@ -168,10 +170,12 @@ class Bot:
     def go_to_swing(self, m):
         me = self.me
         sx, sy = m.swing.seat_pos()
-        in_seat = abs(me.x - sx) < m.swing.seat_width / 2 and sy - 2 * me.r < me.y < sy + 2
+        # (Sitting in the V of the seat, the ball's a little below its middle)
+        in_seat = math.hypot(me.x - sx, me.y - sy) < 1.5 * me.r
         if in_seat:
-            xdir = 0 if abs(me.x - sx) < 6 else (1 if sx > me.x else -1)
-            return self._act(xdir, 0, False)
+            # Sit still: pressing down only presses into the seat (there's
+            # no "do nothing", and left or right would pump the swing)
+            return self._act(0, 1, False)
         approach = sx - 110 if me.x < sx else sx + 110
         if me.y > sy and me.grounded:
             if abs(me.x - approach) < 15:
