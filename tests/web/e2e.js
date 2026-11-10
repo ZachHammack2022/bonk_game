@@ -101,13 +101,13 @@ function check(cond, what) {
     await host.click("#find");
     await host.waitForSelector("#browse:not(.hidden)");
     await host.click("#new-game");
-    await host.waitForSelector("#new-dialog:not(.hidden)");
     const hostName = await host.inputValue("#name");
-    check((await host.inputValue("#new-name")) === `${hostName}'s room`, "a new room is named after you, to start with");
-    await shot(host, "new-game");
-    check(await host.isVisible('#new-privacy [data-private="1"].on'), "new games are private unless you pick public");
-    await host.click("#new-create");
     await host.waitForSelector("#lobby:not(.hidden)");
+    check(!(await host.$("#new-dialog")) && /\/r\/[A-Z]{4}$/.test(host.url()) && await host.isVisible('#privacy [data-private="0"].on') &&
+      (await host.inputValue("#room-name-input")) === `${hostName}'s room`,
+      "New game goes straight to the lobby: a public room named after you");
+    await host.click('#privacy [data-private="1"]');
+    await host.waitForFunction(() => /\?pw=/.test(location.search));
     const url = host.url();
     const password = new URL(url).searchParams.get("pw");
     check(/\/r\/[A-Z]{4}\?pw=[a-z0-9]{6}$/.test(url), "a private game's link has its password in it");
@@ -255,7 +255,8 @@ function check(cond, what) {
     const res = await host.evaluate(() => bonkDebug.app.results);
     check(res.stats.length === res.slots.length && Array.isArray(res.awards), "results come with stats and awards");
     const shown = await host.$$eval("#awards li", (els) => els.length);
-    check(shown === res.awards.length, `the awards are on the results screen (${shown})`);
+    const mine = await host.evaluate((r) => r.awards.filter((a) => a.slots.some((i) => r.slots[i].id === me.id)).length, res);
+    check(shown === mine, `only your own awards are on the results screen (${shown} of ${res.awards.length})`);
 
     // Playtest reports go by themselves (sent when the next match starts):
     // nobody is asked how the match felt
@@ -480,8 +481,6 @@ function check(cond, what) {
     await shot(q1, "browse-empty");
     check(!(await q1.$("#quick")) && !(await q1.$("#empty-quick")), "there are no play-with-bots buttons: you make a public or private game");
     await q1.click("#new-game");
-    await q1.click('#new-privacy [data-private="0"]');
-    await q1.click("#new-create");
     await q1.waitForSelector("#lobby:not(.hidden)");
     check(/\/r\/[A-Z]{4}$/.test(q1.url()) && await q1.isVisible('#privacy [data-private="0"].on'), "a public game has no password");
     await q1.click("#open-game-settings");
@@ -592,8 +591,6 @@ function check(cond, what) {
     await strict.click("#find");
     await strict.waitForSelector("#browse:not(.hidden)");
     await strict.click("#new-game");
-    await strict.click('#new-privacy [data-private="0"]');
-    await strict.click("#new-create");
     await strict.waitForSelector("#lobby:not(.hidden)");
     await strict.click("#add-bot");
     await strict.waitForSelector("#seats .seat >> nth=1");
@@ -613,7 +610,6 @@ function check(cond, what) {
       await page.click("#find");
       await page.waitForSelector("#browse:not(.hidden)");
       await page.click("#new-game");
-      await page.click("#new-create");
       await page.waitForSelector("#lobby:not(.hidden)");
       await page.evaluate(() => send({ type: "settings", map: "platform", mode: "knockouts", first_to: 50,
         bots: ["bot:hard", "bot:hard", "bot:hard"] }));

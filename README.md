@@ -29,7 +29,7 @@ Open the page, pick a name and press **Play**. You'll see every game going: join
 ### Getting into a game
 
 - **Play** opens the game list. Search by room, host, player or 4-letter code (Enter joins), filter by mode or map.
-- **New game** makes a room: name it, and make it **public** (anyone can join) or **private** (listed with a lock; joining needs the password, which the server makes up). **Copy invite link** gives a link with the password in it, so friends get straight in.
+- **New game** takes you straight to a new **public** room (anyone can join), named after you. In the lobby the host can rename it or make it **private** (listed with a lock; joining needs the password, which the server makes up). **Copy invite link** gives a link with the password in it, so friends get straight in.
 - **The host** (★, whoever made the room) picks the mode, map and settings, fills open seats with bots (Easy, Medium or Hard), and presses **Start match**. They can rename the room, switch it between public and private, remove people (they can't come back), and **End match** at any time (say, to change the map without waiting for bots to finish).
 - **Joining mid-match**: you take over a bot's seat, keeping its colour and score (straight away in Lives, Knockouts and Crown; at the next round otherwise), or watch until the next match.
 - **← Lobby** during a match steps out while a bot plays for you; **← Leave** leaves the room. If you refresh or lose connection, you get your seat back; after 30 seconds away you leave.

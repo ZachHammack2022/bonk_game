@@ -58,8 +58,6 @@ async function startMatch(page, base, map) {
   await page.click("#find");
   await page.waitForSelector("#browse:not(.hidden)");
   await page.click("#new-game");
-  await page.waitForSelector("#new-dialog:not(.hidden)");
-  await page.click("#new-create");
   await page.waitForSelector("#lobby:not(.hidden)");
   await page.evaluate((map) => {
     send({ type: "settings", map, mode: "knockouts", first_to: 5, bots: ["bot:easy", "bot:easy", "bot:easy"] });
