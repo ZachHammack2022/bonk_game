@@ -22,7 +22,7 @@ made up when the room is) needs it to get in: the invite link carries it,
 and people already in the room don't need it again to reconnect. Quick play
 (RoomManager.quick_play) sends you to the open room (no password) with the
 most people and space for you, or makes one with bots that starts by
-itself ("quick"). Someone who joins during a match
+itself ("quick"); its bots step aside as people come (lobby.QUICK_FILL). Someone who joins during a match
 takes over a bot's seat: straight away in modes where balls respawn, at
 the next round in the others. With no bot to take over, they watch and
 play in the next match.
@@ -690,7 +690,7 @@ class Room:
     # --- matches ------------------------------------------------------------
     def seats(self):
         """Who would play if the match started now: (member tokens, bot kinds)."""
-        return lobby.seats(self.settings, [m.token for m in self.connected])
+        return lobby.seats(self.settings, [m.token for m in self.connected], self._fill())
 
     def teams_for(self, humans, n_bots):
         return lobby.teams_for(self.settings["mode"], [self.members[t].team for t in humans], n_bots)
@@ -700,7 +700,11 @@ class Room:
 
     def lineup(self):
         """The seats as they'd be if the match started now, for the lobby."""
-        return lobby.lineup(self.settings, self.members, [m.token for m in self.connected])
+        return lobby.lineup(self.settings, self.members, [m.token for m in self.connected], self._fill())
+
+    def _fill(self):
+        """Quick play rooms: how many players bots make it up to (lobby.QUICK_FILL)."""
+        return lobby.QUICK_FILL if self.quick else None
 
     async def start(self):
         if self.match is not None:

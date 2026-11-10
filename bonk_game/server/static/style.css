@@ -283,6 +283,7 @@ body:has(.overlay:not(.hidden)) .screen .logo-ball { animation-play-state: pause
 .home-card { gap: 16px; }
 .quick-help { margin: 8px 0 0; text-align: center; }
 button.big { width: 100%; min-height: 56px; font-size: 19px; }
+button.big.secondary-big { min-height: 46px; font-size: 16px; margin-top: 10px; }
 #join-form .quick-help .link-button { min-height: 0; padding: 0 2px; font-size: inherit; color: var(--dim); text-decoration: underline; }
 /* You: your ball (a button: click to change it) beside your name */
 .you { display: flex; align-items: flex-end; gap: 14px; }

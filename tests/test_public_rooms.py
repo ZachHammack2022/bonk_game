@@ -136,6 +136,20 @@ def test_quick_play_rooms_start_by_themselves(monkeypatch):
     run(go())
 
 
+def test_quick_play_bots_step_aside_as_people_come():
+    async def go():
+        room, _ = RoomManager().quick_play()
+        for k, t in enumerate("abcde"):
+            await room.join(t, t, Inbox())
+            humans, bots = room.seats()
+            assert len(humans) == k + 1 and len(bots) == max(0, lobby.QUICK_FILL - (k + 1))
+        assert [s["kind"] for s in room.lineup()] == ["human"] * 5
+        room.quick = False  # (an ordinary room keeps every bot the host added)
+        assert len(room.seats()[1]) == 1
+        await room.stop()
+    run(go())
+
+
 def test_someone_joining_a_respawn_match_takes_over_a_bot_straight_away():
     async def go():
         room = Room("ABCD")

@@ -259,6 +259,24 @@ async function newGame(button) {
   }
 }
 $("new-game").addEventListener("click", () => newGame($("new-game")));
+
+// Quick play: straight into the open game with the most people, or a new
+// one with bots that starts by itself (the server picks: /api/quickplay)
+async function quickPlay(button) {
+  $("name").dispatchEvent(new Event("change"));
+  if (button) button.disabled = true;
+  try {
+    const r = await fetch("/api/quickplay", { method: "POST" });
+    const body = await r.json();
+    if (!r.ok) toast(body.error || "Couldn't find a game.", true);
+    else openRoom(body.room, true);
+  } catch (e) {
+    toast("Couldn't find a game. Is the server running?", true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+for (const id of ["quick-play", "browse-quick", "empty-quick"]) $(id).addEventListener("click", () => quickPlay($(id)));
 $("empty-public").addEventListener("click", () => newGame($("new-game")));
 
 // ---------------------------------------------------------------------------

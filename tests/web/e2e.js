@@ -95,8 +95,8 @@ function check(cond, what) {
     await host.keyboard.press("KeyH");
     await host.keyboard.press("Escape");
     check(await host.evaluate(() => JSON.parse(localStorage.getItem("bonk.profile")).prefs.keys.heavy === "KeyH"), "keys can be rebound in settings");
-    check(!(await host.$("#create")) && !(await host.isVisible("#join-form")) && await host.isVisible("#find"),
-      "the start page has one way in: Play");
+    check(!(await host.$("#create")) && !(await host.isVisible("#join-form")) && await host.isVisible("#quick-play") &&
+      await host.isVisible("#find"), "the start page has two ways in: Quick play, or Find a game");
     await shot(host, "home");
     await host.click("#find");
     await host.waitForSelector("#browse:not(.hidden)");
@@ -489,7 +489,7 @@ function check(cond, what) {
     await q1.waitForSelector("#browse:not(.hidden)");
     check(q1.url().endsWith("/play"), "Find a game opens the game browser at /play");
     await shot(q1, "browse-empty");
-    check(!(await q1.$("#quick")) && !(await q1.$("#empty-quick")), "there are no play-with-bots buttons: you make a public or private game");
+    check(await q1.isVisible("#browse-quick") && !!(await q1.$("#empty-quick")), "the game browser offers Quick play too (and so does its empty list)");
     await q1.click("#new-game");
     await q1.waitForSelector("#lobby:not(.hidden)");
     check(/\/r\/[A-Z]{4}$/.test(q1.url()) && await q1.isVisible('#privacy [data-private="0"].on'), "a public game has no password");
@@ -574,6 +574,27 @@ function check(cond, what) {
     check(await q1.isHidden("#results") && await q1.isEnabled("#start") &&
       (await q1.textContent("#chat-log")).includes("ended the match"), "the host can end a match early: back to the lobby, no results");
     await q1.close(); await q2.close();
+
+    // Quick play (nobody's in an open game now): a new room with 3 bots,
+    // which starts by itself; the next person in takes over a bot
+    const qa = await open("qa");
+    await qa.goto(base + "/");
+    await qa.fill("#name", "Ada");
+    await qa.click("#quick-play");
+    await qa.waitForSelector("#game:not(.hidden)", { timeout: 8000 });
+    const qaSlots = await qa.evaluate(() => app.match.slots.map((x) => x.kind));
+    check(qaSlots.length === 4 && qaSlots.filter((k) => k === "human").length === 1,
+      `Quick play starts a match by itself, you and 3 bots (${qaSlots.join(", ")})`);
+    const qb = await open("qb");
+    await qb.goto(base + "/");
+    await qb.fill("#name", "Ben");
+    await qb.click("#quick-play");
+    await qb.waitForSelector("#game:not(.hidden)", { timeout: 8000 });
+    await qb.waitForFunction(() => app.match.slots.some((x) => x.id === me.id), null, { timeout: 5000 });
+    check((await qb.evaluate(() => app.room)) === (await qa.evaluate(() => app.room)) &&
+      (await qb.evaluate(() => app.match.slots.length)) === 4,
+      "the next Quick player joins that game, in a bot's seat");
+    await qa.close(); await qb.close();
 
     // Saved before profiles: the old settings come along
     const old = await open("old");
