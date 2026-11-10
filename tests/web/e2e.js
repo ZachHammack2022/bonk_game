@@ -189,6 +189,12 @@ function check(cond, what) {
     check((await host.textContent("#chat-log")).includes("Bob joined"), "lobby chat reaches everyone, filtered, with who joined");
     await shot(host, "lobby");
     check(await host.evaluate(() => music.playing) === "lobby", "the lobby plays Cozy Lobby (music.js)");
+    check(await host.evaluate(() => {
+      try {
+        for (const id of ["arcade", "lobby", "parade", "sudden", "lobby"]) music.want(id);  // (each mid-fade)
+        return music.playing === "lobby";
+      } catch (e) { return String(e); }
+    }) === true, "switching tracks halfway through a fade is fine");
 
     await host.click("#start");
     await host.waitForSelector("#game:not(.hidden)");
