@@ -135,11 +135,15 @@ function check(cond, what) {
     check(true, "the guest shows up in the host's lobby");
     check(await guest.isHidden("#start"), "only the host sees Start");
 
-    // The guest picks green
+    // The guest picks green: their ball opens their profile (the same
+    // editor as on the start page), not a picker in the lobby
     await guest.click("#seats .seat.you .ball");
-    await guest.click(".picker .swatch[title=Green]");
+    await guest.waitForSelector("#me:not(.hidden) #profile-colors");
+    check(!(await guest.$("#seats .picker")), "your ball in the lobby opens your profile, not a picker in the seats");
+    await guest.click("#profile-colors .swatch[title=Green]");
     await host.waitForFunction(() => bonkDebug.app.lobby.seats[1].color === 5);
     check(true, "picking a colour shows up for everyone");
+    await guest.click("#me-close");
 
     // Host sets up a quick match (in the Game settings dialog)
     await host.click("#open-game-settings");
