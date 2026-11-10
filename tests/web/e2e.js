@@ -443,8 +443,9 @@ function check(cond, what) {
     await host.goto(base + "/");
     await host.click("#open-profile");
     await host.click("#me-tabs [data-tab=stats]");
-    check((await host.$$eval("#stats .stat-history li", (els) => els.length)) === 2 && (await host.isVisible(".stat-tiles")),
-      "the stats screen shows your totals and recent matches");
+    check(await host.isVisible(".stat-tiles") && await host.isVisible("#stats .badge-grid")
+      && !(await host.$("#stats .stat-history")),
+      "the stats screen shows your totals and your badges (no match list)");
     await shot(host, "stats");
     check(await host.isHidden("#download-data"), "guests have no data download (their profile is in the browser)");
     const fresh = await open("fresh");
