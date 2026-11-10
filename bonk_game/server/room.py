@@ -182,7 +182,8 @@ class Room:
         self.waiting = []          # tokens waiting to take over a bot's seat in this match
         self.match_accounts = []   # slot -> account of whoever plays it (for match history)
         self.rated_accounts = []   # slot -> account of who played it from the start (rated)
-        self.ratings = None        # signed-in players' ratings (accounts.Accounts: rating, rate)
+        self.ratings = None        # signed-in players' ratings and friends (accounts.Accounts)
+        self.tell_account = None   # async (account, msg): tell them wherever they are (RoomManager)
         self.recent = collections.deque(maxlen=moderation.RECENT_KEPT)  # for reports
         self.chat = collections.deque(maxlen=CHAT_KEPT)  # the latest chat lines
         self.created = time.monotonic()
@@ -369,7 +370,8 @@ class Room:
             "title": lobby.room_title(self.settings, self.members[self.host].name if self.host in self.members else None),
             "host": self.pid(self.host),
             "members": [{"id": m.pid, "name": m.name, "connected": m.connected,
-                         **({"rating": m.rating} if m.rating else {})}
+                         **({"rating": m.rating} if m.rating else {}),
+                         **({"signed_in": True} if m.account else {})}  # (friends need it)
                         for m in self.members.values()],
             "settings": self.settings,
             "bot_options": self.bot_options(),
@@ -445,6 +447,9 @@ class Room:
             return
         if kind == "report_player":
             await self.report_player(token, msg)
+            return
+        if kind == "befriend":
+            await self.befriend(token, msg)
             return
         if kind == "color":
             problem = self.pick_color(token, msg.get("color"))
@@ -545,6 +550,45 @@ class Room:
         moderation.REPORTS.add(moderation.make_report(self.code, m, other, msg.get("reason"),
                                                       msg.get("note"), self.recent))
         await m.send({"type": "notice", "message": f"Thanks. Your report about {other.name} was sent."})
+
+    async def befriend(self, token, msg):
+        """Someone asks a player in the room to be friends ({"id": their
+        public id}). Both need to be signed in. If the other already asked,
+        they're friends now (accounts.befriend). The other hears about it
+        wherever they are on the server (RoomManager.tell_account)."""
+        m = self.members[token]
+        target = self.token_of(msg.get("id"))
+        if target is None or target == token:
+            await self.error(token, "That player isn't in the room any more.")
+            return
+        other = self.members[target]
+        if self.ratings is None:
+            await self.error(token, "Friends need sign-in, and it's off on this server.")
+            return
+        if m.account is None:
+            await self.error(token, "Sign in to add friends.")
+            return
+        if other.account is None:
+            await self.error(token, f"{other.name} isn't signed in, so they can't have friends yet.")
+            return
+        try:
+            result = self.ratings.befriend(m.account, other.account)
+        except Exception as e:
+            metrics.event("error", logging.ERROR, room=self.code, where="befriend", error=repr(e))
+            await self.error(token, "Couldn't do that just now. Try again in a moment.")
+            return
+        self.note("befriend", who=m.name, to=other.name, result=result)
+        said = {"friends": f"You and {other.name} are friends now!",
+                "sent": f"Friend request sent to {other.name}.",
+                "already": f"You've already asked {other.name}, or you're friends.",
+                "full": "You have too many friends or requests waiting.",
+                "no": "You can't add them."}[result]
+        await m.send({"type": "notice", "message": said, "friends": result})
+        if result in ("friends", "sent") and self.tell_account is not None:
+            await self.tell_account(other.account, {
+                "type": "notice", "friends": "request" if result == "sent" else "friends",
+                "message": f"{m.name} wants to be friends: say yes in your profile's Friends tab." if result == "sent"
+                else f"You and {m.name} are friends now!"})
 
     def playtest_report(self, token, kind, msg):
         """A browser says what it saw during a match, or that it hit an error."""
@@ -1020,6 +1064,7 @@ class RoomManager:
             raise ValueError(f"bad room code {code!r}")
         self.rooms[code] = Room(code, self.agents, self.recorder, self.profile_of)
         self.rooms[code].ratings = self.ratings
+        self.rooms[code].tell_account = self.tell_account
         metrics.STATS.rooms_created += 1
         metrics.event("room_created", room=code, rooms=len(self.rooms))
         return self.rooms[code]
@@ -1065,6 +1110,30 @@ class RoomManager:
         return {"rooms": listed,
                 "online": sum(len(r.connected) for r in live),
                 "more": max(0, len(live) - len(listed))}
+
+    async def tell_account(self, account, msg):
+        """Send a message to everyone connected as this account, in any room."""
+        for r in list(self.rooms.values()):
+            for m in r.connected:
+                if m.account == account:
+                    await m.send(msg)
+
+    def where(self, accounts):
+        """Where these accounts are playing: {account: room info} for those
+        connected in a room (their friends list shows it). A private room
+        says so, never its password."""
+        out = {}
+        for r in self.rooms.values():
+            if r.closing:
+                continue
+            for m in r.connected:
+                if m.account in accounts and m.account not in out:
+                    host = r.members.get(r.host)
+                    out[m.account] = {"room": r.code, "title": lobby.room_title(r.settings, host.name if host else None),
+                                      "locked": bool(r.settings.get("password")),
+                                      "playing": r.match is not None, "map": r.settings["map"],
+                                      "mode": r.settings["mode"]}
+        return out
 
     def quick_play(self, allow_new=lambda: True):
         """Quick play: the open room (no password) with the most people that still has

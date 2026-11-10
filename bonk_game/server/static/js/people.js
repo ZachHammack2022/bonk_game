@@ -294,7 +294,7 @@ function personButton(id, name) {
   const b = document.createElement("button");
   b.className = "person-btn icon-button";
   b.innerHTML = icon("more");
-  b.title = `${name}: mute or report`;
+  b.title = `${name}: add as a friend, mute or report`;
   b.setAttribute("aria-label", b.title);
   b.addEventListener("click", () => openPerson(id, name));
   return b;
@@ -321,6 +321,10 @@ function openPerson(id, name) {
   person = { id, name };
   $("person-name").textContent = name;
   $("person-mute").checked = mutes.has(id);
+  // Add friend: when you're both signed in (friends.js)
+  const them = app.lobby ? app.lobby.members.find((m) => m.id === id) : null;
+  $("person-befriend").classList.toggle("hidden", !(profileStore.user && them && them.signed_in));
+  $("person-befriend").disabled = false;
   $("report-note").value = "";
   $("report-send").disabled = false;
   $("report-send").textContent = "Send report";
@@ -338,6 +342,11 @@ $("person-mute").addEventListener("change", () => {
   renderPeople();
   chat.render();
   if (app.results && !$("results").classList.contains("hidden")) showResults(app.results, true);
+});
+$("person-befriend").addEventListener("click", () => {
+  if (!person) return;
+  send({ type: "befriend", id: person.id });
+  $("person-befriend").disabled = true;
 });
 $("report-send").addEventListener("click", () => {
   if (!person) return;

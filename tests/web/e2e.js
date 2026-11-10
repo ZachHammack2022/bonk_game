@@ -363,6 +363,8 @@ function check(cond, what) {
     await phone.waitForFunction(() => document.querySelector("#board-summary").textContent.includes("Sign-in is off"));
     check(await phone.isVisible("#leaderboard") && await phone.isHidden("#home"), "the leaderboard page has its own address");
     check(!(await phone.$("#board-you")), "the leaderboard is just the table: no card about you above it");
+    check(await phone.isHidden("#open-friends") && await phone.isHidden('#me-tabs [data-tab="friends"]'),
+      "with no sign-in on this server, there's no Friends button or tab");
     await phone.click("#board-back");
     check(await phone.isVisible("#home"), "and Back goes home");
     await phone.goto(base + "/");

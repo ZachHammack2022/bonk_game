@@ -159,6 +159,7 @@ function show(screen) {
   for (const id of ["home", "browse", "leaderboard", "lobby", "game"]) $(id).classList.toggle("hidden", id !== screen);
   if (screen !== "game" && typeof music !== "undefined") music.want("lobby");  // (music.js: matches pick their own)
   watchPublic(screen === "home" || screen === "browse");  // (people.js)
+  if (typeof friends !== "undefined") friends.watch(screen === "home" || screen === "browse");
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +561,7 @@ function onMessage(msg) {
       break;
     case "notice":
       toast(msg.message);
+      if (msg.friends) friends.refresh();  // (friends.js: a request, or a new friend)
       break;
     case "restart":
       // The server is going down for an update; we'll reconnect to the new one

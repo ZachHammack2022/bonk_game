@@ -87,6 +87,10 @@ Hold **heavy** for as long as you like: you're 5x heavier, so you hit harder and
 
 It's all kept in your browser, no sign-up needed. **Sign in with Google** (bottom of the profile) to keep it on the server, the same on every device; **Download my data** and **Delete account** are in Stats. `/privacy` and `/terms` say what's kept.
 
+### Friends
+
+Signed-in players can be friends. In a room, open someone's card (⋯ next to their name) and press **Add friend**; they're told wherever they are on the server, and say yes in their profile's **Friends** tab (also on the start page, with a count of requests waiting). Your friends list shows who's playing now and where, with a **Join** button (a private game still asks for its password). Remove a friend, turn down a request or take yours back from the same tab. Kept in `accounts.py` (tables `friends` and `friend_requests`), served by `GET /api/friends`; up to 200 friends and 50 requests waiting.
+
 ### Chat and safety
 
 Everyone in a room can chat (in the lobby, and over the match for a few seconds). Names and chat go through a word filter: an offensive name becomes "Player 42", and offensive words in chat are starred out. Click **⋯** next to anyone to **mute** them (on your screen only) or **report** them. It catches the common cases, not everything.

@@ -38,6 +38,7 @@ const account = {
       // Signed out (here or elsewhere, or the sign-in ran out): back to the guest profile
       if (had) { store.remove(profileStore.ACCOUNT_KEY); location.reload(); return; }
       this.render();
+      friends.refresh();  // (friends.js: shows Friends if this server has sign-in)
       return;
     }
     if (!had || had.id !== me.user.id) {
@@ -71,6 +72,7 @@ const account = {
       renderHomeBall();
     }
     this.render();
+    friends.refresh();  // (friends.js: now we know who you are)
   },
 
   // Send name, ball and settings changes (a moment later: typing a name

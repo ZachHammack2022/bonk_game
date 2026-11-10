@@ -13,6 +13,8 @@ Routes:
     GET  /api/public     the game browser's list: every room (name, whether it
                          has a password, never the password), people online
     POST /api/quickplay  a public room to join -> {"room": "ABCD"} (room.py)
+    GET  /api/friends    your friends (and where they're playing) and friend requests
+    POST /api/friends/{id}    say yes to a friend request; DELETE: unfriend, or turn one down
     GET  /api/rooms/<code>   {"room": "ABCD", "players": 3} or 404
     GET  /leaderboard    the leaderboard (the page itself); /api/leaderboard is
                          its data: the best signed-in players by rating, and
@@ -350,6 +352,54 @@ async def quick_play(request):
     return web.json_response({"room": room.code, "new": new})
 
 
+def _friends_user(request, change=False):
+    """(accounts, the signed-in user) for the friends API, or an error."""
+    accounts = request.app.get(auth.ACCOUNTS)
+    if accounts is None:
+        raise web.HTTPNotFound(text="Sign-in is off on this server")
+    if change and not auth.same_origin(request):
+        raise web.HTTPForbidden(text="Cross-site request")
+    user = auth.user_for(request)
+    if user is None:
+        raise web.HTTPUnauthorized(text="Not signed in")
+    return accounts, user
+
+
+async def friends_list(request):
+    """Your friends ({id, name, ball, online, where}: where they're playing,
+    if they are), and the friend requests waiting either way."""
+    accounts, user = _friends_user(request)
+    out = accounts.friends(user["id"])
+    where = request.app[ROOMS].where({f["id"] for f in out["friends"]})
+    for f in out["friends"]:
+        f["where"] = where.get(f["id"])
+        f["online"] = f["where"] is not None
+    out["friends"].sort(key=lambda f: (not f["online"], f["name"].lower()))
+    return web.json_response(out, headers={"Cache-Control": "no-store"})
+
+
+async def friend_accept(request):
+    """Say yes to a friend request (only one that's waiting for you: a new
+    request is made in a room, from the person's card)."""
+    accounts, user = _friends_user(request, change=True)
+    other = request.match_info["id"]
+    if not any(r["id"] == other for r in accounts.friends(user["id"])["incoming"]):
+        raise web.HTTPNotFound(text="No such friend request")
+    result = accounts.befriend(user["id"], other)
+    if result == "friends":
+        name = (accounts.profile(user["id"]) or {}).get("name") or "Someone"
+        await request.app[ROOMS].tell_account(other, {"type": "notice", "friends": "friends",
+                                                      "message": f"You and {name} are friends now!"})
+    return web.json_response({"result": result})
+
+
+async def friend_remove(request):
+    """Unfriend, turn down a request, or take yours back."""
+    accounts, user = _friends_user(request, change=True)
+    accounts.unfriend(user["id"], request.match_info["id"])
+    return web.json_response({"ok": True})
+
+
 async def room_info(request):
     room = request.app[ROOMS].get(request.match_info["code"])
     if room is None:
@@ -654,6 +704,9 @@ def make_app(rooms=None, auth_config=None, accounts=None, history=None):
     app.router.add_post("/api/quickplay", quick_play)
     app.router.add_get("/api/reports", reports_page)
     app.router.add_get("/api/rooms/{code}", room_info)
+    app.router.add_get("/api/friends", friends_list)
+    app.router.add_post("/api/friends/{id}", friend_accept)
+    app.router.add_delete("/api/friends/{id}", friend_remove)
     app.router.add_get("/ws/{code}", websocket)
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/metrics", metrics_page)
