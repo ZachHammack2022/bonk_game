@@ -587,7 +587,8 @@ class Room:
         if result in ("friends", "sent") and self.tell_account is not None:
             await self.tell_account(other.account, {
                 "type": "notice", "friends": "request" if result == "sent" else "friends",
-                "message": f"{m.name} wants to be friends: say yes in your profile's Friends tab." if result == "sent"
+                **({"from": m.account} if result == "sent" else {}),  # (so the toast can say yes or no)
+                "message": f"{m.name} wants to be friends." if result == "sent"
                 else f"You and {m.name} are friends now!"})
 
     def playtest_report(self, token, kind, msg):

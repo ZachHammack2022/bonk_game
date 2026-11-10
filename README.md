@@ -89,7 +89,7 @@ It's all kept in your browser, no sign-up needed. **Sign in with Google** (botto
 
 ### Friends
 
-Signed-in players can be friends. In a room, open someone's card (⋯ next to their name) and press **Add friend**; they're told wherever they are on the server, and say yes in their profile's **Friends** tab (also on the start page, with a count of requests waiting). Your friends list shows who's playing now and where, with a **Join** button (a private game still asks for its password). Remove a friend, turn down a request or take yours back from the same tab. Kept in `accounts.py` (tables `friends` and `friend_requests`), served by `GET /api/friends`; up to 200 friends and 50 requests waiting.
+Signed-in players can be friends. In a room, open someone's card (⋯ next to their name) and press **Add friend**; they're told wherever they are on the server, with **Accept** and **No thanks** right on the message (or later, in their profile's **Friends** tab ; the start page has a Friends button with a count of requests waiting). Your friends list shows who's playing now and where, with a **Join** button (a private game still asks for its password). Remove a friend, turn down a request or take yours back from the same tab. Kept in `accounts.py` (tables `friends` and `friend_requests`), served by `GET /api/friends`; up to 200 friends and 50 requests waiting.
 
 ### Chat and safety
 

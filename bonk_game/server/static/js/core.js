@@ -143,13 +143,28 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const easeOutBack = (t) => { t = clamp(t, 0, 1); const c = 1.70158; return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2; };
 
 let toastTimer = null;
-function toast(text, error = false) {
+// actions: buttons on the toast ([{label, primary, onClick}]); it stays up
+// longer then, and a button press closes it
+function toast(text, error = false, actions = null) {
   const el = $("toast");
   el.textContent = text;
   el.classList.toggle("error", error);
+  el.classList.toggle("has-actions", !!(actions && actions.length));
+  if (actions && actions.length) {
+    const row = document.createElement("span");
+    row.className = "toast-actions";
+    for (const a of actions) {
+      const b = document.createElement("button");
+      b.textContent = a.label;
+      if (a.primary) b.className = "primary";
+      b.addEventListener("click", () => { el.classList.add("hidden"); a.onClick(); });
+      row.append(b);
+    }
+    el.append(row);
+  }
   el.classList.remove("hidden");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add("hidden"), 3200);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), actions && actions.length ? 12000 : 3200);
 }
 function status(text) {
   $("status").textContent = text || "";
@@ -560,8 +575,17 @@ function onMessage(msg) {
       chat.add(msg);
       break;
     case "notice":
-      toast(msg.message);
-      if (msg.friends) friends.refresh();  // (friends.js: a request, or a new friend)
+      // (friends.js: a friend request comes with Accept / No thanks, right there)
+      if (msg.friends === "request" && msg.from) {
+        if (friends.seen) friends.seen.add(msg.from);  // (shown here: not again from the list)
+        toast(msg.message, false, [
+          { label: "Accept", primary: true, onClick: () => friends.act("POST", msg.from) },
+          { label: "No thanks", onClick: () => friends.act("DELETE", msg.from) },
+        ]);
+      } else {
+        toast(msg.message);
+      }
+      if (msg.friends) friends.refresh();
       break;
     case "restart":
       // The server is going down for an update; we'll reconnect to the new one

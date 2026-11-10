@@ -21,6 +21,7 @@ const friends = {
     } catch (e) {
       return;  // (offline for a moment: keep what we had)
     }
+    this.toastNew();
     this.render();
   },
 
@@ -49,6 +50,26 @@ const friends = {
     if (app.room) leaveRoom(false);
     openRoom(where.room, true);  // (core.js: a private room asks for its password)
   },
+
+  // A request that came in since we last looked (on the start page, where
+  // there's no room to hear it in): the same toast as in a room, with
+  // Accept / No thanks. (The ones waiting when the page opens are just
+  // counted on the Friends button.)
+  toastNew() {
+    if (!this.data) return;
+    const ids = this.data.incoming.map((f) => f.id);
+    if (this.seen) {
+      const fresh = this.data.incoming.find((f) => !this.seen.has(f.id));
+      if (fresh) {
+        toast(`${fresh.name} wants to be friends.`, false, [
+          { label: "Accept", primary: true, onClick: () => this.act("POST", fresh.id) },
+          { label: "No thanks", onClick: () => this.act("DELETE", fresh.id) },
+        ]);
+      }
+    }
+    this.seen = new Set(ids);
+  },
+  seen: null,      // the requests we've shown (or counted) already
 
   // The start page's Friends button shows how many requests are waiting
   renderCount() {

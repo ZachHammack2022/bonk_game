@@ -733,6 +733,9 @@ body.touch .game-bar { bottom: auto; top: 12px; opacity: 0.7; }
 .status { top: 12px; }
 .toast { bottom: 16px; }
 .toast.error { border-color: rgba(240, 98, 98, 0.6); }
+.toast.has-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.toast-actions { display: flex; gap: 6px; }
+.toast-actions button { min-height: 32px; padding: 0 14px; font-size: 14px; }
 .netsim { position: fixed; top: 6px; right: 8px; font-size: 11px; color: var(--accent); opacity: 0.8; pointer-events: none; }
 
 /* --- settings ------------------------------------------------------------ */

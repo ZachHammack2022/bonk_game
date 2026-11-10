@@ -83,7 +83,8 @@ def test_asking_someone_in_a_room_tells_them_wherever_they_are():
         assert members[bob_pid].get("signed_in") and not members[here.members["tg"].pid].get("signed_in")
         await here.handle("ta", {"type": "befriend", "id": bob_pid})
         assert a.notices()[-1]["message"] == "Friend request sent to Bob."
-        assert any(n.get("friends") == "request" and "Ann wants to be friends" in n["message"] for n in b_away.notices())
+        assert any(n.get("friends") == "request" and n.get("from") == ann and "Ann wants to be friends" in n["message"]
+                   for n in b_away.notices())
         await here.handle("tb", {"type": "befriend", "id": here.members["ta"].pid})
         assert acc.are_friends(ann, bob)
         assert any(n.get("friends") == "friends" for n in a.notices())
