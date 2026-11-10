@@ -25,7 +25,8 @@ def test_badges_are_well_made():
         assert "{n}" in b["goal"] and b["icon"] and b["title"]
         # Everything a badge counts is in a profile's stats (or a highlight)
         stat = b["stat"]
-        known = {*new_feats(), "flawless", *profiles.DERIVED_FEATS, "giant_slayer", "bully", "rival"}
+        known = {*new_feats(), "flawless", "comeback", "duds", *profiles.DERIVED_FEATS,
+                 "giant_slayer", "bully", "rival"}
         assert stat.startswith("feats.") and stat[6:] in known or stat in stats, stat
         assert badges.level(stats, b) == 0  # (nobody starts with one)
 
@@ -60,13 +61,15 @@ def test_knockouts_make_highlights():
     assert m.feats[1]["double"] == 1 and m.feats[1]["triple"] == 0
     m.tick_count += 10
     ko(m, 1, 3)
-    assert m.feats[1] == {"first_blood": 1, "double": 1, "triple": 1, "super_ko": 0}
+    assert {k: m.feats[1][k] for k in ("first_blood", "double", "triple", "super_ko")} == \
+        {"first_blood": 1, "double": 1, "triple": 1, "super_ko": 0}
+    assert m.feats[1]["bot_kos"] == 3  # (all bots here)
     # Too slow: the next one starts a new run
     m.tick_count += int(MULTI_KO * TICK_HZ) + 1
     ko(m, 2, 1)
     m.tick_count += int(MULTI_KO * TICK_HZ) + 1
     ko(m, 2, 3)
-    assert m.feats[2] == new_feats()  # (no first blood, no double)
+    assert m.feats[2]["first_blood"] == 0 and m.feats[2]["double"] == 0  # (no first blood, no double)
 
 
 def test_super_knockouts():
@@ -91,7 +94,7 @@ def test_a_match_reports_highlights_and_flawless_wins():
     r = m.results()
     w = r["winner"]
     for i, s in enumerate(r["summaries"]):
-        assert set(s["feats"]) == {*new_feats(), "flawless"}
+        assert set(s["feats"]) == {*new_feats(), "flawless", "comeback", "duds"}
         assert s["feats"]["flawless"] == (1 if i == w and r["stats"][i]["deaths"] == 0 else 0)
     assert sum(s["feats"]["first_blood"] for s in r["summaries"]) == (1 if any(st["kos"] for st in r["stats"]) else 0)
 
@@ -223,3 +226,45 @@ def test_your_clock_and_social_highlights_reach_your_history():
         # 1_800_000_000 is 08:00 UTC: 03:00 on Ann's clock, unknown on Bob's
         assert recorded["u1"]["hour"] == 3 and recorded["u2"]["hour"] == -1
     asyncio.new_event_loop().run_until_complete(go())
+
+
+def test_revenge_going_out_together_and_sitting_ducks():
+    from bonk_game.server.match import SITTING_DUCK
+    m = Match("classic", [{"kind": "human", "name": "a"}, {"kind": "human", "name": "b"},
+                          {"kind": "bot:easy", "name": "c"}], 3)
+    ko(m, 1, 0)                 # b gets a...
+    ko(m, 0, 2)                 # (a knocks out someone else: not revenge)
+    assert m.feats[0]["revenge"] == 0 and m.feats[0]["bot_kos"] == 1
+    ko(m, 0, 1)                 # ...and a gets b back
+    assert m.feats[0]["revenge"] == 1 and m.feats[1]["bot_kos"] == 0
+    ko(m, 0, 1)                 # (only once for it)
+    assert m.feats[0]["revenge"] == 1
+    # Sitting Duck and Taking You With Me, from a real step: knocked out
+    # the moment a round starts, by someone going out too
+    m.round_start = m.tick_count = 100
+    info = {"kos": [(1, 0, False), (0, 2, False)], "deaths": [(1, 0, 0), (0, 0, 0)], "round_over": False}
+    out_now = {i for i, _, _ in info["deaths"]}
+    for i, _, _ in info["deaths"]:
+        by = dict((v, b) for v, b, _ in info["kos"])[i]
+        if m.tick_count - m.round_start <= SITTING_DUCK * TICK_HZ:
+            m.feats[i]["sitting_duck"] += 1
+        ko(m, by, i)
+        if by in out_now:
+            m.feats[by]["with_me"] += 1
+    assert m.feats[0]["with_me"] == 1 and m.feats[1]["sitting_duck"] == 1 and m.feats[0]["sitting_duck"] == 1
+
+
+def test_comeback_kid_and_dud_bombs():
+    from bonk_game.server.match import feats_for
+    m = Match("classic", [{"kind": "bot:easy", "name": n} for n in "ab"], 3, power_ups=True)
+    m.env.scores[:] = [0, 2]
+    m._note_last()
+    assert m.was_last == [True, False]
+    m.env.scores[:] = [3, 2]
+    m._note_last()
+    assert m.was_last == [True, True]
+    m.powerups.duds[0] = 2
+    res = {**m.mode.results(), "stats": [{"deaths": 1}, {"deaths": 1}],
+           "feats": [dict(f, comeback_ok=int(m.was_last[i]), duds=m.powerups.duds[i]) for i, f in enumerate(m.feats)]}
+    assert feats_for(res, 0, True)["comeback"] == 1 and feats_for(res, 0, True)["duds"] == 2
+    assert "comeback_ok" not in feats_for(res, 1, False) and feats_for(res, 1, False)["comeback"] == 0

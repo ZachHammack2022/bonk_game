@@ -118,6 +118,7 @@ class PowerUps:
         self.pickups = []                 # [x, y, kind]
         self.effects = [None] * env.n     # per player: [kind, ticks left] or None
         self.collected = [0] * env.n      # pickups each player grabbed (for awards)
+        self.duds = [0] * env.n           # bombs each player dropped that hit nobody (a badge)
         self.reset_round()
 
     def reset_round(self):
@@ -238,9 +239,13 @@ class PowerUps:
                            for p in env.players)
             if y - BOMB_RADIUS > env.map.height:
                 self.bombs.remove(bomb)  # (fell out without hitting anything)
+                self.duds[bomb[3]] += 1
             elif hit_ball or env.map.world.solid_at(x, y, BOMB_RADIUS):
                 self.bombs.remove(bomb)
-                events.append(self._boom(x, y, bomb[3]))
+                boom = self._boom(x, y, bomb[3])
+                if not boom["hit"]:
+                    self.duds[bomb[3]] += 1
+                events.append(boom)
 
         if plane is not None:
             plane["ticks"] -= 1

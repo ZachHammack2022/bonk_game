@@ -32,11 +32,18 @@ function watchPublic(on) {
   if (on) refreshPublic();
 }
 
+let publicText = null;  // (the last answer, to skip redrawing when nothing changed)
 async function refreshPublic() {
+  // Not while your profile (or another dialog) is open over the page:
+  // redrawing what's under its blurred backdrop makes it flicker
+  if (document.querySelector(".overlay:not(.hidden)")) return;
   try {
     const r = await fetch("/api/public");
     if (!r.ok) return;
-    browse.data = await r.json();
+    const text = await r.text();
+    if (text === publicText) return;
+    publicText = text;
+    browse.data = JSON.parse(text);
     renderHomeCount();
     if (!$("browse").classList.contains("hidden")) renderBrowse();
   } catch (e) { /* offline or restarting: next time */ }
@@ -48,9 +55,10 @@ const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 function renderHomeCount() {
   const d = browse.data;
   const n = d ? d.rooms.length : 0;
-  $("find-help").textContent = n
+  const help = n
     ? `${plural(n, "game")} on right now${d.online ? `, ${plural(d.online, "player")} online` : ""}.`
     : "Join a game or make your own.";
+  if ($("find-help").textContent !== help) $("find-help").textContent = help;
 }
 
 function openBrowse(push) {

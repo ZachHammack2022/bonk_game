@@ -20,8 +20,9 @@ LEVELS = ("bronze", "silver", "gold", "platinum", "diamond")
 # id, icon, title, what it counts, its thresholds, and what reaching a
 # level takes ({n}: the threshold; [a|b]: a for 1, b otherwise).
 # "count" is a lifetime stat (profiles.py), "feats.x" a highlight's total,
-# "maps" / "modes" how many different ones you've played, "awards" every
-# end-of-match award you've won, and "best_hit" your hardest hit ever.
+# "maps" / "modes" how many different ones you've played, and "awards" every
+# end-of-match award you've won. (Only things you can see while playing:
+# no badges for hidden numbers, like how hard a hit was.)
 BADGES = (
     ("matches", "🎮", "Regular", "matches", (1, 10, 50, 200, 1000), "Play {n} [match|matches]"),
     ("wins", "🏆", "Winner", "wins", (1, 10, 50, 200, 500), "Win {n} [match|matches]"),
@@ -36,7 +37,6 @@ BADGES = (
      "Knock out {n} [ball|balls] with a super power"),
     ("flawless", "🛡️", "Untouchable", "feats.flawless", (1, 10, 50),
      "Win {n} [match|matches] without being knocked out"),
-    ("best_hit", "🔨", "Wrecking Ball", "best_hit", (15, 25, 35), "Hit someone with power {n}"),
     ("pickups", "🍬", "Power Hungry", "pickups", (10, 100, 500), "Grab {n} [power-up|power-ups]"),
     ("awards", "⭐", "Showstopper", "awards", (5, 50, 250), "Win {n} end-of-match [award|awards]"),
     ("maps", "🗺️", "Explorer", "maps", (3, 5, len(MAPS)), "Play on {n} different [map|maps]"),
@@ -61,7 +61,17 @@ BADGES = (
      "Play 10 matches in a row on the same map, {n} [time|times]"),
     ("self_destruct", "🧨", "Self-Destruct", "feats.self_destruct", (1, 10, 50),
      "Lose {n} [match|matches] without anyone touching you"),
-    ("nice", "😏", "Nice", "kos", (69,), "Knock out {n} balls"),
+    # What happened in the match (match.py: new_feats)
+    ("bot_kos", "🦾", "AI Bully", "feats.bot_kos", (100, 500, 2000), "Knock out {n} [bot|bots]"),
+    ("revenge", "😤", "Revenge", "feats.revenge", (1, 10, 50),
+     "Knock out whoever just knocked you out, {n} [time|times]"),
+    ("comeback", "👑", "Comeback Kid", "feats.comeback", (1, 10, 50),
+     "Win {n} [match|matches] after being in last place"),
+    ("sitting_duck", "🦆", "Sitting Duck", "feats.sitting_duck", (5, 25, 100),
+     "Get knocked out in the first 3 seconds of a round, {n} [time|times]"),
+    ("duds", "💨", "Dud Drop", "feats.duds", (5, 25, 100), "Drop {n} [bomb|bombs] that hit nobody"),
+    ("with_me", "💀", "Taking You With Me", "feats.with_me", (1, 10, 50),
+     "Knock someone out as you go out yourself, {n} [time|times]"),
     # Against other signed-in players (rating.py: social_feats)
     ("giant_slayer", "🗡️", "Giant Slayer", "feats.giant_slayer", (1, 10, 50),
      "Beat someone rated 300+ above you, {n} [time|times]"),
@@ -71,7 +81,7 @@ BADGES = (
 )
 
 # Secret until you earn them: "???" on your Stats tab
-SECRET = {"self_destruct", "nice"}
+SECRET = {"self_destruct", "with_me"}
 
 
 def describe():
