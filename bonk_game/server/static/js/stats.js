@@ -40,7 +40,7 @@ function renderStats() {
   tile((s.kos / s.matches).toFixed(1), "knockouts a match");
   tile(s.deaths, "times knocked out");
   tile(s.falls, "falls");
-  tile(Math.round(s.best_hit), "hardest hit");
+  tile(s.pickups, "power-ups grabbed");
   body.append(tiles);
   renderBadges(s, body);  // (badges.js)
 }

@@ -33,6 +33,7 @@ OVER_PAUSE = 1.4      # seconds showing the final point before results
 BOT_KINDS = tuple(f"bot:{level}" for level in LEVEL_NAMES)
 STAND_IN = "bot:medium"  # plays for a human who drops out mid-match
 MULTI_KO = 3.0        # seconds between knockouts that make a double (and triple) knockout
+SITTING_DUCK = 3.0    # seconds into a round: knocked out this soon is a Sitting Duck
 
 
 def bot_level(kind):
@@ -114,6 +115,9 @@ class Match:
         self.feats = [new_feats() for _ in kinds]
         self.last_ko = [None] * len(kinds)    # tick of each player's last knockout (multi-knockouts)
         self.ko_chain = [0] * len(kinds)      # ... and how many in a row, MULTI_KO apart
+        self.out_by = [None] * len(kinds)     # who last knocked each player out (Revenge)
+        self.was_last = [False] * len(kinds)  # been alone in last place at some point (Comeback Kid)
+        self.round_start = 0                  # tick the round's play began (Sitting Duck)
         self.set_phase("countdown", 3)
 
     @property
@@ -158,6 +162,7 @@ class Match:
         self.inputs[slot] = NO_BUTTONS
         self.stats[slot] = new_stats()
         self.feats[slot] = new_feats()
+        self.was_last[slot], self.out_by[slot] = False, None
         self.last_ko[slot], self.ko_chain[slot] = None, 0
 
     def release(self, slot):
@@ -193,6 +198,7 @@ class Match:
                 events.append({"e": "beep" if beat < self.countdown_len else "go"})
             if self.phase_t >= BEAT * self.countdown_len:
                 self.set_phase("play")
+                self.round_start = self.tick_count
             return events
 
         if self.phase == "scored":
@@ -205,6 +211,7 @@ class Match:
             if self.phase_t >= powerups.INTRO_SECONDS:
                 self.powerups.launch()
                 self.set_phase("play")
+                self.round_start = self.tick_count
             return events
 
         if self.phase == "over":
@@ -235,16 +242,23 @@ class Match:
         if env.timer.sudden_death and not was_sudden:
             events.append({"e": "sudden"})
         kos = {victim: (by, wall) for victim, by, wall in info["kos"]}
+        out_now = {i for i, _, _ in info["deaths"]}
         for i, x, y in info["deaths"]:
             by, wall = kos.get(i, (None, False))
             self.stats[i]["deaths"] += 1
+            if self.tick_count - self.round_start <= SITTING_DUCK * TICK_HZ:
+                self.feats[i]["sitting_duck"] += 1
             if by is not None:
                 self.stats[by]["kos"] += 1
                 self._feat_ko(by, i)
+                if by in out_now:
+                    self.feats[by]["with_me"] += 1  # (went out at the same moment)
             elif not wall:
                 self.stats[i]["falls"] += 1
             events.append({"e": "death", "i": i, "x": round(x, 1), "y": round(y, 1),
                            "by": by, "wall": wall})
+        if info["deaths"] or info["round_over"]:
+            self._note_last()
         if info["round_over"]:
             events.append({"e": "round"})
         if not info["deaths"]:
@@ -278,6 +292,22 @@ class Match:
             f["triple"] += 1
         if self.powerups and (self.powerups.super_kos.pop(victim, None) == by or self.powerups.super_on(by)):
             f["super_ko"] += 1
+        if self.slots[victim]["kind"] != "human":
+            f["bot_kos"] += 1
+        if self.out_by[by] == victim:
+            f["revenge"] += 1
+            self.out_by[by] = None
+        self.out_by[victim] = by
+
+    def _note_last(self):
+        """Who's alone in last place now (for Comeback Kid)."""
+        scores = self.mode.scores()
+        if len(scores) < 2 or self.mode.id == "teams":
+            return
+        low = min(scores)
+        lows = [i for i, v in enumerate(scores) if v == low]
+        if len(lows) == 1 and low < max(scores):
+            self.was_last[lows[0]] = True
 
     def _buttons(self):
         """What each person is pressing (None for bots and stand-ins). A
@@ -409,7 +439,9 @@ class Match:
                               pickups=self.powerups.collected[i] if self.powerups else 0)
                          for i, st in enumerate(self.stats)],
                # In Knockouts, most knockouts is the score already
-               "feats": [dict(f) for f in self.feats],
+               "feats": [dict(f, comeback_ok=int(self.was_last[i]),
+                              duds=self.powerups.duds[i] if self.powerups else 0)
+                         for i, f in enumerate(self.feats)],
                "awards": [a for a in awards(self.stats, self.powerups.collected if self.powerups else None)
                           if not (self.mode.id == "knockouts" and a["id"] == "kos")]}
         res["summaries"] = summaries(res, self.mode.teams if self.mode.id == "teams" else None)
@@ -445,8 +477,12 @@ def new_feats():
     """A player's highlights in a match, for their badges (badges.py):
     first_blood: made the match's first knockout (0 or 1); double / triple:
     knockouts in a row, each within MULTI_KO seconds of the last; super_ko:
-    knockouts made while their super power was on."""
-    return {"first_blood": 0, "double": 0, "triple": 0, "super_ko": 0}
+    knockouts made while their super power was on; bot_kos: bots knocked
+    out; revenge: knocked out whoever last knocked them out; with_me:
+    knocked someone out as they went out themselves; sitting_duck: knocked
+    out within SITTING_DUCK seconds of a round starting."""
+    return {"first_blood": 0, "double": 0, "triple": 0, "super_ko": 0, "bot_kos": 0, "revenge": 0,
+            "with_me": 0, "sitting_duck": 0}
 
 
 def feats_for(res, i, won):
@@ -454,6 +490,9 @@ def feats_for(res, i, won):
     being knocked out or falling)."""
     f = dict((res.get("feats") or [None] * (i + 1))[i] or new_feats())
     f["flawless"] = 1 if won and res["stats"][i]["deaths"] == 0 else 0
+    # Comeback Kid: won, after being alone in last place at some point
+    f["comeback"] = 1 if won and f.pop("comeback_ok", 0) else 0
+    f.pop("comeback_ok", None)
     return f
 
 
