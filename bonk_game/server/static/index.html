@@ -148,25 +148,6 @@
     </div>
   </section>
 
-  <!-- New game: its name, then public or private. Every game is listed;
-       a private one needs its password, which the invite link carries -->
-  <div id="new-dialog" class="overlay hidden" role="dialog" aria-labelledby="new-title">
-    <form id="new-form" class="card settings-card">
-      <h2 id="new-title">New game</h2>
-      <label for="new-name">Room name</label>
-      <input id="new-name" maxlength="30" autocomplete="off">
-      <div id="new-privacy" class="seg wide-seg" role="radiogroup" aria-label="Who can join">
-        <button type="button" data-private="0" role="radio">Public</button>
-        <button type="button" data-private="1" role="radio"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>Private</button>
-      </div>
-      <p id="new-privacy-help" class="dim small"></p>
-      <div class="row-buttons">
-        <button id="new-create" type="submit" class="primary">Create</button>
-        <button id="new-cancel" type="button" class="ghost">Cancel</button>
-      </div>
-    </form>
-  </div>
-
   <!-- Game settings (the host changes them; everyone else can look) -->
   <div id="game-settings" class="overlay hidden" role="dialog" aria-labelledby="game-settings-title">
     <div class="card settings-card game-settings-card">

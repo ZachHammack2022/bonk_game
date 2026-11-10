@@ -240,57 +240,26 @@ $("browse-search").addEventListener("keydown", (e) => {
 $("find").addEventListener("click", () => openBrowse(true));
 $("browse-back").addEventListener("click", () => leaveRoom(true));
 
-// New game: its name ("<your name>'s room" to start with), public or private
-// (a private one gets a password from the server; it's in the invite link)
+// New game: straight into a public room named "<your name>'s room" (the
+// host can rename it, or make it private, in the lobby)
 const defaultRoomName = () => `${(me.name || "Player").trim() || "Player"}'s room`;
-function openNewGame() {
-  $("name").dispatchEvent(new Event("change"));
-  $("new-name").value = defaultRoomName();
-  setNewPrivacy(store.get("bonk.newPrivate", "1") === "1");
-  $("new-dialog").classList.remove("hidden");
-  // The defaults are fine: focus Create (Enter makes the room), not the
-  // name box, so phones don't pop the keyboard up
-  $("new-create").focus();
-}
-async function newGame(name, locked, button) {
+async function newGame(button) {
   $("name").dispatchEvent(new Event("change"));
   if (button) button.disabled = true;
   try {
     const r = await fetch("/api/rooms", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name || defaultRoomName(), password: locked }) });
+      body: JSON.stringify({ name: defaultRoomName(), password: false }) });
     const body = await r.json();
     if (!r.ok) toast(body.error || "Couldn't create a game.", true);
-    else { $("new-dialog").classList.add("hidden"); openRoom(body.room, true, body.password); }
+    else openRoom(body.room, true, body.password);
   } catch (e) {
     toast("Couldn't create a game. Is the server running?", true);
   } finally {
     if (button) button.disabled = false;
   }
 }
-$("new-game").addEventListener("click", openNewGame);
-// Public or private: a tab (the last one you picked), then Create
-let newPrivate = true;
-function setNewPrivacy(priv) {
-  newPrivate = priv;
-  for (const b of $("new-privacy").querySelectorAll("button")) {
-    const on = (b.dataset.private === "1") === priv;
-    b.classList.toggle("on", on);
-    b.setAttribute("aria-checked", String(on));
-  }
-  $("new-privacy-help").textContent = priv
-    ? "Listed in Find a game, but joining needs a password. Your invite link has it in, so friends get straight in."
-    : "Listed in Find a game, and anyone can join.";
-}
-for (const b of $("new-privacy").querySelectorAll("button")) {
-  b.addEventListener("click", () => { setNewPrivacy(b.dataset.private === "1"); store.set("bonk.newPrivate", b.dataset.private); });
-}
-$("new-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  newGame($("new-name").value.trim(), newPrivate, $("new-create"));
-});
-$("empty-public").addEventListener("click", openNewGame);
-$("new-cancel").addEventListener("click", () => $("new-dialog").classList.add("hidden"));
-$("new-dialog").addEventListener("click", (e) => { if (e.target === $("new-dialog")) $("new-dialog").classList.add("hidden"); });
+$("new-game").addEventListener("click", () => newGame($("new-game")));
+$("empty-public").addEventListener("click", () => newGame($("new-game")));
 
 // ---------------------------------------------------------------------------
 // Mute and report. People are known by their public id (the server never

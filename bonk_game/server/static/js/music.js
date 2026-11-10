@@ -271,23 +271,35 @@ const music = (() => {
       c.next += dt;
     }
   }
-  function fadeOut(c, secs = 0.8) {
+  // Changing tracks isn't a hard cut: the old one eases down, and once it's
+  // nearly gone the new one eases up from silence (slower than it went down)
+  const FADE_OUT = 1.5, FADE_IN = 2.5;
+  // A smooth S-curve from the gain's level now to `to`, over secs
+  function ease(param, to, t, secs) {
+    const from = param.value, n = 32, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const k = i / (n - 1);
+      curve[i] = from + (to - from) * k * k * (3 - 2 * k);
+    }
+    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(t);
+    else { param.cancelScheduledValues(t); param.setValueAtTime(from, t); }
+    param.setValueCurveAtTime(curve, t, secs);
+  }
+  function fadeOut(c, secs = FADE_OUT) {
     clearInterval(c.timer);
-    const t = ctx.currentTime;
-    c.gain.gain.cancelScheduledValues(t);
-    c.gain.gain.setValueAtTime(c.gain.gain.value, t);
-    c.gain.gain.linearRampToValueAtTime(0, t + secs);
+    ease(c.gain.gain, 0, ctx.currentTime, secs);
     setTimeout(() => c.gain.disconnect(), (secs + 1) * 1000);
   }
   function start(id, delay = 0) {
-    if (current) { fadeOut(current); current = null; }
+    let gap = 0;
+    if (current) { fadeOut(current); current = null; gap = FADE_OUT * 0.8; }
     if (!id || !TRACKS[id] || document.hidden || !setup()) return;
     const g = ctx.createGain(); g.connect(bus);
-    const t = ctx.currentTime + 0.05 + delay;
-    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.gain.value = 0;
+    const t = ctx.currentTime + 0.05 + Math.max(delay, gap);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(1, t + 1.2);
-    current = { id, track: TRACKS[id], gain: g, step: 0, next: t };
+    g.gain.setValueCurveAtTime(Float32Array.from({ length: 32 }, (_, i) => { const k = i / 31; return k * k * (3 - 2 * k); }), t, FADE_IN);
+    current = { id, track: TRACKS[id], gain: g, step: 0, next: t, full: t + FADE_IN };
     current.timer = setInterval(tick, 50);
     tick();
   }
@@ -312,7 +324,7 @@ const music = (() => {
     },
     // The music dips for a moment (a knockout, a super power), so the bonk is heard
     duck(depth = 0.35, secs = 0.7) {
-      if (!ctx || !current) return;
+      if (!ctx || !current || ctx.currentTime < current.full) return;  // (not while it's fading in)
       const t = ctx.currentTime, p = current.gain.gain;
       p.cancelScheduledValues(t); p.setValueAtTime(p.value, t);
       p.linearRampToValueAtTime(depth, t + 0.04); p.linearRampToValueAtTime(1, t + secs);

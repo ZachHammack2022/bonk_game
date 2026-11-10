@@ -46,8 +46,6 @@ async function play(browser, base, netName) {
   await page.click("#find");
   await page.waitForSelector("#browse:not(.hidden)");
   await page.click("#new-game");
-  await page.waitForSelector("#new-dialog:not(.hidden)");
-  await page.click("#new-create");
   await page.waitForSelector("#lobby:not(.hidden)");
   await page.evaluate((map) => {
     send({ type: "settings", map, first_to: 99, bots: ["bot:hard", "bot:hard"] });

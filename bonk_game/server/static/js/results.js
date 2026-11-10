@@ -1,4 +1,4 @@
-// bonk web client: The results screen: winner, standings and awards.
+// bonk web client: The results screen: winner, standings and your awards.
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";
 
@@ -103,10 +103,12 @@ function awardDetail(a) {
   return "";
 }
 
+// Just the awards you won (not everyone else's)
 function renderAwards(msg, slots) {
   const ul = $("awards");
   ul.innerHTML = "";
-  for (const a of msg.awards || []) {
+  const mine = (a) => a.slots.some((i) => slots[i] && slots[i].id === me.id);
+  for (const a of (msg.awards || []).filter(mine)) {
     const li = document.createElement("li");
     li.dataset.award = a.id;
     const icon = document.createElement("span");
