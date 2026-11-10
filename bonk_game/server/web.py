@@ -561,7 +561,8 @@ async def websocket(request):
             return await refuse("Too many wrong passwords. Try again in a minute.")
         try:
             member = await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True,
-                                     account=user["id"] if user else None, password=password)
+                                     account=user["id"] if user else None, password=password,
+                                     watch=msg.get("watch") is True)
             member.region = limits.client_region(request)
             tz = msg.get("tz")  # (their clock, for time-of-day badges: badges.py)
             member.tz = tz if isinstance(tz, int) and not isinstance(tz, bool) and -840 <= tz <= 840 else None

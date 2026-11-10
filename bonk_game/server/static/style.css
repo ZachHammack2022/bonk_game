@@ -382,6 +382,7 @@ button.big.secondary-big { min-height: 46px; font-size: 16px; margin-top: 10px; 
 .pill.lobby { background: rgba(126, 214, 170, 0.12); color: var(--ok); }
 .pill.on { background: var(--accent-soft); color: var(--accent-ink); font-variant-numeric: tabular-nums; }
 .g-join { align-items: flex-end; }
+.g-join:has(button.watch.ghost) { flex-direction: row; justify-content: flex-end; gap: 6px; }
 .ping-val { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--faint); }
 .ping-val::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px;
                     vertical-align: 1px; background: currentColor; opacity: 0; }
@@ -936,3 +937,12 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
 .friend-acts { display: flex; gap: 6px; flex: none; }
 .friend-acts button { min-height: 32px; padding: 4px 12px; }
 #person-befriend { margin-bottom: 4px; }
+
+/* Watching a game (spectating): a bar at the top, with Play */
+.watch-bar { position: fixed; z-index: 7; display: flex; align-items: center; left: 50%; transform: translateX(-50%); bottom: 76px;
+             gap: 12px; padding: 6px 6px 6px 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.92);
+             box-shadow: 0 4px 14px rgba(90, 60, 130, 0.18); font-weight: 600; white-space: nowrap; }
+.watch-bar button { min-height: 34px; padding: 0 18px; }
+/* (In a match: centred, above the clock, clear of the scores. The lobby
+   says so in its own bar, #match-on) */
+body:not(:has(#game:not(.hidden))) .watch-bar { display: none; }

@@ -229,6 +229,7 @@
     <div id="match-on" class="need match-on hidden">
       <p id="match-on-text"></p>
       <button id="back-to-match" class="primary">Back to the match</button>
+      <button id="lobby-play" class="primary hidden">Play</button>
       <button id="end-match-lobby" class="host-only">End match</button>
     </div>
     <div class="lobby-grid">
@@ -285,6 +286,12 @@
   </section>
 
   <!-- The match -->
+  <!-- Watching (spectating): over the lobby and the match; Play joins in -->
+  <div id="watch-bar" class="watch-bar hidden" role="status">
+    <span>👀 You're watching</span>
+    <button id="watch-play" class="primary">Play</button>
+  </div>
+
   <section id="game" class="screen hidden">
     <div id="stage"><canvas id="canvas"></canvas></div>
     <!-- Touch controls (phones, tablets): see-through, over the game. Touch

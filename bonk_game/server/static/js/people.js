@@ -176,13 +176,25 @@ function gameRow(r) {
   pill.className = "pill " + (r.playing ? "on" : "lobby");
   pill.textContent = r.playing ? `Playing${r.elapsed != null ? " " + clock(r.elapsed) : ""}` : "In lobby";
 
+  // Join (play, now or in the next match), or Watch: spectate a match
+  // that's on (or a full game) without taking a seat
   const b = document.createElement("button");
-  b.className = r.open ? "join" : "";
+  b.className = r.open ? "join" : "watch";
   b.textContent = r.open ? "Join" : "Watch";
   b.setAttribute("aria-label", `${b.textContent} ${name.textContent}: ${r.mode} on ${r.map}`);
   // A game with a password: ask for it here (no need to ask the server first)
-  b.addEventListener("click", (e) => { e.stopPropagation(); joinListed(r); });
+  b.addEventListener("click", (e) => { e.stopPropagation(); joinListed(r, !r.open); });
   row.addEventListener("click", () => b.click());
+  const joinCell = cell("g-join", b);
+  if (r.open && r.playing) {
+    const w = document.createElement("button");
+    w.className = "watch ghost";
+    w.textContent = "Watch";
+    w.title = "Watch the match without playing (you can join in from there)";
+    w.setAttribute("aria-label", `Watch ${name.textContent}`);
+    w.addEventListener("click", (e) => { e.stopPropagation(); joinListed(r, true); });
+    joinCell.prepend(w);
+  }
 
   const lock = cell("g-lock");
   if (r.locked) {
@@ -199,7 +211,7 @@ function gameRow(r) {
   pingCell.title = r.ping == null ? "No ping yet" : `The players' round trip to the server: about ${r.ping} ms`;
 
   row.append(game, cell("g-players", dots, count), cell("g-mode", mode), lock, cell("g-map", r.map),
-    cell("g-status", pill), pingCell, cell("g-join", b));
+    cell("g-status", pill), pingCell, joinCell);
   return row;
 }
 
@@ -221,10 +233,29 @@ $("clear-filters").addEventListener("click", () => {
   $("hide-locked").checked = false;
   renderBrowse();
 });
-function joinListed(r) {
+function joinListed(r, watch) {
+  app.watch = !!watch;  // (core.js: the hello says so; the address keeps ?watch=1)
   if (r.locked) askPassword(r.room, false);  // (core.js)
   else openRoom(r.room, true, null);
 }
+
+// Watching: a bar over the lobby and the match, with Play to join in
+function watchingNow() {
+  if (!app.lobby || !app.ws) return false;
+  const mine = app.lobby.members.find((m) => m.id === me.id);
+  return !!(mine && mine.watching);
+}
+function renderWatching() {
+  const on = watchingNow();
+  $("watch-bar").classList.toggle("hidden", !on);
+  document.body.classList.toggle("watching", on);
+  if (!on && app.watch && app.lobby && app.ws) {
+    // (Playing now: the address stops saying watch)
+    app.watch = false;
+    history.replaceState({}, "", roomLink(app.room, app.password));
+  }
+}
+for (const id of ["watch-play", "lobby-play"]) $(id).addEventListener("click", () => send({ type: "play" }));
 
 // Enter in the search: the one game it finds, or (for a game that isn't
 // listed yet) the 4-letter code you typed

@@ -321,7 +321,11 @@ $("join-form").addEventListener("submit", (e) => {
 $("join-other").addEventListener("click", () => { showInvite(null); openBrowse(true); });  // (people.js)
 
 // A room's link: with its password, if it has one, so it's filled in for you
-const roomLink = (code, password) => `/r/${code}` + (password ? `?pw=${encodeURIComponent(password)}` : "");
+// (?watch=1: you came to watch, so a refresh keeps you watching)
+const roomLink = (code, password) => {
+  const q = [password ? `pw=${encodeURIComponent(password)}` : "", app.watch ? "watch=1" : ""].filter(Boolean).join("&");
+  return `/r/${code}` + (q ? "?" + q : "");
+};
 
 // password: the room's (from its invite link, or typed in); undefined keeps
 // the one we have for this room
@@ -369,6 +373,7 @@ function route() {
   const m = location.pathname.match(/^\/r\/([A-Za-z]{4})\/?$/);
   if (m) {
     const pw = new URLSearchParams(location.search).get("pw");
+    app.watch = new URLSearchParams(location.search).get("watch") === "1";
     if (!me.name) {
       // Ask for a name first; joining comes from the form
       show("home");
@@ -406,6 +411,8 @@ function leaveRoom(push) {
   replayer.stop();
   chat.reset([]);
   app.ws = null; app.room = null; app.password = null; app.lobby = null; app.match = null; app.results = null; app.away = false;
+  app.watch = false;
+  renderWatching();
   app.states = []; app.last = null; app.retry = 0;
   $("results").classList.add("hidden");
   $("killcam").classList.add("hidden");
@@ -432,6 +439,7 @@ function connect() {
                              reopen: app.retry > 0, host: app.restoring !== null,
                              installed: installedApp(),
                              tz: -new Date().getTimezoneOffset(),  // (your clock: time-of-day badges)
+                             watch: !!app.watch,  // (came to watch: no seat until you press Play)
                              ...(app.password ? { password: app.password } : {}) }));
   };
   ws.onmessage = (e) => {
@@ -498,6 +506,7 @@ function onMessage(msg) {
       }
       document.body.classList.toggle("is-host", isHost());
       renderLobby();
+      renderWatching();  // (people.js)
       if (app.restoring && msg.phase === "lobby") {
         // (Not the password: the room got that back when it was made again)
         const settings = { ...app.restoring };

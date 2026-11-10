@@ -29,6 +29,7 @@ Open the page, pick a name and press **Quick play** to go straight into a game (
 ### Getting into a game
 
 - **Quick play** puts you in the open game with the most people that has space, or makes one: Knockouts on Floating Platform, which starts by itself, with bots making it up to 4 players. Bots step aside as people come (someone arriving mid-match takes over a bot's seat).
+- **Watch**: in the game list, a match that's on (or a full game) has **Watch**: you see the match without taking a seat, now or in the next one, with a bar saying you're watching and **Play** to join in (taking over a bot if one's playing). Watchers don't count towards a game's players; the list says how many are watching. The address keeps `?watch=1`, so a refresh keeps you watching.
 - **Find a game** opens the game list. Search by room, host, player or 4-letter code (Enter joins), filter by mode or map.
 - **New game** takes you straight to a new **public** room (anyone can join), named after you. In the lobby the host can rename it or make it **private** (listed with a lock; joining needs the password, which the server makes up). **Copy invite link** gives a link with the password in it, so friends get straight in.
 - **The host** (★, whoever made the room) picks the mode, map and settings, fills open seats with bots (Easy, Medium or Hard), and presses **Start match**. They can rename the room, switch it between public and private, remove people (they can't come back), and **End match** at any time (say, to change the map without waiting for bots to finish).
