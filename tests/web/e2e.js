@@ -189,6 +189,12 @@ function check(cond, what) {
     check((await host.textContent("#chat-log")).includes("Bob joined"), "lobby chat reaches everyone, filtered, with who joined");
     await shot(host, "lobby");
     check(await host.evaluate(() => music.playing) === "lobby", "the lobby plays Cozy Lobby (music.js)");
+    check(await host.evaluate(() => {
+      try {
+        for (const id of ["arcade", "lobby", "parade", "sudden", "lobby"]) music.want(id);  // (each mid-fade)
+        return music.playing === "lobby";
+      } catch (e) { return String(e); }
+    }) === true, "switching tracks halfway through a fade is fine");
 
     await host.click("#start");
     await host.waitForSelector("#game:not(.hidden)");
@@ -453,6 +459,9 @@ function check(cond, what) {
       `matches go into your history (${prof.stats.matches}: ${prof.history.map((h) => h.mode + " " + h.place + "/" + h.of).join(", ")})`);
     await host.goto(base + "/");
     await host.click("#open-profile");
+    check(await host.evaluate(() => getComputedStyle($("me")).backdropFilter === "none" &&
+      document.querySelector(".logo-ball").getAnimations().every((a) => a.playState === "paused")),
+      "behind the profile, the home page holds still (no live blur, the logo's ball stops bouncing)");
     await host.click("#me-tabs [data-tab=stats]");
     check(await host.isVisible(".stat-tiles") && await host.isVisible("#stats .badge-grid")
       && !(await host.$("#stats .stat-history")),

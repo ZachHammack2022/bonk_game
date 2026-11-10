@@ -274,20 +274,19 @@ const music = (() => {
   // Changing tracks isn't a hard cut: the old one eases down, and once it's
   // nearly gone the new one eases up from silence (slower than it went down)
   const FADE_OUT = 1.5, FADE_IN = 2.5;
-  // A smooth S-curve from the gain's level now to `to`, over secs
-  function ease(param, to, t, secs) {
-    const from = param.value, n = 32, curve = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      const k = i / (n - 1);
-      curve[i] = from + (to - from) * k * k * (3 - 2 * k);
-    }
-    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(t);
-    else { param.cancelScheduledValues(t); param.setValueAtTime(from, t); }
-    param.setValueCurveAtTime(curve, t, secs);
-  }
+  // Down: an exponential slide from wherever the gain is (setTargetAtTime
+  // never clashes with what's scheduled, even halfway through a fade-in,
+  // where a value curve would throw)
   function fadeOut(c, secs = FADE_OUT) {
     clearInterval(c.timer);
-    ease(c.gain.gain, 0, ctx.currentTime, secs);
+    const p = c.gain.gain, t = ctx.currentTime;
+    try {
+      if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t);
+      else { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); }
+      p.setTargetAtTime(0, t, secs / 4);
+    } catch (e) {
+      p.cancelScheduledValues(0); p.value = 0;  // (whatever happens, it goes quiet)
+    }
     setTimeout(() => c.gain.disconnect(), (secs + 1) * 1000);
   }
   function start(id, delay = 0) {
@@ -295,9 +294,8 @@ const music = (() => {
     if (current) { fadeOut(current); current = null; gap = FADE_OUT * 0.8; }
     if (!id || !TRACKS[id] || document.hidden || !setup()) return;
     const g = ctx.createGain(); g.connect(bus);
-    g.gain.value = 0;
+    g.gain.value = 0;  // (a fresh gain: nothing else is scheduled on it, so the curve can't clash)
     const t = ctx.currentTime + 0.05 + Math.max(delay, gap);
-    g.gain.setValueAtTime(0, t);
     g.gain.setValueCurveAtTime(Float32Array.from({ length: 32 }, (_, i) => { const k = i / 31; return k * k * (3 - 2 * k); }), t, FADE_IN);
     current = { id, track: TRACKS[id], gain: g, step: 0, next: t, full: t + FADE_IN };
     current.timer = setInterval(tick, 50);
