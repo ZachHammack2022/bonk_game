@@ -1,4 +1,4 @@
-[![main](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml/badge.svg?branch=main&event=push)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml?query=branch%3Amain+event%3Apush) [![staging](https://github.com/ZachHammack2022/bonk_game/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/deploy.yml)
+[![main](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml/badge.svg?branch=main&event=push)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/tests.yml?query=branch%3Amain+event%3Apush) [![deploy](https://github.com/ZachHammack2022/bonk_game/actions/workflows/deploy.yml/badge.svg)](https://github.com/ZachHammack2022/bonk_game/actions/workflows/deploy.yml)
 
 # bonk
 
@@ -126,12 +126,12 @@ Accounts and metrics history live on a volume. Make it once: `fly volumes create
 
 ### Deploys and updates
 
-- **Staging**: every merge to `main` deploys to `https://bonk-game-staging.fly.dev` (`.github/workflows/deploy.yml`), and a smoke test checks it.
-- **Production**: Actions → deploy → Run workflow → `production`. It deploys `main` only if its tests passed on that commit.
+- **Production**: every merge to `main` deploys itself (`.github/workflows/deploy.yml`, the same as `fly deploy --ha=false`) once `main`'s tests pass on that commit, and a smoke test checks it. If the tests fail, nothing is deployed.
+- **By hand**: Actions → deploy → Run workflow → `production` or `staging` (a `bonk-game-staging` app, if you make one).
 - **No dropped matches**: on SIGTERM the server stops taking connections, lets running matches finish (up to `BONK_DRAIN_SECONDS`, 120), then exits. Open tabs reconnect and get their room back. Tabs running the old client are told to refresh.
 - **Check any deploy**: `python -m bonk_game.server.smoke https://your-server` loads the page, plays a few seconds against a bot, and prints the ping.
 
-Set up once: make the staging app (`./deploy/fly.sh bonk-game-staging iad` plus its volume), then add a deploy token (`fly tokens create org`) as the repository secret `FLY_API_TOKEN`.
+Set up once: make a deploy token (`fly tokens create deploy -a bonk-game`) and add it as the repository secret `FLY_API_TOKEN` (Settings → Secrets and variables → Actions). Until it's there, the workflow deploys nothing.
 
 ### Watching it
 
@@ -400,7 +400,7 @@ A few habits keep a project like this working as it grows:
 - **No build step.** The client is plain scripts sharing one global scope. To still catch typos, `eslint.config.js` reads the names each file declares and complains only about names nobody declares.
 - **Pinned versions.** Requirements give ranges; `constraints.txt` and `package-lock.json` pin exact versions, so a new release can't break anything until someone bumps it and CI checks the bump.
 - **Optimistic CI.** A pull request needs only lint (about a minute) to merge; the slower jobs run alongside as a heads-up and in full on `main`. If `main` goes red, production deploys refuse it.
-- **Staging first.** Every merge goes to a staging app automatically; production is a deliberate button.
+- **Deploy on green.** Every merge goes to production by itself, but only after the full tests pass on `main`.
 
 ---
 

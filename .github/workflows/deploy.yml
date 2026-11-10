@@ -1,19 +1,20 @@
 name: deploy
 
-# Staging: every merge to main goes straight to the staging app, without
-# waiting for the tests (they run at the same time; see tests.yml), so you
-# can try it within a few minutes.
+# Production: every merge to main deploys itself, once main's tests have
+# passed on that commit (tests.yml runs everything on main; this waits for
+# it). Red tests: nothing is deployed.
 #
-# Production: by hand (Actions -> deploy -> Run workflow -> production).
-# It deploys main, and only if the tests passed on that commit.
+# By hand: Actions -> deploy -> Run workflow, to staging or production
+# (production still only if the tests passed on main's latest commit).
 #
-# Setup, once (README: "Staging and deploys"):
-#   - Fly apps for both (./deploy/fly.sh bonk-game-staging makes staging)
-#   - the repository secret FLY_API_TOKEN (fly tokens create org)
+# Setup, once (README: "Deploys"):
+#   - the repository secret FLY_API_TOKEN (fly tokens create deploy -a bonk-game)
 #   - optionally the repository variables STAGING_APP and PRODUCTION_APP
 #     (defaults: bonk-game-staging and bonk-game)
 on:
-  push:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -21,11 +22,11 @@ on:
         description: Where to deploy main
         type: choice
         options: [staging, production]
-        default: staging
+        default: production
 
-# One deploy at a time per app; a newer merge replaces a waiting one
+# One deploy at a time per app; they queue up in order
 concurrency:
-  group: deploy-${{ github.event.inputs.target || 'staging' }}
+  group: deploy-${{ github.event.inputs.target || 'production' }}
   cancel-in-progress: false
 
 # Read-only: the deploy uses FLY_API_TOKEN, not GitHub's token
@@ -35,17 +36,25 @@ permissions:
 
 jobs:
   deploy:
+    # (after a merge: only when main's tests passed, and only for a push to
+    # main, not the tests run on a pull request's branch)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
-      name: ${{ github.event.inputs.target || 'staging' }}
+      name: ${{ github.event.inputs.target || 'production' }}
       url: https://${{ steps.app.outputs.name }}.fly.dev
     steps:
+      # The commit the tests passed on (after a merge), or main's latest (by hand)
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - id: app
         env:
-          TARGET: ${{ github.event.inputs.target || 'staging' }}
+          TARGET: ${{ github.event.inputs.target || 'production' }}
           STAGING: ${{ vars.STAGING_APP || 'bonk-game-staging' }}
           PRODUCTION: ${{ vars.PRODUCTION_APP || 'bonk-game' }}
           HAS_TOKEN: ${{ secrets.FLY_API_TOKEN != '' }}
@@ -62,6 +71,7 @@ jobs:
             exit 1
           fi
 
+      # (by hand; after a merge, this run started because they passed)
       - name: Production needs main's tests to have passed on this commit
         if: steps.app.outputs.skip != 'true' && github.event.inputs.target == 'production'
         env:
