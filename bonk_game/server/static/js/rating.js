@@ -61,7 +61,6 @@ function boardBall(ball) {
 function renderBoard(d) {
   const list = $("board-list");
   list.innerHTML = "";
-  $("board-you").classList.add("hidden");
   $("board-empty").classList.add("hidden");
   if (!d) { $("board-summary").textContent = "Loading…"; return; }
   for (const el of document.querySelectorAll(".board-placement")) el.textContent = d.placement;
@@ -93,22 +92,6 @@ function renderBoard(d) {
   if (!d.players.length && d.accounts) {
     $("board-empty").textContent = `Nobody's on it yet. Sign in and play ${d.placement} matches against other signed-in players to be the first.`;
     $("board-empty").classList.remove("hidden");
-  }
-  // You: where you stand, or how to get on it
-  const you = $("board-you");
-  you.innerHTML = "";
-  if (d.accounts) {
-    you.classList.remove("hidden");
-    if (!d.you) {
-      you.append(rtText("p", "", "Sign in to get a rating and a place on the leaderboard."));
-      const b = document.createElement("button");
-      b.className = "primary";
-      b.textContent = "Sign in with Google";
-      b.addEventListener("click", () => account.signIn());
-      you.append(b);
-    } else {
-      you.append(rankBadge(d.you, { big: true }), rtText("p", "", youLine(d.you)));
-    }
   }
 }
 

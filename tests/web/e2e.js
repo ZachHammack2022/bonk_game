@@ -362,6 +362,7 @@ function check(cond, what) {
     await phone.goto(base + "/leaderboard");
     await phone.waitForFunction(() => document.querySelector("#board-summary").textContent.includes("Sign-in is off"));
     check(await phone.isVisible("#leaderboard") && await phone.isHidden("#home"), "the leaderboard page has its own address");
+    check(!(await phone.$("#board-you")), "the leaderboard is just the table: no card about you above it");
     await phone.click("#board-back");
     check(await phone.isVisible("#home"), "and Back goes home");
     await phone.goto(base + "/");
