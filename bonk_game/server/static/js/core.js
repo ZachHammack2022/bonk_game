@@ -240,7 +240,17 @@ const me = {
   get ballHex() { return this.ownColor || (this.color === null ? PALETTE[0][1] : PALETTE[this.color][1]); },
 };
 // (me.color = ... and me.pattern = ... save straight away)
-function saveProfile() { renderHomeBall(); }
+function saveProfile() {
+  renderHomeBall();
+  if (app.ws && app.welcome) sendLooks();  // (in a room: your seat follows)
+}
+// Your ball's colour and look, to the room (a colour someone else has is
+// skipped quietly: you get it when it's free)
+function sendLooks() {
+  send({ type: "look", ...Object.fromEntries(looks.KINDS.map((k) => [k, me.look(k)])), auto: true });
+  if (me.color !== null) send({ type: "color", color: me.color, auto: true });
+  send({ type: "own_color", color: me.ownColor || null, auto: true });
+}
 store.set("bonk.token", me.token);
 
 const app = {
@@ -459,10 +469,7 @@ function onMessage(msg) {
       playtest.on = !!msg.playtest;
       chat.reset(msg.chat);
       playtest.sendErrors();
-      // Bring your profile along
-      send({ type: "look", ...Object.fromEntries(looks.KINDS.map((k) => [k, me.look(k)])), auto: true });
-      if (me.color !== null) send({ type: "color", color: me.color, auto: true });
-      if (me.ownColor) send({ type: "own_color", color: me.ownColor, auto: true });
+      sendLooks();  // (bring your profile along)
       break;
     case "lobby":
       app.lobby = msg;

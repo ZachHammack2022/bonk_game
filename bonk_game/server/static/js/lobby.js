@@ -40,7 +40,6 @@ function botLabel(kind) {
   return kind.toUpperCase() + " agent";
 }
 
-const picker = { open: false };
 
 function renderLobby() {
   const L = app.lobby, Wm = app.welcome;
@@ -155,12 +154,14 @@ function renderLobby() {
       if (you) {
         const ball = li.querySelector(".ball");
         ball.classList.add("pick");
-        ball.title = "Pick your colour";
+        ball.title = "Customize your ball";
         ball.setAttribute("role", "button");
         ball.tabIndex = 0;
-        const toggle = () => { picker.open = !picker.open; renderLobby(); };
-        ball.addEventListener("click", toggle);
-        ball.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+        // Your profile's Ball tab, the same as on the start page (changes
+        // reach your seat: saveProfile)
+        const edit = () => openMe("ball");
+        ball.addEventListener("click", edit);
+        ball.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); edit(); } });
       } else {
         li.appendChild(personButton(seatInfo.id, seatInfo.name));
         if (host) {
@@ -170,7 +171,6 @@ function renderLobby() {
         }
       }
       ul.appendChild(li);
-      if (you && picker.open) ul.appendChild(colorPicker(seatInfo.color, seatInfo.own_color));
     } else {
       const b = seatInfo.bot;
       const li = seat(seatInfo.color, botLabel(seatInfo.kind), "bot", false);
@@ -305,58 +305,6 @@ function removeButton(title, onClick) {
   rm.setAttribute("aria-label", title);
   rm.addEventListener("click", onClick);
   return rm;
-}
-
-function colorPicker(current, own) {
-  const li = document.createElement("li");
-  li.className = "picker";
-  const taken = new Set(app.lobby.seats.filter((x) => x.kind === "human" && x.id !== me.id).map((x) => x.color));
-  // In teams, each side has its own colours
-  const mine = app.lobby.seats.find((x) => x.id === me.id);
-  const allowed = mine && mine.team !== null && mine.team !== undefined ? new Set(app.welcome.team_palettes[mine.team]) : null;
-  app.welcome.colors.forEach((c, i) => {
-    const b = document.createElement("button");
-    b.className = "swatch" + (i === current && !own ? " on" : "");
-    b.style.background = c;
-    b.title = app.welcome.color_names[i];
-    b.setAttribute("aria-label", app.welcome.color_names[i]);
-    b.disabled = taken.has(i) || (allowed !== null && !allowed.has(i));
-    b.addEventListener("click", () => {
-      me.color = i;
-      if (me.ownColor) { me.ownColor = null; send({ type: "own_color", color: null }); }
-      saveProfile();
-      send({ type: "color", color: i });
-    });
-    li.appendChild(b);
-  });
-  // Any colour (signed in; not in teams, where colours show your side)
-  if (allowed === null) {
-    li.appendChild(ownColorButton(own || me.ownColor, (hex) => {
-      me.ownColor = hex; saveProfile();
-      send({ type: "own_color", color: hex });
-    }));
-    if (me.ownColor && !own) {
-      const note = document.createElement("p");
-      note.className = "dim small own-note";
-      note.textContent = "Your colour is too close to someone else's here, so you have a palette colour this time.";
-      li.appendChild(note);
-    }
-  }
-  const ballColor = own || (mine ? app.welcome.colors[mine.color] : T.faint);
-  for (const kind of looks.KINDS) {
-    const current = mine && mine[kind] ? mine[kind] : me.look(kind);
-    if (kind !== "pattern") {
-      const label = document.createElement("p");
-      label.className = "dim small look-label";
-      label.textContent = looks.LABELS[kind];
-      li.appendChild(label);
-    }
-    li.appendChild(lookRow(kind, current, ballColor, mine ? mine.pattern : me.pattern, (id) => {
-      me.setLook(kind, id); saveProfile();
-      send({ type: "look", [kind]: id });
-    }));
-  }
-  return li;
 }
 
 // The "any colour" swatch: a colour picker when signed in, a lock for
