@@ -404,6 +404,7 @@ function connect() {
     ws.send(JSON.stringify({ type: "hello", name: me.name, token: me.token, version: CLIENT_VERSION,
                              reopen: app.retry > 0, host: app.restoring !== null,
                              installed: installedApp(),
+                             tz: -new Date().getTimezoneOffset(),  // (your clock: time-of-day badges)
                              ...(app.password ? { password: app.password } : {}) }));
   };
   ws.onmessage = (e) => {
@@ -442,6 +443,7 @@ function recordMatch(msg) {
   if (i < 0 || !msg.summaries || !msg.match_id) return null;
   const before = profileStore.get().stats;
   profileStore.record({ id: msg.match_id, at: msg.at, mode: msg.mode, map: msg.map, ...msg.summaries[i],
+                        hour: new Date(msg.at * 1000).getHours(),  // (your clock's: badges)
                         players: slots.length, people: slots.filter((s) => s.kind === "human").length });
   return badgeReport(before, profileStore.get().stats);
 }

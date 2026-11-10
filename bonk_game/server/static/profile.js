@@ -52,7 +52,7 @@
   }
 
   // { key: count }: a match's highlights (feats), or their totals
-  function cleanCounts(d, most = 20) {
+  function cleanCounts(d, most = 40) {
     const out = {};
     if (isObj(d)) for (const k of Object.keys(d).sort().slice(0, most)) if (key(k)) out[k] = int(d[k]);
     return out;
@@ -78,6 +78,7 @@
                   map: key(e.map) ? e.map : "?", won: e.won === true, score: num(e.score) };
     for (const k of ENTRY_COUNTS) out[k] = int(e[k], 0, 1000);
     out.best_hit = num(e.best_hit);
+    out.hour = Number.isInteger(e.hour) && e.hour >= 0 && e.hour <= 23 ? e.hour : -1;
     out.awards = Array.isArray(e.awards) ? e.awards.filter(key).slice(0, 10) : [];
     out.feats = {};
     for (const [k, v] of Object.entries(cleanCounts(e.feats))) if (v) out.feats[k] = Math.min(v, 1000);
@@ -119,11 +120,44 @@
     return { ...t, [k]: { matches: cur.matches + 1, wins: cur.wins + (won ? 1 : 0) } };
   };
 
+  // Highlights a match entry says by itself (profiles.py: derived_feats):
+  // only bots; at night or lunch on your clock; 2nd or last (not in Teams);
+  // lost without anyone touching you; won without a knockout; no
+  // knockouts either way; 8 people; 5 power-ups; GROUNDHOG in a row on a map
+  const DERIVED = ["bots_only", "night_owl", "lunch", "second", "last", "self_destruct", "lucky_win",
+                   "pacifist", "party", "sugar_rush", "groundhog"];
+  const GROUNDHOG = 10;
+  function derivedFeats(e, history) {
+    const ranked = e.mode !== "teams";
+    let run = 1;
+    for (const h of history) {
+      if (h.map !== e.map || run > GROUNDHOG) break;  // (just the 10th in a row counts)
+      run += 1;
+    }
+    const checks = {
+      bots_only: e.people === 1 && e.players > 1,
+      night_owl: e.hour >= 2 && e.hour < 5,
+      lunch: e.hour === 12,
+      second: ranked && e.of >= 3 && e.place === 2,
+      last: ranked && e.of >= 2 && e.place === e.of && !e.won,
+      self_destruct: !e.won && e.deaths > 0 && e.falls === e.deaths,
+      lucky_win: e.won && e.kos === 0,
+      pacifist: e.kos === 0 && e.deaths === 0,
+      party: e.people >= 8,
+      sugar_rush: e.pickups >= 5,
+      groundhog: run === GROUNDHOG,
+    };
+    const f = {};
+    for (const k of DERIVED) if (checks[k]) f[k] = 1;
+    return f;
+  }
+
   // The profile after one more match (a history entry; see the top).
   // The same match twice (say, after a reconnect) only counts once.
   function record(p, entry) {
     const e = cleanEntry(entry);
     if (!e || p.history.some((h) => h.id === e.id)) return p;
+    e.feats = { ...e.feats, ...derivedFeats(e, p.history) };
     const s = p.stats;
     const awards = { ...s.awards };
     for (const a of e.awards) awards[a] = (awards[a] || 0) + 1;

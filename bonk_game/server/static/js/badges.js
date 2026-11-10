@@ -33,7 +33,7 @@ function badgeReport(before, after) {
   for (const b of BADGES) {
     const was = badgeLevel(before, b), now = badgeLevel(after, b);
     if (now > was) earned.push({ badge: b, level: now });
-    if (now < b.levels.length) {
+    if (now < b.levels.length && !(b.secret && !now)) {  // (a secret one stays a surprise)
       const have = badgeValue(after, b.stat), need = b.levels[now];
       const from = now ? b.levels[now - 1] : 0;
       const frac = (have - from) / (need - from);
@@ -52,6 +52,26 @@ function badgeMedal(b, level, big) {
   return m;
 }
 
+// A secret badge you haven't found yet
+function secretCard() {
+  const li = document.createElement("li");
+  li.className = "badge-card locked secret";
+  const m = document.createElement("span");
+  m.className = "badge-medal locked";
+  m.textContent = "?";
+  m.setAttribute("aria-hidden", "true");
+  const text = document.createElement("div");
+  text.className = "badge-text";
+  const title = document.createElement("b");
+  title.textContent = "???";
+  const what = document.createElement("span");
+  what.className = "dim small";
+  what.textContent = "A secret badge. Keep playing to find it";
+  text.append(title, what);
+  li.append(m, text);
+  return li;
+}
+
 const levelName = (level) => BADGE_LEVEL_TITLES[level - 1] || "";
 
 // ---------------------------------------------------------------------------
@@ -66,6 +86,7 @@ function renderBadges(stats, into) {
   for (const b of BADGES) {
     const lvl = badgeLevel(stats, b);
     const have = badgeValue(stats, b.stat);
+    if (b.secret && !lvl) { grid.append(secretCard()); continue; }
     const li = document.createElement("li");
     li.className = "badge-card" + (lvl ? "" : " locked");
     const text = document.createElement("div");

@@ -62,7 +62,7 @@ def empty(id_):
             "history": []}
 
 
-def _clean_counts(d, most=20):
+def _clean_counts(d, most=40):
     """{key: count}: a match's highlights (feats), or their totals."""
     return {k: _int(d[k]) for k in sorted(d)[:most] if _key(k)} if isinstance(d, dict) else {}
 
@@ -91,6 +91,8 @@ def _clean_entry(e):
     for k in ENTRY_COUNTS:
         out[k] = _int(e.get(k), 0, 1000)
     out["best_hit"] = _num(e.get("best_hit"))
+    h = e.get("hour")
+    out["hour"] = h if isinstance(h, int) and not isinstance(h, bool) and 0 <= h <= 23 else -1
     out["awards"] = [a for a in e.get("awards", []) if _key(a)][:10] if isinstance(e.get("awards"), list) else []
     out["feats"] = {k: min(v, 1000) for k, v in _clean_counts(e.get("feats")).items() if v}
     return out
@@ -146,11 +148,51 @@ def _tally(t, k, won):
     return {**t, k: {"matches": cur["matches"] + 1, "wins": cur["wins"] + (1 if won else 0)}}
 
 
+# Highlights a match entry says by itself (record() adds them to its feats,
+# for badges.py): see derived_feats
+DERIVED_FEATS = ("bots_only", "night_owl", "lunch", "second", "last", "self_destruct", "lucky_win",
+                 "pacifist", "party", "sugar_rush", "groundhog")
+GROUNDHOG = 10  # matches in a row on one map
+
+
+def derived_feats(e, history):
+    """The highlights an entry makes on its own (and with the matches before
+    it, newest first): played with only bots; at night (2-5 on your clock)
+    or at lunch (12-1); 2nd or last (not in Teams); lost without anyone
+    touching you; won without a knockout; no knockouts either way; with 8
+    people; 5 power-ups; GROUNDHOG matches in a row on the same map."""
+    f = {}
+    ranked = e["mode"] != "teams"
+    checks = {
+        "bots_only": e["people"] == 1 and e["players"] > 1,
+        "night_owl": 2 <= e["hour"] < 5,
+        "lunch": e["hour"] == 12,
+        "second": ranked and e["of"] >= 3 and e["place"] == 2,
+        "last": ranked and e["of"] >= 2 and e["place"] == e["of"] and not e["won"],
+        "self_destruct": not e["won"] and e["deaths"] > 0 and e["falls"] == e["deaths"],
+        "lucky_win": e["won"] and e["kos"] == 0,
+        "pacifist": e["kos"] == 0 and e["deaths"] == 0,
+        "party": e["people"] >= 8,
+        "sugar_rush": e["pickups"] >= 5,
+    }
+    run = 1
+    for h in history:
+        if h["map"] != e["map"] or run > GROUNDHOG:  # (just the 10th in a row counts)
+            break
+        run += 1
+    checks["groundhog"] = run == GROUNDHOG
+    for k in DERIVED_FEATS:
+        if checks[k]:
+            f[k] = 1
+    return f
+
+
 def record(p, entry):
     """The profile after one more match; the same match twice counts once."""
     e = _clean_entry(entry)
     if e is None or any(h["id"] == e["id"] for h in p["history"]):
         return p
+    e["feats"] = {**e["feats"], **derived_feats(e, p["history"])}
     s = p["stats"]
     awards = dict(s["awards"])
     for a in e["awards"]:
@@ -207,9 +249,11 @@ def merge(a, b):
     return {**a, "merged": merged, "stats": stats, "history": history[:HISTORY]}
 
 
-def history_entry(results, slot, match_id, at, map_name):
-    """One player's history entry from a match's results (match.py)."""
+def history_entry(results, slot, match_id, at, map_name, hour=None):
+    """One player's history entry from a match's results (match.py). hour:
+    when it was on the player's own clock (0-23), if their browser said."""
     summary = results["summaries"][slot]
     slots = results.get("slots") or []
     return {"id": match_id, "at": at, "mode": results["mode"], "map": map_name, **summary,
-            "players": len(slots), "people": sum(1 for s in slots if s.get("kind") == "human")}
+            "players": len(slots), "people": sum(1 for s in slots if s.get("kind") == "human"),
+            "hour": -1 if hour is None else hour}
