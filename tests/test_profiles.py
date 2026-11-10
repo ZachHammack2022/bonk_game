@@ -27,7 +27,9 @@ def entry(rng, k, **extra):
             "score": rng.choice([0, 1, 2.5, 30]), "kos": rng.randint(0, 6), "falls": rng.randint(0, 3),
             "deaths": rng.randint(0, 5), "best_hit": round(rng.uniform(0, 40), 3), "pickups": rng.randint(0, 4),
             "awards": rng.sample(["kos", "hit", "falls", "survivor", "pickups"], rng.randint(0, 2)),
-            "players": of, "people": rng.randint(1, of), **extra}
+            "players": of, "people": rng.randint(1, of),
+            "feats": {"first_blood": rng.randint(0, 1), "double": rng.randint(0, 2), "triple": rng.randint(0, 1),
+                      "super_ko": rng.randint(0, 2), "flawless": rng.randint(0, 1)}, **extra}
 
 
 def python_side(script):
@@ -73,9 +75,11 @@ def steps():
     script += [("a", entry(rng, 3))]                     # the same match again (a reconnect)
     script += [("b", entry(rng, 100 + k)) for k in range(40)]
     script += [("merge", None), ("merge", None)]          # adding the same profile twice
-    script += [("a", entry(rng, 200, best_hit=55.55, awards=["kos", "BAD key", 5], kos=5000, mode="<x>"))]
+    script += [("a", entry(rng, 200, best_hit=55.55, awards=["kos", "BAD key", 5], kos=5000, mode="<x>",
+                           feats={"triple": 5000, "Bad": 1, "double": -3, "first_blood": "x"}))]
     junk = {"format": "bonk-profile", "id": "x" * 99, "name": "n" * 40, "color": 12, "own_color": "#ZZZZZZ", "pattern": 7,
             "merged": ["ok", 3, ""], "stats": {"matches": -5, "wins": 2.7, "best_hit": "big", "awards": {"kos": 2, "Bad": 1},
+                                                 "feats": {"triple": 2, "NO": 1, "double": "x"},
                                                  "modes": {"ffa": {"matches": 3, "wins": "x"}, "UP": {}}, "first_at": None},
             "history": [{"id": "h1", "at": 5, "won": "yes"}, {"id": "h1"}, {"nope": 1}, "str"]}
     script += [("validate", junk), ("validate", {"format": "other"}), ("validate", [1, 2])]

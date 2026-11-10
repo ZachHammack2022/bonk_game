@@ -10,11 +10,15 @@
 //                               (own_color: "#rrggbb" or null; accounts only)
 //     prefs: { volume, shake, ping, keys: {...} },
 //     stats: { matches, wins, kos, falls, deaths, pickups, best_hit,
-//              awards: { kos: 3, ... }, modes: { ffa: { matches, wins } },
+//              awards: { kos: 3, ... }, feats: { triple: 1, ... },
+//              modes: { ffa: { matches, wins } },
 //              maps: { platform: { matches, wins } }, first_at, last_at },
 //     history: [ newest first, up to HISTORY entries:
 //       { id, at, mode, map, place, of, won, score, kos, falls, deaths,
-//         best_hit, pickups, awards: ["kos", ...], players, people } ] }
+//         best_hit, pickups, awards: ["kos", ...], feats: { double: 1, ... },
+//         players, people } ] }
+// (feats: highlights for badges, js/badges.js: first_blood, double,
+// triple, super_ko, flawless)
 //
 // An exported file is the profile itself. Times are seconds since 1970.
 //
@@ -42,9 +46,21 @@
       name: "", color: null, own_color: null, pattern: "plain", trail: "none", hat: "none", ko: "pop", muted: false,
       prefs: {},
       stats: { matches: 0, wins: 0, kos: 0, falls: 0, deaths: 0, pickups: 0, best_hit: 0,
-               awards: {}, modes: {}, maps: {}, first_at: null, last_at: null },
+               awards: {}, feats: {}, modes: {}, maps: {}, first_at: null, last_at: null },
       history: [],
     };
+  }
+
+  // { key: count }: a match's highlights (feats), or their totals
+  function cleanCounts(d, most = 20) {
+    const out = {};
+    if (isObj(d)) for (const k of Object.keys(d).sort().slice(0, most)) if (key(k)) out[k] = int(d[k]);
+    return out;
+  }
+  function addCounts(a, b) {
+    const out = { ...a };
+    for (const k of Object.keys(b)) out[k] = (out[k] || 0) + b[k];
+    return out;
   }
 
   function cleanTally(t) {
@@ -63,6 +79,8 @@
     for (const k of ENTRY_COUNTS) out[k] = int(e[k], 0, 1000);
     out.best_hit = num(e.best_hit);
     out.awards = Array.isArray(e.awards) ? e.awards.filter(key).slice(0, 10) : [];
+    out.feats = {};
+    for (const [k, v] of Object.entries(cleanCounts(e.feats))) if (v) out.feats[k] = Math.min(v, 1000);
     return out;
   }
 
@@ -85,6 +103,7 @@
     out.stats.best_hit = num(s.best_hit);
     out.stats.awards = {};
     if (isObj(s.awards)) for (const k of Object.keys(s.awards).sort().slice(0, 20)) if (key(k)) out.stats.awards[k] = int(s.awards[k]);
+    out.stats.feats = cleanCounts(s.feats);
     out.stats.modes = cleanTally(s.modes);
     out.stats.maps = cleanTally(s.maps);
     out.stats.first_at = Number.isFinite(s.first_at) ? int(s.first_at, 0, TIME) : null;
@@ -114,7 +133,7 @@
         ...s,
         matches: s.matches + 1, wins: s.wins + (e.won ? 1 : 0), kos: s.kos + e.kos, falls: s.falls + e.falls,
         deaths: s.deaths + e.deaths, pickups: s.pickups + e.pickups, best_hit: Math.max(s.best_hit, e.best_hit),
-        awards, modes: tally(s.modes, e.mode, e.won), maps: tally(s.maps, e.map, e.won),
+        awards, feats: addCounts(s.feats, e.feats), modes: tally(s.modes, e.mode, e.won), maps: tally(s.maps, e.map, e.won),
         first_at: s.first_at === null ? e.at : Math.min(s.first_at, e.at), last_at: Math.max(s.last_at || 0, e.at),
       },
       history: [e, ...p.history].slice(0, HISTORY),
@@ -141,6 +160,7 @@
     for (const k of COUNTS) stats[k] = s[k] + t[k];
     stats.awards = { ...s.awards };
     for (const k of Object.keys(t.awards)) stats.awards[k] = (stats.awards[k] || 0) + t.awards[k];
+    stats.feats = addCounts(s.feats, t.feats);
     stats.modes = addTallies(s.modes, t.modes);
     stats.maps = addTallies(s.maps, t.maps);
     const firsts = [s.first_at, t.first_at].filter((x) => x !== null);

@@ -38,6 +38,7 @@ function renderStats() {
     : "";
   if (!s.matches) {
     body.append(el("p", "dim", "No matches yet. Play one and it shows up here."));
+    renderBadges(s, body);  // (badges.js: all still to earn)
     return;
   }
   const tiles = el("div", "stat-tiles");
@@ -53,6 +54,7 @@ function renderStats() {
   tile(s.falls, "falls");
   tile(Math.round(s.best_hit), "hardest hit");
   body.append(tiles);
+  renderBadges(s, body);  // (badges.js)
 
   const awards = Object.entries(s.awards).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
   if (awards.length) {

@@ -62,6 +62,7 @@ function showResults(msg, quiet) {
   }
   renderAwards(msg, slots);
   renderRatingChange(msg, slots);
+  renderEarned(app.earned);  // (badges.js: what this match earned you)
   $("results").classList.remove("hidden");
   $("emotes").classList.add("hidden");
   const quick = !!(app.lobby && app.lobby.quick);

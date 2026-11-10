@@ -237,6 +237,10 @@ function check(cond, what) {
     await guest.keyboard.up("ArrowRight");
     const winner = await host.textContent("#winner");
     check(/wins?!|Draw!/.test(winner), `results show a winner (${winner.trim()})`);
+    // A first match always earns a badge (Regular: play 1 match), shown on the results
+    await host.waitForSelector("#badges-earned .earned-list li");
+    check((await host.textContent("#badges-earned")).includes("Regular"), "the results show the badges you just earned");
+    await host.waitForTimeout(1200);  // (they pop in)
     await shot(host, "results");
     const res = await host.evaluate(() => bonkDebug.app.results);
     check(res.stats.length === res.slots.length && Array.isArray(res.awards), "results come with stats and awards");

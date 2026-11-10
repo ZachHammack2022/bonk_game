@@ -32,6 +32,7 @@ OVER_PAUSE = 1.4      # seconds showing the final point before results
 
 BOT_KINDS = tuple(f"bot:{level}" for level in LEVEL_NAMES)
 STAND_IN = "bot:medium"  # plays for a human who drops out mid-match
+MULTI_KO = 3.0        # seconds between knockouts that make a double (and triple) knockout
 
 
 def bot_level(kind):
@@ -110,6 +111,9 @@ class Match:
         self.finished = False   # done and the final pause is over
         self.tick_count = 0
         self.stats = [new_stats() for _ in kinds]
+        self.feats = [new_feats() for _ in kinds]
+        self.last_ko = [None] * len(kinds)    # tick of each player's last knockout (multi-knockouts)
+        self.ko_chain = [0] * len(kinds)      # ... and how many in a row, MULTI_KO apart
         self.set_phase("countdown", 3)
 
     @property
@@ -153,6 +157,8 @@ class Match:
         self.stand_ins.pop(slot, None)
         self.inputs[slot] = NO_BUTTONS
         self.stats[slot] = new_stats()
+        self.feats[slot] = new_feats()
+        self.last_ko[slot], self.ko_chain[slot] = None, 0
 
     def release(self, slot):
         """The human is back: stop the stand-in bot."""
@@ -234,6 +240,7 @@ class Match:
             self.stats[i]["deaths"] += 1
             if by is not None:
                 self.stats[by]["kos"] += 1
+                self._feat_ko(by, i)
             elif not wall:
                 self.stats[i]["falls"] += 1
             events.append({"e": "death", "i": i, "x": round(x, 1), "y": round(y, 1),
@@ -256,6 +263,21 @@ class Match:
         elif self.powerups and self.powerups.pending is not None:
             self.set_phase("super")
         return events
+
+    def _feat_ko(self, by, victim):
+        """The highlights (badges.py) `by` knocking out `victim` makes."""
+        f = self.feats[by]
+        if not any(x["first_blood"] for x in self.feats):
+            f["first_blood"] = 1  # (the match's first knockout)
+        last = self.last_ko[by]
+        self.ko_chain[by] = self.ko_chain[by] + 1 if last is not None and self.tick_count - last <= MULTI_KO * TICK_HZ else 1
+        self.last_ko[by] = self.tick_count
+        if self.ko_chain[by] == 2:
+            f["double"] += 1
+        elif self.ko_chain[by] == 3:
+            f["triple"] += 1
+        if self.powerups and (self.powerups.super_kos.pop(victim, None) == by or self.powerups.super_on(by)):
+            f["super_ko"] += 1
 
     def _buttons(self):
         """What each person is pressing (None for bots and stand-ins). A
@@ -387,6 +409,7 @@ class Match:
                               pickups=self.powerups.collected[i] if self.powerups else 0)
                          for i, st in enumerate(self.stats)],
                # In Knockouts, most knockouts is the score already
+               "feats": [dict(f) for f in self.feats],
                "awards": [a for a in awards(self.stats, self.powerups.collected if self.powerups else None)
                           if not (self.mode.id == "knockouts" and a["id"] == "kos")]}
         res["summaries"] = summaries(res, self.mode.teams if self.mode.id == "teams" else None)
@@ -413,8 +436,25 @@ def summaries(res, teams=None):
         out.append({"place": place, "of": of, "won": won, "score": scores[i],
                     "kos": st["kos"], "falls": st["falls"], "deaths": st["deaths"],
                     "best_hit": round(st["best_hit"], 1), "pickups": st.get("pickups", 0),
-                    "awards": [a["id"] for a in res["awards"] if i in a["slots"]]})
+                    "awards": [a["id"] for a in res["awards"] if i in a["slots"]],
+                    "feats": feats_for(res, i, won)})
     return out
+
+
+def new_feats():
+    """A player's highlights in a match, for their badges (badges.py):
+    first_blood: made the match's first knockout (0 or 1); double / triple:
+    knockouts in a row, each within MULTI_KO seconds of the last; super_ko:
+    knockouts made while their super power was on."""
+    return {"first_blood": 0, "double": 0, "triple": 0, "super_ko": 0}
+
+
+def feats_for(res, i, won):
+    """One player's highlights from the results, with flawless (won without
+    being knocked out or falling)."""
+    f = dict((res.get("feats") or [None] * (i + 1))[i] or new_feats())
+    f["flawless"] = 1 if won and res["stats"][i]["deaths"] == 0 else 0
+    return f
 
 
 def theme_color(i):

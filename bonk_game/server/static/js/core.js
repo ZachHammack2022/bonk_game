@@ -434,13 +434,16 @@ function refreshForNewVersion(text) {
   setTimeout(() => location.reload(), 600);
 }
 
-// Add a finished match to your history, if you played in it
+// Add a finished match to your history, if you played in it. Returns the
+// badges it earned you (badges.js), and how close you are to the next one
 function recordMatch(msg) {
   const slots = msg.slots || [];
   const i = slots.findIndex((s) => s.id === me.id);
-  if (i < 0 || !msg.summaries || !msg.match_id) return;
+  if (i < 0 || !msg.summaries || !msg.match_id) return null;
+  const before = profileStore.get().stats;
   profileStore.record({ id: msg.match_id, at: msg.at, mode: msg.mode, map: msg.map, ...msg.summaries[i],
                         players: slots.length, people: slots.filter((s) => s.kind === "human").length });
+  return badgeReport(before, profileStore.get().stats);
 }
 
 function onMessage(msg) {
@@ -536,9 +539,9 @@ function onMessage(msg) {
     case "results":
       if (!app.match) { show("lobby"); break; }  // joined after the match ended
       app.results = msg;
+      app.earned = recordMatch(msg);  // (the badges it earned you: badges.js)
       showResults(msg);
       playtest.finish();
-      recordMatch(msg);
       showReplayButtons(msg);
       break;
     case "chat":

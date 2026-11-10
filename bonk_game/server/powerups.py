@@ -127,6 +127,7 @@ class PowerUps:
         self.pending = None   # (player, super) about to happen: the cutscene's on (see Match)
         self.plane = None     # the plane in the air: see launch()
         self.bombs = []       # falling: [x, y, y speed, pilot]
+        self.super_kos = {}   # victim -> who a bomb or black hole is knocking them out for
         self.hole = None      # the black hole: see launch()
         self.clear_copies()
         self.apply()
@@ -161,6 +162,14 @@ class PowerUps:
             self._pull()
 
     # --- supers --------------------------------------------------------------
+    def super_on(self, i):
+        """Is player i's super power on: flying the plane (or its bombs still
+        falling), a black hole, a giant or a swarm?"""
+        return ((self.plane is not None and self.plane["i"] == i)
+                or any(b[3] == i for b in self.bombs)
+                or (self.hole is not None and self.hole["i"] == i)
+                or bool(self.effects[i] and self.effects[i][0] in SUPERS))
+
     def busy(self):
         """Is a super on (or about to be)? Only one at a time."""
         return (self.pending is not None or self.plane is not None or self.hole is not None
@@ -253,6 +262,7 @@ class PowerUps:
                     and math.hypot(p.x - x, p.y - y) < BLAST + p.r):
                 p.doomed = True
                 env.last_hit[j] = (pilot, env.steps)
+                self.super_kos[j] = pilot
                 victims.append(j)
         for o, c in env.copies:
             if env.teams[o] != env.teams[pilot] and math.hypot(c.x - x, c.y - y) < BLAST + c.r:
@@ -321,6 +331,7 @@ class PowerUps:
                     and math.hypot(p.x - hx, p.y - hy) < reach + p.r):
                 p.doomed = True  # (out at the start of the next step, to you)
                 env.last_hit[j] = (h["i"], env.steps)
+                self.super_kos[j] = h["i"]
                 events.append({"e": "gulp", "i": h["i"], "j": j, "x": round(p.x, 1), "y": round(p.y, 1)})
         for o, c in env.copies:
             if not self._hole_safe(o) and math.hypot(c.x - hx, c.y - hy) < reach + c.r:

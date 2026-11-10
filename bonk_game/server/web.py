@@ -94,7 +94,7 @@ import traceback
 from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
-from bonk_game.server import auth, limits, lobby, metrics, moderation, modes, playtest
+from bonk_game.server import auth, badges, limits, lobby, metrics, moderation, modes, playtest
 from bonk_game.server.room import PasswordNeeded, RoomFull, RoomManager, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -169,9 +169,11 @@ def render_index(version=VERSION):
     with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
         page = f.read()
     page = re.sub(r'((?:src|href)="/static/[^"?]+)"', rf'\1?v={version}"', page)
-    # Map and mode names, for your match history on the home screen
+    # Map and mode names, for your match history on the home screen, and
+    # the badges (badges.py) your stats earn
     names = json.dumps({"maps": {n: MAPS[n].title for n in MAPS},
-                        "modes": {m["id"]: m["title"] for m in modes.describe_modes()}})
+                        "modes": {m["id"]: m["title"] for m in modes.describe_modes()},
+                        "badges": badges.describe()})
     names = names.replace("<", "\\u003c")
     head = (f'<head>\n  <meta name="bonk-version" content="{version}">'
             f'\n  <script id="bonk-names" type="application/json">{names}</script>')
