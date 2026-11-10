@@ -157,6 +157,7 @@ function status(text) {
 }
 function show(screen) {
   for (const id of ["home", "browse", "leaderboard", "lobby", "game"]) $(id).classList.toggle("hidden", id !== screen);
+  if (screen !== "game" && typeof music !== "undefined") music.want("lobby");  // (music.js: matches pick their own)
   watchPublic(screen === "home" || screen === "browse");  // (people.js)
 }
 
@@ -492,6 +493,7 @@ function onMessage(msg) {
       break;
     case "match":
       app.away = false;
+      music.want(music.forMap(msg.map));  // (each map has its own)
       $("go-lobby").classList.remove("hidden");
       app.match = msg;
       applyLooks(msg);
