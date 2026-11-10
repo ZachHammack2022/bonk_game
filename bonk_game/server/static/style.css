@@ -839,8 +839,6 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
 .home-top { display: flex; gap: 8px; align-items: center; }
 .leaderboard-button { gap: 6px; }
 
-.board-you { flex-direction: row; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 18px; }
-.board-you p { margin: 0; flex: 1; min-width: 200px; }
 .board-head, .board-row { display: grid; grid-template-columns: 44px minmax(0, 2.4fr) minmax(130px, 1.2fr) 70px 64px 56px;
                           align-items: center; gap: 12px; padding: 0 18px; }
 .board-head { min-height: 38px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 11px;
