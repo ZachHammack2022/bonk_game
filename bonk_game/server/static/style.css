@@ -777,15 +777,6 @@ body.touch .game-bar { bottom: auto; top: 12px; opacity: 0.7; }
 .stat-tile { padding: 12px 8px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px;
              font-size: 12px; color: var(--dim); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 0 -1px -1px 0; }
 .stat-tile b { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-.stat-awards { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.stat-awards li { background: var(--surface-2); border-radius: 999px; padding: 3px 10px; font-size: 13px; display: flex; gap: 6px; align-items: center; }
-.stat-awards li b { color: var(--accent); font-variant-numeric: tabular-nums; }
-.stat-modes { width: 100%; border-collapse: collapse; font-size: 14px; }
-.stat-modes td { padding: 6px 0; border-bottom: 1px solid var(--line); }
-.stat-modes td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
-.stat-history { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
-.stat-history li { padding: 8px 2px 8px 10px; border-bottom: 1px solid var(--line); border-left: 2px solid transparent; }
-.stat-history li.won { border-left-color: var(--accent); }
 .row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 @media (max-width: 420px) { .stat-tiles { grid-template-columns: repeat(2, 1fr); } }
 
