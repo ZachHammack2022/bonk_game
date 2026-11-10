@@ -15,7 +15,7 @@ const FIXED_KEYS = { ArrowUp: 0, ArrowLeft: 1, ArrowDown: 2, ArrowRight: 3, Shif
 const RESERVED_KEYS = new Set(["Digit1", "Digit2", "Digit3", "Digit4", "KeyM", "KeyT", "Escape", "Tab", "Enter"]);
 
 const prefs = (() => {
-  const d = { volume: 0.8, shake: true, haptics: true, ping: true, predictOthers: true, chat: true, colorblind: false, contrast: false, keys: { ...DEFAULT_KEYS } };
+  const d = { volume: 0.8, music: 0.5, shake: true, haptics: true, ping: true, predictOthers: true, chat: true, colorblind: false, contrast: false, keys: { ...DEFAULT_KEYS } };
   const saved = profileStore.get().prefs;
   return { ...d, ...saved, keys: { ...d.keys, ...(saved.keys || {}) } };
 })();
@@ -88,6 +88,8 @@ const settingsOpen = meOpen;
 function renderSettings() {
   $("set-volume").value = Math.round(prefs.volume * 100);
   $("set-volume-out").textContent = sound.muted ? "muted" : `${Math.round(prefs.volume * 100)}%`;
+  $("set-music").value = Math.round(prefs.music * 100);
+  $("set-music-out").textContent = sound.muted ? "muted" : prefs.music ? `${Math.round(prefs.music * 100)}%` : "off";
   $("set-mute").checked = sound.muted;
   $("set-shake").checked = prefs.shake;
   $("set-haptics").checked = prefs.haptics !== false;
@@ -164,6 +166,12 @@ $("set-volume").addEventListener("input", () => {
   savePrefs(); renderSettings();
 });
 $("set-volume").addEventListener("change", () => sound.play("point"));
+$("set-volume").addEventListener("input", () => music.volume());
+// Music: a share of the main volume (music.js)
+$("set-music").addEventListener("input", () => {
+  prefs.music = +$("set-music").value / 100;
+  savePrefs(); renderSettings(); music.volume();
+});
 $("set-mute").addEventListener("change", () => { sound.setMuted($("set-mute").checked); renderSettings(); });
 $("set-shake").addEventListener("change", () => { prefs.shake = $("set-shake").checked; savePrefs(); });
 $("set-haptics").addEventListener("change", () => {

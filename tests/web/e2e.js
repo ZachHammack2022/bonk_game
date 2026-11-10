@@ -188,11 +188,14 @@ function check(cond, what) {
     await host.waitForFunction(() => document.querySelector("#chat-log").textContent.includes("hi there you ****"));
     check((await host.textContent("#chat-log")).includes("Bob joined"), "lobby chat reaches everyone, filtered, with who joined");
     await shot(host, "lobby");
+    check(await host.evaluate(() => music.playing) === "lobby", "the lobby plays Cozy Lobby (music.js)");
 
     await host.click("#start");
     await host.waitForSelector("#game:not(.hidden)");
     await guest.waitForSelector("#game:not(.hidden)");
     check(true, "both players go to the match");
+    check(await host.evaluate(() => music.playing === music.forMap("classic") && music.playing === "arcade"),
+      "a match plays its map's music (Classic: Pocket Arcade)");
     await host.waitForTimeout(2200);
     await guest.keyboard.press("Digit2");
     await host.waitForFunction(() => bonkDebug.fx.emotes.some((e) => e.slot === 1 && e.id === 1), null, { timeout: 3000 });
@@ -241,6 +244,9 @@ function check(cond, what) {
     await guest.keyboard.up("ArrowRight");
     const winner = await host.textContent("#winner");
     check(/wins?!|Draw!/.test(winner), `results show a winner (${winner.trim()})`);
+    // Music (music.js): a victory sting, then the results music
+    await host.waitForFunction(() => music.playing === "parade", null, { timeout: 8000 });
+    check(true, "the results play the Oom-Pah Parade");
     // A first match always earns a badge (Regular: play 1 match), shown on the results
     await host.waitForSelector("#badges-earned .earned-list li");
     check((await host.textContent("#badges-earned")).includes("Regular"), "the results show the badges you just earned");

@@ -17,6 +17,7 @@ const sound = {
   setMuted(m) {
     this.muted = m;
     profileStore.update((p) => ({ ...p, muted: m }));
+    if (typeof music !== "undefined") music.volume();  // (music.js)
   },
   toggle() {
     this.setMuted(!this.muted);
@@ -184,7 +185,7 @@ function onEvent(ev, state) {
       if (isMe(ev.i)) haptics.buzz([60, 40, 90]);       // you're out
       else if (isMe(ev.by)) haptics.buzz([15, 50, 25]); // you got them
       fx.kick(10);
-      sound.play("death");
+      music.sting("ko"); music.duck();  // (music.js)
       fx.feed.push({ victim: ev.i, by: ev.by ?? null, wall: !!ev.wall, at: performance.now() });
       if (fx.feed.length > FEED_LINES) fx.feed.shift();
       const eliminated = (state.events || []).some((e) => e.e === "eliminated" && e.i === ev.i);
@@ -245,7 +246,7 @@ function onEvent(ev, state) {
     case "super":
       startSuperScene(ev.i);
       if (isMe(ev.i)) haptics.buzz([20, 40, 20, 40, 80]);
-      sound.play("super");
+      music.sting("super"); music.duck(0.25, 1.4);
       break;
     case "bomb": sound.play("bomb"); break;
     case "boom": {
@@ -302,8 +303,9 @@ function onEvent(ev, state) {
       fx.kick(12);
       sound.play("hit", 1);
       break;
-    case "overtime": fx.say("Overtime!", T.accent); fx.tell("Next knockout wins", T.text); sound.play("go"); break;
-    case "sudden": fx.say("Sudden death!", T.danger); fx.kick(6); sound.play("go"); break;
+    // The timer ran out: the Sudden Death music (music.js)
+    case "overtime": fx.say("Overtime!", T.accent); fx.tell("Next knockout wins", T.text); music.sting("sudden"); music.want("sudden", 0.7); break;
+    case "sudden": fx.say("Sudden death!", T.danger); fx.kick(6); music.sting("sudden"); music.want("sudden", 0.7); break;
     case "hit":
       critterHit(ev.x, ev.y, ev.s);
       // (Only real bumps: rolling against someone isn't worth a buzz)
@@ -312,6 +314,7 @@ function onEvent(ev, state) {
       fx.kick(Math.min(8, ev.s * 0.4));
       sound.play("hit", Math.min(1, ev.s / 18));
       break;
-    case "over": sound.play("win"); break;
+    // The match is over: a victory sting, then the results music (music.js)
+    case "over": music.sting("win"); music.want("parade", 1.6); break;
   }
 }
