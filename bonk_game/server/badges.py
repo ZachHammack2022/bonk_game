@@ -42,12 +42,42 @@ BADGES = (
     ("maps", "🗺️", "Explorer", "maps", (3, 5, len(MAPS)), "Play on {n} different [map|maps]"),
     ("modes", "🎲", "All-Rounder", "modes", (3, len(modes.MODES)), "Play {n} different [mode|modes]"),
     ("falls", "🧈", "Butterfingers", "falls", (10, 100, 500), "Fall off {n} [time|times] all by yourself"),
+    # The silly ones (profiles.py: derived_feats)
+    ("bots_only", "🤖", "No Friends", "feats.bots_only", (10, 50, 200),
+     "Play {n} [match|matches] with nobody but bots"),
+    ("night_owl", "🦉", "Night Owl", "feats.night_owl", (1, 10, 50),
+     "Play {n} [match|matches] between 2 and 5 in the morning"),
+    ("lunch", "🥪", "Lunch Break", "feats.lunch", (5, 25, 100), "Play {n} [match|matches] between 12 and 1"),
+    ("second", "🥈", "Bridesmaid", "feats.second", (10, 50, 200), "Come 2nd {n} [time|times]"),
+    ("last", "🫠", "Participation Trophy", "feats.last", (10, 50, 200), "Come last {n} [time|times]"),
+    ("lucky_win", "🍀", "Lucky Winner", "feats.lucky_win", (1, 10, 50),
+     "Win {n} [match|matches] without knocking anyone out"),
+    ("pacifist", "🕊️", "Pacifist", "feats.pacifist", (1, 10, 50),
+     "Finish {n} [match|matches] without a knockout, either way"),
+    ("party", "🎉", "Party Animal", "feats.party", (1, 10, 50), "Play {n} [match|matches] with 8 people"),
+    ("sugar_rush", "🍭", "Sugar Rush", "feats.sugar_rush", (1, 10, 50),
+     "Grab 5 power-ups in one match, {n} [time|times]"),
+    ("groundhog", "🔁", "Groundhog Day", "feats.groundhog", (1, 5, 25),
+     "Play 10 matches in a row on the same map, {n} [time|times]"),
+    ("self_destruct", "🧨", "Self-Destruct", "feats.self_destruct", (1, 10, 50),
+     "Lose {n} [match|matches] without anyone touching you"),
+    ("nice", "😏", "Nice", "kos", (69,), "Knock out {n} balls"),
+    # Against other signed-in players (rating.py: social_feats)
+    ("giant_slayer", "🗡️", "Giant Slayer", "feats.giant_slayer", (1, 10, 50),
+     "Beat someone rated 300+ above you, {n} [time|times]"),
+    ("bully", "🍼", "Bully", "feats.bully", (10, 50, 200), "Beat someone rated 300+ below you, {n} [time|times]"),
+    ("rival", "🤝", "Rival", "feats.rival", (1, 5, 20),
+     "Play 25 rated matches with the same person: {n} [rival|rivals]"),
 )
+
+# Secret until you earn them: "???" on your Stats tab
+SECRET = {"self_destruct", "nice"}
 
 
 def describe():
     """The badges, for the page."""
-    return [{"id": i, "icon": icon, "title": title, "stat": stat, "levels": list(levels), "goal": goal}
+    return [{"id": i, "icon": icon, "title": title, "stat": stat, "levels": list(levels), "goal": goal,
+             "secret": i in SECRET}
             for i, icon, title, stat, levels, goal in BADGES]
 
 

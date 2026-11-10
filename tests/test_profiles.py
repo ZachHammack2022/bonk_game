@@ -27,7 +27,7 @@ def entry(rng, k, **extra):
             "score": rng.choice([0, 1, 2.5, 30]), "kos": rng.randint(0, 6), "falls": rng.randint(0, 3),
             "deaths": rng.randint(0, 5), "best_hit": round(rng.uniform(0, 40), 3), "pickups": rng.randint(0, 4),
             "awards": rng.sample(["kos", "hit", "falls", "survivor", "pickups"], rng.randint(0, 2)),
-            "players": of, "people": rng.randint(1, of),
+            "players": of, "people": rng.randint(1, of), "hour": rng.choice([-1, 0, 3, 12, 23, 30, "x"]),
             "feats": {"first_blood": rng.randint(0, 1), "double": rng.randint(0, 2), "triple": rng.randint(0, 1),
                       "super_ko": rng.randint(0, 2), "flawless": rng.randint(0, 1)}, **extra}
 
@@ -72,6 +72,7 @@ def node_side(script):
 def steps():
     rng = random.Random(4)
     script = [("a", entry(rng, k)) for k in range(30)]
+    script += [("a", entry(rng, 50 + k, map="swing")) for k in range(12)]  # (Groundhog Day)
     script += [("a", entry(rng, 3))]                     # the same match again (a reconnect)
     script += [("b", entry(rng, 100 + k)) for k in range(40)]
     script += [("merge", None), ("merge", None)]          # adding the same profile twice

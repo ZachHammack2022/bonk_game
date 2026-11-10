@@ -13,6 +13,8 @@ stored, in one SQLite file (BONK_DB):
 - profiles: each account's profile, as JSON
 - ratings:  each account's rating (rating.py), once they've played a rated
             match: the rating, matches, wins, their best, when last rated
+- rivals:   how many rated matches each pair of accounts has played
+            together (for the Rival badge)
 
 Everything goes through Accounts, so moving to another database later only
 changes this file. The calls are quick (one small row each), so they run on
@@ -55,6 +57,12 @@ CREATE TABLE IF NOT EXISTS ratings (
     updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ratings_rank ON ratings(rating DESC);
+CREATE TABLE IF NOT EXISTS rivals (
+    a       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    b       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    matches INTEGER NOT NULL,
+    PRIMARY KEY (a, b)
+);
 """
 # What a browser may change in its account's profile. Stats and history are
 # the server's: it records each match an account plays (record()).
@@ -213,6 +221,7 @@ class Accounts:
                 {"rating": rating.START, "games": 0, "wins": 0, "peak": rating.START} for p in players}
         changes = rating.update([{**p, "rating": rows[p["id"]]["rating"], "games": rows[p["id"]]["games"]}
                                  for p in players])
+        feats = rating.social_feats([{**p, "rating": rows[p["id"]]["rating"]} for p in players])
         out = {}
         with self.db:
             self.db.execute("BEGIN")
@@ -224,7 +233,18 @@ class Accounts:
                 self.db.execute("INSERT OR REPLACE INTO ratings VALUES (?, ?, ?, ?, ?, ?)",
                                 (p["id"], new["rating"], new["games"], new["wins"], new["peak"], now))
                 out[p["id"]] = {**rating.badge(new), "before": round(row["rating"]),
-                                "change": round(new["rating"]) - round(row["rating"])}
+                                "change": round(new["rating"]) - round(row["rating"]),
+                                "feats": feats[p["id"]]}
+            # Rivals: each pair's matches together; the RIVAL_MATCHES-th makes them rivals
+            ids = sorted(p["id"] for p in players)
+            for i, a in enumerate(ids):
+                for b in ids[i + 1:]:
+                    self.db.execute("INSERT INTO rivals VALUES (?, ?, 1) ON CONFLICT(a, b) "
+                                    "DO UPDATE SET matches = matches + 1", (a, b))
+                    n = self.db.execute("SELECT matches FROM rivals WHERE a = ? AND b = ?", (a, b)).fetchone()[0]
+                    if n == rating.RIVAL_MATCHES:
+                        for x in (a, b):
+                            out[x]["feats"]["rival"] = out[x]["feats"].get("rival", 0) + 1
         return out
 
     def leaderboard(self, limit=100):

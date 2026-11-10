@@ -35,6 +35,28 @@ TIERS = (
 )
 
 
+# Social highlights, for badges (badges.py)
+UPSET = 300           # Giant Slayer / Bully: placing above someone this much better / worse
+RIVAL_MATCHES = 25    # Rival: this many rated matches with the same signed-in player
+
+
+def social_feats(players):
+    """{id: {"giant_slayer": 1, "bully": 1}} for who placed above someone
+    rated UPSET more (a giant slain) or UPSET less (bullied), as the match
+    started. players: [{"id", "rating", "place", "team"}]; teammates
+    don't count."""
+    out = {p["id"]: {} for p in players}
+    for p in players:
+        for q in players:
+            if q is p or (p["team"] is not None and q["team"] == p["team"]) or p["place"] >= q["place"]:
+                continue
+            if q["rating"] - p["rating"] >= UPSET:
+                out[p["id"]]["giant_slayer"] = 1
+            if p["rating"] - q["rating"] >= UPSET:
+                out[p["id"]]["bully"] = 1
+    return out
+
+
 def tier(r):
     """The tier id for a rating."""
     return next(t for lo, t, _ in TIERS if r >= lo)

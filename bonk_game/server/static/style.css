@@ -913,3 +913,4 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
 .badge-next .badge-medal { width: 26px; height: 26px; font-size: 13px; border-width: 1.5px; }
 @keyframes badge-pop { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .earned-list li { animation: none; } }
+.badge-card.secret .badge-medal { font-weight: 800; color: var(--dim); filter: none; }

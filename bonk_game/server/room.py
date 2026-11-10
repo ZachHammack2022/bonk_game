@@ -110,6 +110,7 @@ class Member:
         self.errors_sent = 0     # client errors logged for them
         self.account = None      # their account id, when signed in (accounts.py)
         self.rating = None       # their rating badge (rating.badge), when signed in
+        self.tz = None           # their clock's offset from UTC in minutes, from their browser (badges)
         self.own_color = None    # a colour of their own ("#rrggbb"): signed in only
         self.pid = secrets.token_hex(4)  # how the others see them (the token is a secret)
         self.names = collections.deque([name], maxlen=5)  # names they've used here, for reports
@@ -796,9 +797,9 @@ class Room:
                 self.results["match_id"] = f"{self.code}-{int(began_at * 1000)}"
                 self.results["at"] = int(began_at)
                 self.results["slots"] = match.describe()["slots"]
-                self._record(match_accounts)
                 if match.finished:
-                    self._rate(match_accounts)
+                    self._rate(match_accounts)  # (first: it adds the social highlights)
+                self._record(match_accounts)
         except asyncio.CancelledError:
             why = "stopped"
             raise
@@ -889,9 +890,11 @@ class Room:
         for slot, account in enumerate(accounts):
             if account is None:
                 continue
+            tz = next((m.tz for m in self.members.values() if m.account == account), None)
+            hour = None if tz is None else int((self.results["at"] // 60 + tz) // 60 % 24)
             try:
                 self.recorder(account, profiles.history_entry(self.results, slot, self.results["match_id"],
-                                                              self.results["at"], self.results["map"]))
+                                                              self.results["at"], self.results["map"], hour))
             except Exception as e:  # never lose the results over it
                 metrics.event("error", logging.ERROR, room=self.code, where="record", error=repr(e))
 
@@ -925,7 +928,15 @@ class Room:
             return
         if not changes:
             return
-        res["ratings"] = {str(k): changes[a] for k, a in enumerate(accounts) if a in changes}
+        res["ratings"] = {str(k): {x: v for x, v in changes[a].items() if x != "feats"}
+                          for k, a in enumerate(accounts) if a in changes}
+        # Social highlights (Giant Slayer, Bully, Rival: accounts.rate) join
+        # the player's others, for their badges
+        for k, a in enumerate(accounts):
+            if a in changes and changes[a].get("feats"):
+                f = res["summaries"][k].setdefault("feats", {})
+                for x, v in changes[a]["feats"].items():
+                    f[x] = f.get(x, 0) + v
         for m in self.members.values():
             if m.account in changes:
                 m.rating = self._rating(m.account)

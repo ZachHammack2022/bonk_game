@@ -44,7 +44,7 @@ a new client after a deploy.
 WebSocket protocol (JSON text messages):
   browser -> server
     {"type": "hello", "name": "Sam", "token": "<random id>", "version": "<VERSION>",
-     "password": "k7mq2x"}
+     "password": "k7mq2x", "tz": 60}
         first message. password: the room's, if it has one (people already
         in the room don't need it to reconnect); without it (or a wrong one)
         the reply is {"type": "error", "fatal": true, "password": true}. A different version (a tab opened before a deploy)
@@ -513,6 +513,8 @@ async def websocket(request):
             member = await room.join(token, msg.get("name"), send, was_host=msg.get("host") is True,
                                      account=user["id"] if user else None, password=password)
             member.region = limits.client_region(request)
+            tz = msg.get("tz")  # (their clock, for time-of-day badges: badges.py)
+            member.tz = tz if isinstance(tz, int) and not isinstance(tz, bool) and -840 <= tz <= 840 else None
         except PasswordNeeded as e:
             token = None
             return await refuse(str(e), password=True, wrong=e.wrong)
