@@ -453,6 +453,9 @@ function check(cond, what) {
       `matches go into your history (${prof.stats.matches}: ${prof.history.map((h) => h.mode + " " + h.place + "/" + h.of).join(", ")})`);
     await host.goto(base + "/");
     await host.click("#open-profile");
+    check(await host.evaluate(() => getComputedStyle($("me")).backdropFilter === "none" &&
+      document.querySelector(".logo-ball").getAnimations().every((a) => a.playState === "paused")),
+      "behind the profile, the home page holds still (no live blur, the logo's ball stops bouncing)");
     await host.click("#me-tabs [data-tab=stats]");
     check(await host.isVisible(".stat-tiles") && await host.isVisible("#stats .badge-grid")
       && !(await host.$("#stats .stat-history")),

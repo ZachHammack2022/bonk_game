@@ -238,8 +238,9 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
 
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(70, 45, 105, 0.35);
-  backdrop-filter: blur(4px);
+  /* (No backdrop blur: Chrome re-blurs the whole page under it on every
+     frame something moves there, and on some GPUs that flashes) */
+  background: rgba(70, 45, 105, 0.5);
   display: flex;
   padding: 16px;
   overflow-y: auto;  /* a pop-up taller than the screen scrolls, rather than being cut off */
@@ -276,6 +277,8 @@ button.ghost:hover, .link-button:hover { color: var(--text); background: var(--s
 .logo-ball canvas { display: block; }
 @keyframes bob { 50% { transform: translateY(-5px); } }
 @media (prefers-reduced-motion: reduce) { .logo-ball { animation: none; } }
+/* Nothing moves under a pop-up */
+body:has(.overlay:not(.hidden)) .screen .logo-ball { animation-play-state: paused; }
 .tagline { color: var(--dim); margin: 10px 0 28px; font-size: 16px; }
 .home-card { gap: 16px; }
 .quick-help { margin: 8px 0 0; text-align: center; }
