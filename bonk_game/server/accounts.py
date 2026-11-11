@@ -15,6 +15,8 @@ stored, in one SQLite file (BONK_DB):
             match: the rating, matches, wins, their best, when last rated
 - rivals:   how many rated matches each pair of accounts has played
             together (for the Rival badge)
+- friends:  pairs of friends (a < b), and friend_requests: who asked whom
+            (a request back makes them friends)
 
 Everything goes through Accounts, so moving to another database later only
 changes this file. The calls are quick (one small row each), so they run on
@@ -57,6 +59,20 @@ CREATE TABLE IF NOT EXISTS ratings (
     updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ratings_rank ON ratings(rating DESC);
+CREATE TABLE IF NOT EXISTS friends (
+    a     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    b     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    since INTEGER NOT NULL,
+    PRIMARY KEY (a, b)
+);
+CREATE INDEX IF NOT EXISTS friends_b ON friends(b);
+CREATE TABLE IF NOT EXISTS friend_requests (
+    from_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    to_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    at      INTEGER NOT NULL,
+    PRIMARY KEY (from_id, to_id)
+);
+CREATE INDEX IF NOT EXISTS friend_requests_to ON friend_requests(to_id);
 CREATE TABLE IF NOT EXISTS rivals (
     a       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     b       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -66,6 +82,8 @@ CREATE TABLE IF NOT EXISTS rivals (
 """
 # What a browser may change in its account's profile. Stats and history are
 # the server's: it records each match an account plays (record()).
+MAX_FRIENDS = 200    # friends an account can have
+MAX_REQUESTS = 50    # friend requests it can have waiting on other people
 EDITABLE = ("name", "color", "own_color", "pattern", "trail", "hat", "ko", "muted", "prefs")
 
 
@@ -265,3 +283,73 @@ class Accounts:
                         "ball": {k2: p[k2] for k2 in ("color", "own_color", "pattern", "hat")},
                         **rating.badge(dict(row))})
         return out, total
+
+    # --- friends ------------------------------------------------------------
+    def are_friends(self, a, b):
+        a, b = sorted((a, b))
+        return self.db.execute("SELECT 1 FROM friends WHERE a = ? AND b = ?", (a, b)).fetchone() is not None
+
+    def _count_friends(self, uid):
+        return self.db.execute("SELECT COUNT(*) FROM friends WHERE a = ? OR b = ?", (uid, uid)).fetchone()[0]
+
+    def befriend(self, me, other):
+        """`me` asks `other` to be friends. If `other` already asked, they're
+        friends now. Returns "friends", "sent", "already" (friends, or asked
+        already), "full" (one of them has MAX_FRIENDS, or `me` has
+        MAX_REQUESTS waiting) or "no" (yourself, or no such account)."""
+        if me == other or self.user(other) is None or self.user(me) is None:
+            return "no"
+        if self.are_friends(me, other):
+            return "already"
+        asked = self.db.execute("SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ?",
+                                (other, me)).fetchone()
+        if asked:
+            if max(self._count_friends(me), self._count_friends(other)) >= MAX_FRIENDS:
+                return "full"
+            a, b = sorted((me, other))
+            with self.db:
+                self.db.execute("BEGIN")
+                self.db.execute("INSERT OR IGNORE INTO friends VALUES (?, ?, ?)", (a, b, self._now()))
+                self.db.execute("DELETE FROM friend_requests WHERE (from_id = ? AND to_id = ?) "
+                                "OR (from_id = ? AND to_id = ?)", (me, other, other, me))
+            return "friends"
+        if self.db.execute("SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ?",
+                           (me, other)).fetchone():
+            return "already"
+        waiting = self.db.execute("SELECT COUNT(*) FROM friend_requests WHERE from_id = ?", (me,)).fetchone()[0]
+        if waiting >= MAX_REQUESTS or self._count_friends(me) >= MAX_FRIENDS:
+            return "full"
+        self.db.execute("INSERT INTO friend_requests VALUES (?, ?, ?)", (me, other, self._now()))
+        return "sent"
+
+    def unfriend(self, me, other):
+        """No longer friends, or a request either way turned down / taken back."""
+        a, b = sorted((me, other))
+        with self.db:
+            self.db.execute("BEGIN")
+            self.db.execute("DELETE FROM friends WHERE a = ? AND b = ?", (a, b))
+            self.db.execute("DELETE FROM friend_requests WHERE (from_id = ? AND to_id = ?) "
+                            "OR (from_id = ? AND to_id = ?)", (me, other, other, me))
+
+    def _people(self, rows):
+        out = []
+        for row in rows:
+            p = profiles.validate(json.loads(row["data"])) or profiles.empty("acct-" + row["id"])
+            out.append({"id": row["id"], "name": p["name"] or "Player",
+                        "ball": {k: p[k] for k in ("color", "own_color", "pattern", "hat")}})
+        return out
+
+    def friends(self, uid):
+        """{"friends": [...], "incoming": [...], "outgoing": [...]}: each
+        {id, name, ball}, friends by name, requests newest first."""
+        friends = self.db.execute(
+            "SELECT u.id, p.data FROM friends f JOIN users u ON u.id = CASE WHEN f.a = ? THEN f.b ELSE f.a END "
+            "JOIN profiles p ON p.user_id = u.id WHERE f.a = ? OR f.b = ?", (uid, uid, uid)).fetchall()
+        incoming = self.db.execute(
+            "SELECT r.from_id AS id, p.data FROM friend_requests r JOIN profiles p ON p.user_id = r.from_id "
+            "WHERE r.to_id = ? ORDER BY r.at DESC", (uid,)).fetchall()
+        outgoing = self.db.execute(
+            "SELECT r.to_id AS id, p.data FROM friend_requests r JOIN profiles p ON p.user_id = r.to_id "
+            "WHERE r.from_id = ? ORDER BY r.at DESC", (uid,)).fetchall()
+        return {"friends": sorted(self._people(friends), key=lambda f: f["name"].lower()),
+                "incoming": self._people(incoming), "outgoing": self._people(outgoing)}

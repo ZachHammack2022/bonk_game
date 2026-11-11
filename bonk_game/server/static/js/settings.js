@@ -44,7 +44,7 @@ const menu = { capture: null };  // the action waiting for a key press
 // button (start page, game list) opens it on your ball; the gear and Esc (in
 // a room) open it on Settings.
 // ---------------------------------------------------------------------------
-const ME_PANES = { ball: "profile", stats: "stats", settings: "settings" };
+const ME_PANES = { ball: "profile", stats: "stats", friends: "friends", settings: "settings" };
 let meTab = "ball";
 
 function showMeTab(tab) {
@@ -58,6 +58,7 @@ function showMeTab(tab) {
   for (const [t, id] of Object.entries(ME_PANES)) $(id).classList.toggle("hidden", t !== tab);
   if (tab === "ball") renderProfileEditor();         // (lobby.js)
   else if (tab === "stats") renderStats();           // (stats.js)
+  else if (tab === "friends") { friends.render(); friends.refresh(); }  // (friends.js)
   else { renderSettings(); renderPeople(); }         // (people.js)
 }
 function openMe(tab) {

@@ -246,16 +246,24 @@ function renderLobby() {
   }
 
   // Joined during a match: watch it
-  if (L.phase === "match" && !app.match) status("A match is on. You'll play in the next one.");
+  const watching = watchingNow();  // (people.js: came to watch, with Play to join in)
+  if (L.phase === "match" && !app.match && !watching) status("A match is on. You'll play in the next one.");
 
-  // Here while a match is on (you came out to the lobby): go back to it
+  // Here while a match is on (you came out to the lobby): go back to it.
+  // Watching: the same bar says so, with Play
   const on = !!app.match && (L.phase === "match" || (app.away && !!app.results));
-  $("match-on").classList.toggle("hidden", !on);
+  $("match-on").classList.toggle("hidden", !on && !watching);
+  $("back-to-match").classList.toggle("hidden", !on);
+  $("lobby-play").classList.toggle("hidden", !watching);
+  $("back-to-match").classList.toggle("primary", !watching);
   if (on) {
     const playingIt = app.match.slots.some((x) => x.id === me.id);
     $("match-on-text").textContent = app.results ? "The match has finished."
-      : playingIt ? "A match is on. A bot is playing for you while you're here." : "A match is on.";
+      : playingIt ? "A match is on. A bot is playing for you while you're here."
+      : watching ? "A match is on. You're watching." : "A match is on.";
     $("back-to-match").textContent = app.results ? "See the results" : playingIt ? "Back to the match" : "Watch the match";
+  } else if (watching) {
+    $("match-on-text").textContent = "You're watching. Press Play to join in.";
   }
   if (L.phase === "match") {
     $("start").disabled = true;

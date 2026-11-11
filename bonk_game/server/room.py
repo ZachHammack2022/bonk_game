@@ -116,6 +116,7 @@ class Member:
         self.names = collections.deque([name], maxlen=5)  # names they've used here, for reports
         self.report_times = collections.deque(maxlen=moderation.REPORTS_PER_MINUTE)
         self.reported = set()    # pids they've reported
+        self.watching = False    # came to watch (spectate): no seat, now or in the next match, until they ask
         self.region = None       # where their connection came in (Fly's region, e.g. "lhr"), for /admin
         self.rtt = None          # their round trip in ms, as their browser last said
         self.delay = None        # how far behind the newest states their match is drawn, ms (in a match)
@@ -182,7 +183,8 @@ class Room:
         self.waiting = []          # tokens waiting to take over a bot's seat in this match
         self.match_accounts = []   # slot -> account of whoever plays it (for match history)
         self.rated_accounts = []   # slot -> account of who played it from the start (rated)
-        self.ratings = None        # signed-in players' ratings (accounts.Accounts: rating, rate)
+        self.ratings = None        # signed-in players' ratings and friends (accounts.Accounts)
+        self.tell_account = None   # async (account, msg): tell them wherever they are (RoomManager)
         self.recent = collections.deque(maxlen=moderation.RECENT_KEPT)  # for reports
         self.chat = collections.deque(maxlen=CHAT_KEPT)  # the latest chat lines
         self.created = time.monotonic()
@@ -192,6 +194,11 @@ class Room:
     @property
     def connected(self):
         return [m for m in self.members.values() if m.connected]
+
+    @property
+    def players(self):
+        """The connected members who play (not the ones just watching)."""
+        return [m for m in self.members.values() if m.connected and not m.watching]
 
     def token_of(self, pid):
         """The member with this public id's token, or None."""
@@ -223,12 +230,13 @@ class Room:
             return True
         return isinstance(password, str) and hmac.compare_digest(password.strip().encode(), want.encode())
 
-    async def join(self, token, name, send, was_host=False, account=None, password=None):
+    async def join(self, token, name, send, was_host=False, account=None, password=None, watch=False):
         """Add (or reconnect) a member. Returns the Member. was_host: they
         were the host before a server restart, and get it back if they come
         back soon after (whoever reconnects first doesn't keep it).
         account: their account id, if they're signed in. password: the
-        room's password (PasswordNeeded if it has one and this isn't it)."""
+        room's password (PasswordNeeded if it has one and this isn't it).
+        watch: they came to watch: they don't play until they ask ("play")."""
         if token in self.banned or (account is not None and account in self.banned):
             raise RoomFull("The host removed you from this room.")
         if not self.password_ok(token, password):
@@ -250,6 +258,7 @@ class Room:
                 m.rename(clean)
         m.account = account
         m.rating = self._rating(account)
+        m.watching = bool(watch) and not (self.match is not None and token in self.match_tokens)
         self.note("join", who=m.name, account=account)
         if self.host is None or self.host not in self.members:
             self.host = token
@@ -274,7 +283,7 @@ class Room:
         await self.broadcast_lobby()
         if joined:
             await self.say(f"{m.name} joined")  # (after "welcome", which has the chat so far)
-        if self.match is not None and token not in self.match_tokens:
+        if self.match is not None and token not in self.match_tokens and not m.watching:
             await self.wait_for_seat(token)
         elif self.match is None and self.results is None:
             self.auto_start(AUTO_START)
@@ -369,7 +378,9 @@ class Room:
             "title": lobby.room_title(self.settings, self.members[self.host].name if self.host in self.members else None),
             "host": self.pid(self.host),
             "members": [{"id": m.pid, "name": m.name, "connected": m.connected,
-                         **({"rating": m.rating} if m.rating else {})}
+                         **({"rating": m.rating} if m.rating else {}),
+                         **({"signed_in": True} if m.account else {}),  # (friends need it)
+                         **({"watching": True} if m.watching else {})}
                         for m in self.members.values()],
             "settings": self.settings,
             "bot_options": self.bot_options(),
@@ -445,6 +456,12 @@ class Room:
             return
         if kind == "report_player":
             await self.report_player(token, msg)
+            return
+        if kind == "befriend":
+            await self.befriend(token, msg)
+            return
+        if kind == "play":
+            await self.stop_watching(token)
             return
         if kind == "color":
             problem = self.pick_color(token, msg.get("color"))
@@ -545,6 +562,63 @@ class Room:
         moderation.REPORTS.add(moderation.make_report(self.code, m, other, msg.get("reason"),
                                                       msg.get("note"), self.recent))
         await m.send({"type": "notice", "message": f"Thanks. Your report about {other.name} was sent."})
+
+    async def stop_watching(self, token):
+        """Someone who came to watch wants to play: in the match now if a
+        bot's seat is free (wait_for_seat), else in the next one."""
+        m = self.members[token]
+        if not m.watching:
+            return
+        if self.match is None and not self.has_space():
+            await self.error(token, "The game is full. You can keep watching.")
+            return
+        m.watching = False
+        self.note("play", who=m.name)
+        await self.broadcast_lobby()
+        if self.match is not None:
+            await self.wait_for_seat(token)
+        elif self.results is None:
+            self.auto_start(AUTO_START)
+
+    async def befriend(self, token, msg):
+        """Someone asks a player in the room to be friends ({"id": their
+        public id}). Both need to be signed in. If the other already asked,
+        they're friends now (accounts.befriend). The other hears about it
+        wherever they are on the server (RoomManager.tell_account)."""
+        m = self.members[token]
+        target = self.token_of(msg.get("id"))
+        if target is None or target == token:
+            await self.error(token, "That player isn't in the room any more.")
+            return
+        other = self.members[target]
+        if self.ratings is None:
+            await self.error(token, "Friends need sign-in, and it's off on this server.")
+            return
+        if m.account is None:
+            await self.error(token, "Sign in to add friends.")
+            return
+        if other.account is None:
+            await self.error(token, f"{other.name} isn't signed in, so they can't have friends yet.")
+            return
+        try:
+            result = self.ratings.befriend(m.account, other.account)
+        except Exception as e:
+            metrics.event("error", logging.ERROR, room=self.code, where="befriend", error=repr(e))
+            await self.error(token, "Couldn't do that just now. Try again in a moment.")
+            return
+        self.note("befriend", who=m.name, to=other.name, result=result)
+        said = {"friends": f"You and {other.name} are friends now!",
+                "sent": f"Friend request sent to {other.name}.",
+                "already": f"You've already asked {other.name}, or you're friends.",
+                "full": "You have too many friends or requests waiting.",
+                "no": "You can't add them."}[result]
+        await m.send({"type": "notice", "message": said, "friends": result})
+        if result in ("friends", "sent") and self.tell_account is not None:
+            await self.tell_account(other.account, {
+                "type": "notice", "friends": "request" if result == "sent" else "friends",
+                **({"from": m.account} if result == "sent" else {}),  # (so the toast can say yes or no)
+                "message": f"{m.name} wants to be friends." if result == "sent"
+                else f"You and {m.name} are friends now!"})
 
     def playtest_report(self, token, kind, msg):
         """A browser says what it saw during a match, or that it hit an error."""
@@ -684,13 +758,13 @@ class Room:
         """Apply the host's changes. Returns an error message or None."""
         if self.match is not None:
             return "Settings can't change during a match."
-        self.settings, problem = lobby.check_settings(self.settings, msg, len(self.connected), self.bot_options)
+        self.settings, problem = lobby.check_settings(self.settings, msg, len(self.players), self.bot_options)
         return problem
 
     # --- matches ------------------------------------------------------------
     def seats(self):
         """Who would play if the match started now: (member tokens, bot kinds)."""
-        return lobby.seats(self.settings, [m.token for m in self.connected], self._fill())
+        return lobby.seats(self.settings, [m.token for m in self.players], self._fill())
 
     def teams_for(self, humans, n_bots):
         return lobby.teams_for(self.settings["mode"], [self.members[t].team for t in humans], n_bots)
@@ -700,7 +774,7 @@ class Room:
 
     def lineup(self):
         """The seats as they'd be if the match started now, for the lobby."""
-        return lobby.lineup(self.settings, self.members, [m.token for m in self.connected], self._fill())
+        return lobby.lineup(self.settings, self.members, [m.token for m in self.players], self._fill())
 
     def _fill(self):
         """Quick play rooms: how many players bots make it up to (lobby.QUICK_FILL)."""
@@ -750,7 +824,7 @@ class Room:
         # anyone who drops out; the match still counts for them)
         self.match_accounts = [self.members[t].account for t in humans] + [None] * len(bots)
         self.rated_accounts = list(self.match_accounts)  # (dropping in mid-match isn't rated)
-        self.waiting = [m.token for m in self.connected if m.token not in humans]
+        self.waiting = [m.token for m in self.players if m.token not in humans]
         self.results = None
         self.ending = None
         self.votes.clear()
@@ -883,7 +957,7 @@ class Room:
         async def go():
             await asyncio.sleep(delay)
             self.auto_task = None
-            if self.match is None and self.connected and not self.closing:
+            if self.match is None and self.players and not self.closing:
                 await self.start()
         self.auto_task = asyncio.ensure_future(go())
 
@@ -965,8 +1039,9 @@ class Room:
                 "locked": bool(s.get("password")), "map": info.title, "map_id": s["map"],
                 "mode": mode.title, "mode_id": s["mode"],
                 "goal": mode.goal_short(s["first_to"]),
-                "people": len(self.connected), "bots": len(bots), "most": info.players[1],
-                "names": [m.name for m in self.connected][:limits.MAX_MEMBERS],
+                "people": len(self.players), "bots": len(bots), "most": info.players[1],
+                "watching": len(self.connected) - len(self.players),
+                "names": [m.name for m in self.players][:limits.MAX_MEMBERS],
                 "playing": match is not None,
                 "elapsed": round(match.tick_count / TICK_HZ) if match is not None else None,
                 "open": self.has_space(),
@@ -986,7 +1061,7 @@ class Room:
     def has_space(self):
         """Is there room to play here (now or in the next match)?"""
         most = MAPS[self.settings["map"]].players[1]
-        return len(self.connected) < most and len(self.members) < limits.MAX_MEMBERS
+        return len(self.players) < most and len(self.members) < limits.MAX_MEMBERS
 
 
 def valid_code(code):
@@ -1020,6 +1095,7 @@ class RoomManager:
             raise ValueError(f"bad room code {code!r}")
         self.rooms[code] = Room(code, self.agents, self.recorder, self.profile_of)
         self.rooms[code].ratings = self.ratings
+        self.rooms[code].tell_account = self.tell_account
         metrics.STATS.rooms_created += 1
         metrics.event("room_created", room=code, rooms=len(self.rooms))
         return self.rooms[code]
@@ -1066,6 +1142,30 @@ class RoomManager:
                 "online": sum(len(r.connected) for r in live),
                 "more": max(0, len(live) - len(listed))}
 
+    async def tell_account(self, account, msg):
+        """Send a message to everyone connected as this account, in any room."""
+        for r in list(self.rooms.values()):
+            for m in r.connected:
+                if m.account == account:
+                    await m.send(msg)
+
+    def where(self, accounts):
+        """Where these accounts are playing: {account: room info} for those
+        connected in a room (their friends list shows it). A private room
+        says so, never its password."""
+        out = {}
+        for r in self.rooms.values():
+            if r.closing:
+                continue
+            for m in r.connected:
+                if m.account in accounts and m.account not in out:
+                    host = r.members.get(r.host)
+                    out[m.account] = {"room": r.code, "title": lobby.room_title(r.settings, host.name if host else None),
+                                      "locked": bool(r.settings.get("password")),
+                                      "playing": r.match is not None, "map": r.settings["map"],
+                                      "mode": r.settings["mode"]}
+        return out
+
     def quick_play(self, allow_new=lambda: True):
         """Quick play: the open room (no password) with the most people that still has
         space, or a new one with bots that starts by itself. Returns
@@ -1075,7 +1175,7 @@ class RoomManager:
         best = None
         for r in self.rooms.values():
             if not r.settings.get("password") and not r.closing and r.has_space() and (r.connected or r.quick):
-                key = (len(r.connected), r.quick)
+                key = (len(r.players), r.quick)
                 if best is None or key > best[0]:
                     best = (key, r)
         if best is not None:

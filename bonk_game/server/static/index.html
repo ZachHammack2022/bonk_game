@@ -28,6 +28,7 @@
       <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
       <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
       <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5v1a3 3 0 0 0 3 3M16 6h3v1a3 3 0 0 1-3 3M12 13v4M8 20h8M10 17h4"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3 6"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
       <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.3-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
@@ -35,7 +36,7 @@
   </svg>
   <!-- Home: pick a name, make a room or join one -->
   <section id="home" class="screen">
-    <div class="home-top"><button id="open-leaderboard" class="ghost leaderboard-button" title="Who's the best: the leaderboard"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg>Leaderboard</button><button id="open-profile" class="me-button" data-me="ball" title="Your profile: ball, stats, settings"><span class="me-button-ball"></span><span class="me-button-name">Profile</span></button></div>
+    <div class="home-top"><button id="open-friends" class="ghost leaderboard-button hidden" title="Your friends: who's playing, and friend requests"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg>Friends<span id="friends-count" class="count-badge hidden"></span></button><button id="open-leaderboard" class="ghost leaderboard-button" title="Who's the best: the leaderboard"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg>Leaderboard</button><button id="open-profile" class="me-button" data-me="ball" title="Your profile: ball, stats, settings"><span class="me-button-ball"></span><span class="me-button-name">Profile</span></button></div>
     <h1 class="logo">b<span class="logo-ball"></span>nk</h1>
     <p class="tagline">a tiny physics brawler, with friends</p>
     <div class="card home-card">
@@ -228,6 +229,7 @@
     <div id="match-on" class="need match-on hidden">
       <p id="match-on-text"></p>
       <button id="back-to-match" class="primary">Back to the match</button>
+      <button id="lobby-play" class="primary hidden">Play</button>
       <button id="end-match-lobby" class="host-only">End match</button>
     </div>
     <div class="lobby-grid">
@@ -284,6 +286,12 @@
   </section>
 
   <!-- The match -->
+  <!-- Watching (spectating): over the lobby and the match; Play joins in -->
+  <div id="watch-bar" class="watch-bar hidden" role="status">
+    <span>👀 You're watching</span>
+    <button id="watch-play" class="primary">Play</button>
+  </div>
+
   <section id="game" class="screen hidden">
     <div id="stage"><canvas id="canvas"></canvas></div>
     <!-- Touch controls (phones, tablets): see-through, over the game. Touch
@@ -343,6 +351,7 @@
   <div id="person" class="overlay hidden" role="dialog" aria-labelledby="person-name">
     <div class="card settings-card">
       <h2 id="person-name"></h2>
+      <button id="person-befriend" class="hidden">Add friend</button>
       <label class="check"><input id="person-mute" type="checkbox"> Mute: hide their emotes and name on your screen</label>
       <h3>Report</h3>
       <p class="dim small">Sends their name and what happened in this room lately to whoever runs the server.</p>
@@ -374,6 +383,7 @@
       <div id="me-tabs" class="seg wide-seg" role="tablist" aria-label="Profile">
         <button data-tab="ball" role="tab">Ball</button>
         <button data-tab="stats" role="tab">Stats</button>
+        <button data-tab="friends" role="tab" class="hidden">Friends</button>
         <button data-tab="settings" role="tab">Settings</button>
       </div>
       <!-- Your ball: favourite colour, pattern, trail, hat and knockout effect -->
@@ -402,6 +412,10 @@
         <button id="download-data" class="link-button hidden">Download my data</button>
         <button id="delete-account" class="link-button danger hidden">Delete my account</button>
         <a class="dim small privacy-link" href="/privacy" target="_blank" rel="noopener">Privacy</a>
+      </div>
+      <!-- Friends (signed in): requests, who's playing, join them (friends.js) -->
+      <div id="friends" class="me-pane hidden" role="tabpanel">
+        <div id="friends-body"></div>
       </div>
       <!-- Settings: kept in this browser -->
       <div id="settings" class="me-pane hidden" role="tabpanel">
@@ -478,6 +492,7 @@
   <script src="/static/js/rating.js"></script>
   <script src="/static/js/badges.js"></script>
   <script src="/static/js/chat.js"></script>
+  <script src="/static/js/friends.js"></script>
   <script src="/static/js/account.js"></script>
   <script src="/static/js/install.js"></script>
   <script src="/static/js/main.js"></script>

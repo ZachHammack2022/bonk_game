@@ -29,6 +29,7 @@ Open the page, pick a name and press **Quick play** to go straight into a game (
 ### Getting into a game
 
 - **Quick play** puts you in the open game with the most people that has space, or makes one: Knockouts on Floating Platform, which starts by itself, with bots making it up to 4 players. Bots step aside as people come (someone arriving mid-match takes over a bot's seat).
+- **Watch**: in the game list, a match that's on (or a full game) has **Watch**: you see the match without taking a seat, now or in the next one, with a bar saying you're watching and **Play** to join in (taking over a bot if one's playing). Watchers don't count towards a game's players; the list says how many are watching. The address keeps `?watch=1`, so a refresh keeps you watching.
 - **Find a game** opens the game list. Search by room, host, player or 4-letter code (Enter joins), filter by mode or map.
 - **New game** takes you straight to a new **public** room (anyone can join), named after you. In the lobby the host can rename it or make it **private** (listed with a lock; joining needs the password, which the server makes up). **Copy invite link** gives a link with the password in it, so friends get straight in.
 - **The host** (★, whoever made the room) picks the mode, map and settings, fills open seats with bots (Easy, Medium or Hard), and presses **Start match**. They can rename the room, switch it between public and private, remove people (they can't come back), and **End match** at any time (say, to change the map without waiting for bots to finish).
@@ -86,6 +87,10 @@ Hold **heavy** for as long as you like: you're 5x heavier, so you hit harder and
 - **Settings**: volume, screen shake, ping display, key bindings, **colourblind mode** (every ball gets its own pattern) and **high-contrast colours** (Okabe and Ito's palette).
 
 It's all kept in your browser, no sign-up needed. **Sign in with Google** (bottom of the profile) to keep it on the server, the same on every device; **Download my data** and **Delete account** are in Stats. `/privacy` and `/terms` say what's kept.
+
+### Friends
+
+Signed-in players can be friends. In a room, open someone's card (⋯ next to their name) and press **Add friend**; they're told wherever they are on the server, with **Accept** and **No thanks** right on the message (or later, in their profile's **Friends** tab ; the start page has a Friends button with a count of requests waiting). Your friends list shows who's playing now and where, with a **Join** button (a private game still asks for its password). Remove a friend, turn down a request or take yours back from the same tab. Kept in `accounts.py` (tables `friends` and `friend_requests`), served by `GET /api/friends`; up to 200 friends and 50 requests waiting.
 
 ### Chat and safety
 

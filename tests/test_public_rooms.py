@@ -42,7 +42,7 @@ def test_every_room_is_listed_by_its_name_and_never_with_its_password():
         assert listed == {"room": room.code, "name": "Friday night", "locked": True,
                           "map": "Sinking Swing", "map_id": "swing",
                           "mode": "Free-for-all", "mode_id": "ffa", "goal": "First to 5", "people": 1,
-                          "bots": 1, "most": 6, "names": ["Ann"], "playing": False, "elapsed": None,
+                          "bots": 1, "most": 6, "watching": 0, "names": ["Ann"], "playing": False, "elapsed": None,
                           "open": True, "power_ups": False, "gravity": "normal", "speed": "normal", "quick": False,
                           "host": "Ann", "ping": None}
         room.members["a"].note_network(0, {"rtt": 84.4})
@@ -168,6 +168,49 @@ def test_someone_joining_a_respawn_match_takes_over_a_bot_straight_away():
         await room.handle("w", {"type": "input", "b": [0, 1, 0, 0, 0]})
         assert room.match.inputs[2][1]
         assert w.all("lobby")[-1]["playing"] == [room.members["a"].pid, None, room.members["w"].pid]
+        await room.stop()
+    run(go())
+
+
+def test_watchers_see_the_match_without_a_seat_until_they_press_play():
+    async def go():
+        room = Room("ABCD")
+        a, v = Inbox(), Inbox()
+        await room.join("a", "Ann", a)
+        await room.handle("a", {"type": "settings", "mode": "knockouts", "bots": ["bot:easy", "bot:hard"]})
+        await room.start()
+        await asyncio.sleep(0.2)
+        await room.join("v", "Vic", v, watch=True)
+        # They get the match (to watch it), but keep out of the bots' seats
+        assert v.all("match") and room.match_tokens == ["a", None, None] and not a.all("seat")
+        me = next(m for m in v.all("lobby")[-1]["members"] if m["name"] == "Vic")
+        assert me.get("watching") is True
+        listing = room.listing()
+        assert listing["people"] == 1 and listing["watching"] == 1 and listing["names"] == ["Ann"]
+        assert room.seats()[0] == ["a"] and [s["kind"] for s in room.lineup()][0] == "human"
+        # Play: in a bot's seat straight away (a respawn mode)
+        await room.handle("v", {"type": "play"})
+        assert room.match_tokens == ["a", None, "v"] and not room.members["v"].watching
+        assert "took over" in v.all("notice")[-1]["message"]
+        await room.stop()
+    run(go())
+
+
+def test_watchers_dont_fill_a_game_or_start_a_quick_play_match(monkeypatch):
+    monkeypatch.setattr(room_mod, "AUTO_START", 0.01)
+
+    async def go():
+        rooms = RoomManager()
+        room, _ = rooms.quick_play()
+        await room.join("v", "Vic", Inbox(), watch=True)
+        await asyncio.sleep(0.05)
+        assert room.match is None  # (nobody to play)
+        room.settings["map"] = "classic"  # (2-8 players)
+        for k in range(7):
+            await room.join(f"p{k}", f"P{k}", Inbox())
+        assert room.has_space()  # 7 playing: the watcher doesn't count
+        await room.join("p7", "P7", Inbox())
+        assert not room.has_space()
         await room.stop()
     run(go())
 

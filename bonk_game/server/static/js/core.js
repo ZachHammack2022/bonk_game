@@ -143,13 +143,28 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const easeOutBack = (t) => { t = clamp(t, 0, 1); const c = 1.70158; return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2; };
 
 let toastTimer = null;
-function toast(text, error = false) {
+// actions: buttons on the toast ([{label, primary, onClick}]); it stays up
+// longer then, and a button press closes it
+function toast(text, error = false, actions = null) {
   const el = $("toast");
   el.textContent = text;
   el.classList.toggle("error", error);
+  el.classList.toggle("has-actions", !!(actions && actions.length));
+  if (actions && actions.length) {
+    const row = document.createElement("span");
+    row.className = "toast-actions";
+    for (const a of actions) {
+      const b = document.createElement("button");
+      b.textContent = a.label;
+      if (a.primary) b.className = "primary";
+      b.addEventListener("click", () => { el.classList.add("hidden"); a.onClick(); });
+      row.append(b);
+    }
+    el.append(row);
+  }
   el.classList.remove("hidden");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add("hidden"), 3200);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), actions && actions.length ? 12000 : 3200);
 }
 function status(text) {
   $("status").textContent = text || "";
@@ -159,6 +174,7 @@ function show(screen) {
   for (const id of ["home", "browse", "leaderboard", "lobby", "game"]) $(id).classList.toggle("hidden", id !== screen);
   if (screen !== "game" && typeof music !== "undefined") music.want("lobby");  // (music.js: matches pick their own)
   watchPublic(screen === "home" || screen === "browse");  // (people.js)
+  if (typeof friends !== "undefined") friends.watch(screen === "home" || screen === "browse");
 }
 
 // ---------------------------------------------------------------------------
@@ -305,7 +321,11 @@ $("join-form").addEventListener("submit", (e) => {
 $("join-other").addEventListener("click", () => { showInvite(null); openBrowse(true); });  // (people.js)
 
 // A room's link: with its password, if it has one, so it's filled in for you
-const roomLink = (code, password) => `/r/${code}` + (password ? `?pw=${encodeURIComponent(password)}` : "");
+// (?watch=1: you came to watch, so a refresh keeps you watching)
+const roomLink = (code, password) => {
+  const q = [password ? `pw=${encodeURIComponent(password)}` : "", app.watch ? "watch=1" : ""].filter(Boolean).join("&");
+  return `/r/${code}` + (q ? "?" + q : "");
+};
 
 // password: the room's (from its invite link, or typed in); undefined keeps
 // the one we have for this room
@@ -353,6 +373,7 @@ function route() {
   const m = location.pathname.match(/^\/r\/([A-Za-z]{4})\/?$/);
   if (m) {
     const pw = new URLSearchParams(location.search).get("pw");
+    app.watch = new URLSearchParams(location.search).get("watch") === "1";
     if (!me.name) {
       // Ask for a name first; joining comes from the form
       show("home");
@@ -390,6 +411,8 @@ function leaveRoom(push) {
   replayer.stop();
   chat.reset([]);
   app.ws = null; app.room = null; app.password = null; app.lobby = null; app.match = null; app.results = null; app.away = false;
+  app.watch = false;
+  renderWatching();
   app.states = []; app.last = null; app.retry = 0;
   $("results").classList.add("hidden");
   $("killcam").classList.add("hidden");
@@ -416,6 +439,7 @@ function connect() {
                              reopen: app.retry > 0, host: app.restoring !== null,
                              installed: installedApp(),
                              tz: -new Date().getTimezoneOffset(),  // (your clock: time-of-day badges)
+                             watch: !!app.watch,  // (came to watch: no seat until you press Play)
                              ...(app.password ? { password: app.password } : {}) }));
   };
   ws.onmessage = (e) => {
@@ -482,6 +506,7 @@ function onMessage(msg) {
       }
       document.body.classList.toggle("is-host", isHost());
       renderLobby();
+      renderWatching();  // (people.js)
       if (app.restoring && msg.phase === "lobby") {
         // (Not the password: the room got that back when it was made again)
         const settings = { ...app.restoring };
@@ -559,7 +584,17 @@ function onMessage(msg) {
       chat.add(msg);
       break;
     case "notice":
-      toast(msg.message);
+      // (friends.js: a friend request comes with Accept / No thanks, right there)
+      if (msg.friends === "request" && msg.from) {
+        if (friends.seen) friends.seen.add(msg.from);  // (shown here: not again from the list)
+        toast(msg.message, false, [
+          { label: "Accept", primary: true, onClick: () => friends.act("POST", msg.from) },
+          { label: "No thanks", onClick: () => friends.act("DELETE", msg.from) },
+        ]);
+      } else {
+        toast(msg.message);
+      }
+      if (msg.friends) friends.refresh();
       break;
     case "restart":
       // The server is going down for an update; we'll reconnect to the new one

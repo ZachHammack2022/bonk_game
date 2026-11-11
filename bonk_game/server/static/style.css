@@ -382,6 +382,7 @@ button.big.secondary-big { min-height: 46px; font-size: 16px; margin-top: 10px; 
 .pill.lobby { background: rgba(126, 214, 170, 0.12); color: var(--ok); }
 .pill.on { background: var(--accent-soft); color: var(--accent-ink); font-variant-numeric: tabular-nums; }
 .g-join { align-items: flex-end; }
+.g-join:has(button.watch.ghost) { flex-direction: row; justify-content: flex-end; gap: 6px; }
 .ping-val { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--faint); }
 .ping-val::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px;
                     vertical-align: 1px; background: currentColor; opacity: 0; }
@@ -733,6 +734,9 @@ body.touch .game-bar { bottom: auto; top: 12px; opacity: 0.7; }
 .status { top: 12px; }
 .toast { bottom: 16px; }
 .toast.error { border-color: rgba(240, 98, 98, 0.6); }
+.toast.has-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.toast-actions { display: flex; gap: 6px; }
+.toast-actions button { min-height: 32px; padding: 0 14px; font-size: 14px; }
 .netsim { position: fixed; top: 6px; right: 8px; font-size: 11px; color: var(--accent); opacity: 0.8; pointer-events: none; }
 
 /* --- settings ------------------------------------------------------------ */
@@ -916,3 +920,29 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
 @keyframes badge-pop { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .earned-list li { animation: none; } }
 .badge-card.secret .badge-medal { font-weight: 800; color: var(--dim); filter: none; }
+
+/* Friends (friends.js) */
+.count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+               margin-left: 6px; border-radius: 9px; background: var(--danger, #e5484d); color: #fff; font-size: 11px; font-weight: 700; }
+#friends-body { display: flex; flex-direction: column; gap: 8px; }
+#friends-body h3 { margin-top: 8px; }
+.friend-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.friend { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px;
+          border-radius: var(--r); background: var(--surface-2); }
+.friend-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.friend-who canvas { flex: none; }
+.friend.online .friend-who canvas { box-shadow: 0 0 0 2px #3ccf6e; border-radius: 50%; }
+.friend-text { display: flex; flex-direction: column; min-width: 0; }
+.friend-text b, .friend-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-acts { display: flex; gap: 6px; flex: none; }
+.friend-acts button { min-height: 32px; padding: 4px 12px; }
+#person-befriend { margin-bottom: 4px; }
+
+/* Watching a game (spectating): a bar at the top, with Play */
+.watch-bar { position: fixed; z-index: 7; display: flex; align-items: center; left: 50%; transform: translateX(-50%); bottom: 76px;
+             gap: 12px; padding: 6px 6px 6px 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.92);
+             box-shadow: 0 4px 14px rgba(90, 60, 130, 0.18); font-weight: 600; white-space: nowrap; }
+.watch-bar button { min-height: 34px; padding: 0 18px; }
+/* (In a match: centred, above the clock, clear of the scores. The lobby
+   says so in its own bar, #match-on) */
+body:not(:has(#game:not(.hidden))) .watch-bar { display: none; }

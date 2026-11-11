@@ -363,6 +363,8 @@ function check(cond, what) {
     await phone.waitForFunction(() => document.querySelector("#board-summary").textContent.includes("Sign-in is off"));
     check(await phone.isVisible("#leaderboard") && await phone.isHidden("#home"), "the leaderboard page has its own address");
     check(!(await phone.$("#board-you")), "the leaderboard is just the table: no card about you above it");
+    check(await phone.isHidden("#open-friends") && await phone.isHidden('#me-tabs [data-tab="friends"]'),
+      "with no sign-in on this server, there's no Friends button or tab");
     await phone.click("#board-back");
     check(await phone.isVisible("#home"), "and Back goes home");
     await phone.goto(base + "/");
@@ -526,13 +528,31 @@ function check(cond, what) {
     check((await q2.textContent("#games-empty-text")).includes("match these filters"), "a search with no games says so");
     await q2.click("#clear-filters");
     await q2.waitForSelector("#games-list .game-row");
-    await q2.click("#games-list .game-row:not(.locked) .g-join button");
+    await q2.click("#games-list .game-row:not(.locked) .g-join button.join");
     await q2.waitForSelector("#game:not(.hidden)");
     await q2.waitForFunction(() => app.match.slots.some((s) => s.id === me.id), null, { timeout: 5000 });
     check(true, "joining while a match is on takes over a bot's seat");
     const q2name = await q2.evaluate(() => app.match.slots.find((s) => s.id === me.id).name);
     check(/^Player \d\d$/.test(q2name), `an offensive name is replaced (${q2name})`);
     await q1.waitForFunction((n) => app.match.slots.some((s) => s.kind === "human" && s.name === n), q2name);
+    // Watching: from the game browser, see the match without a seat; Play
+    // then takes over the last bot
+    const qw = await open("watcher");
+    await qw.goto(base + "/");
+    await qw.fill("#name", "Wendy");
+    await qw.click("#find");
+    await qw.waitForSelector("#games-list .game-row:not(.locked) .g-join button.watch");
+    await qw.click("#games-list .game-row:not(.locked) .g-join button.watch");
+    await qw.waitForSelector("#game:not(.hidden)");
+    await qw.waitForSelector("#watch-bar:not(.hidden)");
+    check(/[?&]watch=1/.test(qw.url()) && await qw.evaluate(() => !app.match.slots.some((s) => s.id === me.id)) &&
+      await q1.evaluate(() => app.lobby.members.some((m) => m.name === "Wendy" && m.watching)),
+      "Watch from the game browser shows the match, with no seat (and the others see you're watching)");
+    await shot(qw, "watching");
+    await qw.click("#watch-play");
+    await qw.waitForFunction(() => app.match.slots.some((s) => s.id === me.id), null, { timeout: 5000 });
+    check(await qw.isHidden("#watch-bar") && !/watch=1/.test(qw.url()), "and Play joins in, in a bot's seat");
+    await qw.close();
     check(!(await q1.evaluate(() => JSON.stringify(app.lobby).includes(me.token))), "nobody is sent anyone's token");
     // Mute them (from settings, during the match): their emotes and name go
     await q1.keyboard.press("Escape");
