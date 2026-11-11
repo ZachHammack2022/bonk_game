@@ -468,9 +468,14 @@ function check(cond, what) {
       document.querySelector(".logo-ball").getAnimations().every((a) => a.playState === "paused")),
       "behind the profile, the home page holds still (no live blur, the logo's ball stops bouncing)");
     await host.click("#me-tabs [data-tab=stats]");
-    check(await host.isVisible(".stat-tiles") && await host.isVisible("#stats .badge-grid")
-      && !(await host.$("#stats .stat-history")),
-      "the stats screen shows your totals and your badges (no match list)");
+    check((await host.$$(".stat-tiles .stat-tile")).length === 4 && (await host.textContent(".stat-tiles")).includes("Win rate") &&
+      (await host.$$("#stats .up-next li")).length === 4 && !(await host.$("#stats .stat-history")),
+      "the stats screen shows four headline numbers and the badges you're closest to (no match list)");
+    const trophies = await host.$$("#stats .trophy-case .trophy");
+    await trophies[0].click();
+    check(trophies.length === (await host.evaluate(() => BADGES.length)) &&
+      /Regular/.test(await host.textContent("#stats .trophy-detail")),
+      "every badge is in the trophy case, earned first; picking one shows its goal");
     await shot(host, "stats");
     check(await host.isHidden("#download-data"), "guests have no data download (their profile is in the browser)");
     const fresh = await open("fresh");

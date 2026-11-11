@@ -1,5 +1,6 @@
 // bonk web client: Your stats (the Stats tab of your profile): your rating,
-// lifetime totals and badges, from your profile (profileStore in core.js).
+// four headline numbers, the badges you're closest to (Up next) and every
+// badge (the trophy case), from your profile (profileStore in core.js).
 // Signed in, Download my data saves a copy.
 // Plain scripts sharing one global scope; index.html loads them in order.
 "use strict";
@@ -15,6 +16,9 @@ function el(tag, cls, text) {
   return e;
 }
 
+// Best map: the best win rate over at least BEST_MAP_MATCHES matches on it
+const BEST_MAP_MATCHES = 10;
+
 function renderStats() {
   const p = profileStore.get();
   const s = p.stats;
@@ -25,24 +29,34 @@ function renderStats() {
     ? `${s.matches} match${s.matches === 1 ? "" : "es"} since ${new Date(s.first_at * 1000).toLocaleDateString()}.`
     : "";
   if (!s.matches) {
-    body.append(el("p", "dim", "No matches yet. Play one and it shows up here."));
-    renderBadges(s, body);  // (badges.js: all still to earn)
-    return;
+    body.append(el("p", "dim", "No matches yet. Play one and your numbers show up here."));
+  } else {
+    // Four headline numbers. (Totals like knockouts, falls and power-ups
+    // are on their badges: Bonker, Butterfingers, Power Hungry)
+    const tiles = el("div", "stat-tiles");
+    const tile = (value, label, sub, long) => {
+      const t = el("div", "stat-tile" + (long ? " long" : ""));
+      t.append(el("b", "", value), el("span", "stat-label", label), el("span", "dim small", sub));
+      tiles.append(t);
+    };
+    tile(`${Math.round((100 * s.wins) / s.matches)}%`, "Win rate", `${s.wins} of ${s.matches}`);
+    tile((s.kos / s.matches).toFixed(1), "Knockouts a match", `${s.kos} in all`);
+    tile(s.deaths ? (s.kos / s.deaths).toFixed(2) : String(s.kos), "Bonk ratio",
+      s.deaths ? `${s.kos} out · ${s.deaths} in` : "never knocked out!");
+    const best = Object.entries(s.maps || {})
+      .filter(([, m]) => m.matches >= BEST_MAP_MATCHES)
+      .sort(([, a], [, b]) => b.wins / b.matches - a.wins / a.matches || b.matches - a.matches)[0];
+    if (best) {
+      const [id, m] = best;
+      tile(NAMES.maps[id] || id, "Best map", `${Math.round((100 * m.wins) / m.matches)}% wins · ${m.matches} played`, true);
+    } else {
+      tile("–", "Best map", `play ${BEST_MAP_MATCHES} on one map`);
+    }
+    tiles.querySelectorAll(".stat-tile")[2].title = "Knockouts you made for each time you were knocked out";
+    body.append(tiles);
   }
-  const tiles = el("div", "stat-tiles");
-  const tile = (value, label) => {
-    const t = el("div", "stat-tile");
-    t.append(el("b", "", value), el("span", "dim small", label));
-    tiles.append(t);
-  };
-  tile(s.wins, `wins (${Math.round((100 * s.wins) / s.matches)}%)`);
-  tile(s.kos, "knockouts");
-  tile((s.kos / s.matches).toFixed(1), "knockouts a match");
-  tile(s.deaths, "times knocked out");
-  tile(s.falls, "falls");
-  tile(s.pickups, "power-ups grabbed");
-  body.append(tiles);
-  renderBadges(s, body);  // (badges.js)
+  renderUpNext(s, body);      // (badges.js)
+  renderTrophyCase(s, body);
 }
 
 // Signed in: a copy of everything your account keeps (see the privacy page)
