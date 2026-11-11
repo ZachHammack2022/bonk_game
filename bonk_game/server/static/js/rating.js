@@ -123,6 +123,7 @@ $("board-back").addEventListener("click", () => { history.pushState({}, "", "/")
 function renderMyRating() {
   const box = $("stats-rating");
   box.innerHTML = "";
+  box.classList.remove("rated");
   if (!profileStore.user) {
     box.append(rtText("p", "dim small", "Sign in to get a rating and a place on the leaderboard."));
     return;
@@ -130,11 +131,20 @@ function renderMyRating() {
   fetchBoard().then((d) => {
     box.innerHTML = "";
     if (!d.you) return;
+    const r = d.you;
+    // A card: your place, your tier and rating, your best
+    const place = rtText("span", `rating-place tier-${r.tier}`, r.placing ? "–" : `#${r.rank}`);
+    const text = document.createElement("div");
+    text.className = "rating-text";
+    text.append(rtText("b", "", `${(TIERS[r.tier] || TIERS.silver).title} · ${r.rating}`),
+      rtText("span", "dim small", r.placing ? youLine(r)
+        : `#${r.rank} of ${d.total} on the leaderboard · best ${r.peak}`));
     const link = document.createElement("button");
     link.className = "link-button";
-    link.textContent = "See the leaderboard";
+    link.textContent = "Leaderboard";
     link.addEventListener("click", () => { closeMe(); openLeaderboard(true); });
-    box.append(rankBadge(d.you, { big: true }), rtText("p", "small", youLine(d.you)), link);
+    box.append(place, text, link);
+    box.classList.add("rated");
   }, () => {});
 }
 

@@ -783,13 +783,35 @@ body.touch .game-bar { bottom: auto; top: 12px; opacity: 0.7; }
 }
 .own-note { width: 100%; margin: 2px 0 0; }
 
-/* Your stats: numbers in a strip, matches as a list */
-.stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
-.stat-tile { padding: 12px 8px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px;
-             font-size: 12px; color: var(--dim); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 0 -1px -1px 0; }
-.stat-tile b { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+/* Your stats (stats.js): four headline numbers, then Up next and the trophy case (badges.js) */
+#stats-body { display: flex; flex-direction: column; gap: 18px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.stat-tile { padding: 14px 12px; display: flex; flex-direction: column; gap: 3px; border-radius: var(--r); background: var(--surface-2); min-width: 0; }
+.stat-tile b { font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-tile.long b { font-size: 18px; white-space: normal; line-height: 1.2; }
+.stat-label { font-size: 13px; font-weight: 600; }
 .row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-@media (max-width: 420px) { .stat-tiles { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stats-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: -8px; }
+.stats-head h3 { margin: 0; }
+.up-next { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.up-next li { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r); border: 1px solid var(--line); }
+.up-next .badge-text { gap: 6px; }
+.up-next .badge-top b { font-size: 16px; font-weight: 600; }
+.up-next .badge-top b .dim { font-weight: 500; }
+.up-next .badge-bar { height: 8px; border-radius: 4px; }
+.up-left { font-size: 14px; font-weight: 600; color: var(--accent-ink); white-space: nowrap; }
+.trophy-case { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 10px 4px; padding: 14px;
+               border-radius: var(--r); background: var(--surface-2); }
+.trophy { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 2px; min-height: 0; min-width: 0;
+          background: none; border: 0; border-radius: var(--r-s); box-shadow: none; cursor: pointer; }
+.trophy:hover, .trophy.on { background: var(--surface-3); }
+.trophy-name { font-size: 10px; line-height: 1.15; color: var(--dim); text-align: center; max-width: 100%;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trophy-detail { display: flex; align-items: center; gap: 14px; min-height: 56px; margin-top: -8px; padding: 10px 14px;
+                 border-radius: var(--r); border: 1px dashed var(--line-strong); }
+.trophy-detail .trophy-hint { margin: 0; }
 
 /* Killcam */
 /* Covers the match while it plays: click anywhere to skip */
@@ -878,6 +900,17 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
 .rating-card { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .rating-card p { margin: 0; flex: 1; min-width: 180px; }
 .rating-card:empty { display: none; }
+/* Signed in: your place, tier and rating as a card in your tier's colours */
+.rating-card.rated { gap: 14px; padding: 14px 16px; border-radius: var(--r); background: var(--tier-bg, #fff4cc); border: 1px solid var(--tier-line, #f1d778); }
+.rating-card.rated:has(.tier-bronze) { --tier-bg: #fbeee4; --tier-line: #ecc8ad; }
+.rating-card.rated:has(.tier-silver) { --tier-bg: #eef1f6; --tier-line: #cfd6e2; }
+.rating-card.rated:has(.tier-platinum) { --tier-bg: #ddf5f2; --tier-line: #9fdcd5; }
+.rating-card.rated:has(.tier-diamond) { --tier-bg: #e3edff; --tier-line: #a9c4ff; }
+.rating-card.rated:has(.tier-champion) { --tier-bg: #fde4f3; --tier-line: #f2a6d4; }
+.rating-place { display: grid; place-items: center; width: 52px; height: 52px; flex: none; border-radius: 50%; background: #fff;
+                border: 3px solid var(--tier); font-size: 15px; font-weight: 700; color: var(--tier-ink); }
+.rating-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 180px; }
+.rating-text b { font-size: 20px; font-weight: 700; }
 
 .rating-change { margin: -4px 0 4px; display: flex; gap: 6px; align-items: center; justify-content: center; font-weight: 600; }
 .rating-change .change, .rating-chip { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--dim); }
@@ -898,10 +931,6 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
 .lvl-platinum { --lvl: #23a99c; --lvl-bg: #ddf5f2; }
 .lvl-diamond  { --lvl: #4f8cff; --lvl-bg: #e3edff; }
 
-.badge-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.badge-card { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line);
-              border-radius: var(--r); background: var(--surface); min-width: 0; }
-.badge-card.locked .badge-text b { color: var(--dim); }
 .badge-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .badge-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .badge-top b { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -909,7 +938,6 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
 .badge-text .small { line-height: 1.3; }
 .badge-bar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
 .badge-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-@media (max-width: 520px) { .badge-grid { grid-template-columns: minmax(0, 1fr); } }
 
 .badges-earned { display: flex; flex-direction: column; gap: 8px; text-align: left; }
 .badges-earned-head { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-deep, #e0a800); text-align: center; }
@@ -922,7 +950,7 @@ html.installed-app body.touch .game-bar { top: calc(12px + var(--safe-t)); botto
 .badge-next .badge-medal { width: 26px; height: 26px; font-size: 13px; border-width: 1.5px; }
 @keyframes badge-pop { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .earned-list li { animation: none; } }
-.badge-card.secret .badge-medal { font-weight: 800; color: var(--dim); filter: none; }
+.badge-medal.locked:not(:empty) { font-weight: 800; color: var(--dim); }
 
 /* Friends (friends.js) */
 .count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
