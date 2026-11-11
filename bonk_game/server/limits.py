@@ -16,6 +16,16 @@ def _env(name, default):
 
 
 MAX_ROOMS = _env("BONK_MAX_ROOMS", 500)                # rooms on the server at once
+# Busy: past this many people online (players and watchers, every room), or
+# when matches keep falling behind (BUSY_LATE late ticks in BUSY_WINDOW
+# seconds), nobody new gets in: they're told the servers are busy and try
+# again in BUSY_RETRY seconds. People already in a room stay, and can come
+# back after a refresh. One small machine manages about 100 (README: "How
+# much can one server take?")
+MAX_PEOPLE = _env("BONK_MAX_PEOPLE", 100)
+BUSY_LATE = _env("BONK_BUSY_LATE", 3)
+BUSY_WINDOW = _env("BONK_BUSY_WINDOW", 30.0)
+BUSY_RETRY = _env("BONK_BUSY_RETRY", 15)
 ROOMS_PER_IP = _env("BONK_ROOMS_PER_IP", 10)           # new rooms per IP per minute
 MAX_MEMBERS = _env("BONK_MAX_MEMBERS", 16)             # people in a room (players + watchers)
 CONNECTIONS_PER_IP = _env("BONK_CONNECTIONS_PER_IP", 20)

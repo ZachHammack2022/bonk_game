@@ -219,7 +219,8 @@
     }
     lastNow = [t, now];
     const tiles = [
-      ["Players online", fmt(now.members_connected)],
+      ["Players online", fmt(now.members_connected),
+        now.busy ? "busy: turning new people away" : now.max_people ? `of ${fmt(now.max_people)} before "busy"` : "", now.busy],
       ["Rooms", fmt(now.rooms), now.rooms_locked ? `${now.rooms_locked} locked` : ""],
       ["Matches running", fmt(now.matches_running)],
       ["Connections", fmt(now.connections)],
@@ -237,7 +238,7 @@
       ["rooms made", now.rooms_created_total], ["late ticks", now.late_ticks_total],
       ["sent", bytes(now.wire_bytes_sent_total)], ["browser errors", now.client_errors_total],
       ["player reports", now.player_reports_total], ["playtest reports", now.playtest_reports_total],
-      ["old tabs refreshed", now.refused_old_clients_total],
+      ["old tabs refreshed", now.refused_old_clients_total], ["turned away (busy)", now.refused_busy_total],
     ];
     $("totals").textContent = "Since this restart: " +
       totals.map(([k, v]) => `${typeof v === "number" ? nf.format(v) : v} ${k}`).join(" · ");

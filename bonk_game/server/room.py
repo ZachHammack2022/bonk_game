@@ -88,7 +88,14 @@ class PasswordNeeded(RoomFull):
 
 
 class ServerFull(Exception):
-    pass
+    """No new room: the server has as many as it takes, or it's busy (RoomManager.busy)."""
+
+
+class ServerBusy(RoomFull):
+    """Can't join: the server is busy (RoomManager.busy). Try again soon."""
+
+    def __init__(self):
+        super().__init__("The servers are busy right now.")
 
 
 class Member:
@@ -185,6 +192,7 @@ class Room:
         self.rated_accounts = []   # slot -> account of who played it from the start (rated)
         self.ratings = None        # signed-in players' ratings and friends (accounts.Accounts)
         self.tell_account = None   # async (account, msg): tell them wherever they are (RoomManager)
+        self.busy = None           # () -> why the server is busy, or None (RoomManager.busy)
         self.recent = collections.deque(maxlen=moderation.RECENT_KEPT)  # for reports
         self.chat = collections.deque(maxlen=CHAT_KEPT)  # the latest chat lines
         self.created = time.monotonic()
@@ -247,6 +255,11 @@ class Room:
         if m is None:
             if len(self.members) >= limits.MAX_MEMBERS:
                 raise RoomFull("This room is full.")
+            # A busy server lets nobody new in (people already here can
+            # always come back; so can a room's people after a restart)
+            if self.busy is not None and self.reopened_at is None and self.busy():
+                metrics.STATS.refused_busy += 1
+                raise ServerBusy()
             clean, notice = self._name(token, name)
             m = Member(token, clean, send)
             self.members[token] = m
@@ -864,6 +877,7 @@ class Room:
                 delay = next_t - loop.time()
                 if delay < -0.25:
                     stats.late_ticks += 1
+                    stats.late_at.append(stats.clock())
                     next_t = loop.time()  # fell far behind: don't try to catch up
                 await asyncio.sleep(max(0.0, delay))
                 if not self.connected:
@@ -1084,6 +1098,9 @@ class RoomManager:
         to their room after a server restart)."""
         if self.draining or len(self.rooms) >= limits.MAX_ROOMS:
             raise ServerFull()
+        if code is None and self.busy():  # (a room coming back after a restart still can)
+            metrics.STATS.refused_busy += 1
+            raise ServerFull()
         if code is None:
             for _ in range(1000):
                 code = "".join(self.rng.choice(ROOM_ALPHABET) for _ in range(ROOM_CODE_LEN))
@@ -1096,6 +1113,7 @@ class RoomManager:
         self.rooms[code] = Room(code, self.agents, self.recorder, self.profile_of)
         self.rooms[code].ratings = self.ratings
         self.rooms[code].tell_account = self.tell_account
+        self.rooms[code].busy = self.busy
         metrics.STATS.rooms_created += 1
         metrics.event("room_created", room=code, rooms=len(self.rooms))
         return self.rooms[code]
@@ -1142,6 +1160,22 @@ class RoomManager:
                 "online": sum(len(r.connected) for r in live),
                 "more": max(0, len(live) - len(listed))}
 
+    def people(self):
+        """Everyone connected, in every room (players and watchers)."""
+        return sum(len(r.connected) for r in self.rooms.values())
+
+    def busy(self):
+        """Why the server can't take anyone new right now ("full": as many
+        people as limits.MAX_PEOPLE; "behind": matches keep falling behind),
+        or None."""
+        if self.people() >= limits.MAX_PEOPLE:
+            return "full"
+        stats = metrics.STATS
+        now = stats.clock()
+        if sum(1 for t in stats.late_at if now - t < limits.BUSY_WINDOW) >= limits.BUSY_LATE:
+            return "behind"
+        return None
+
     async def tell_account(self, account, msg):
         """Send a message to everyone connected as this account, in any room."""
         for r in list(self.rooms.values()):
@@ -1171,7 +1205,10 @@ class RoomManager:
         space, or a new one with bots that starts by itself. Returns
         (room, whether it's new), or (None, False) if a room is needed and
         allow_new() says no (the per-IP limit). ServerFull if the server
-        can't make one."""
+        can't make one, or is busy (it would turn them away anyway)."""
+        if self.busy():
+            metrics.STATS.refused_busy += 1
+            raise ServerFull()
         best = None
         for r in self.rooms.values():
             if not r.settings.get("password") and not r.closing and r.has_space() and (r.connected or r.quick):

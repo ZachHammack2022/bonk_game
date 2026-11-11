@@ -18,6 +18,8 @@ import secrets
 import sqlite3
 import time
 
+from bonk_game.server import limits
+
 log = logging.getLogger("bonk")
 
 
@@ -50,6 +52,8 @@ class Stats:
         self.ticks = collections.deque(maxlen=self.TICK_SAMPLES)  # seconds per tick
         self.ticks_total = 0
         self.late_ticks = 0            # a room fell behind 30 ticks a second
+        self.late_at = collections.deque(maxlen=100)  # when (clock()), for RoomManager.busy
+        self.refused_busy = 0          # people turned away because the server was busy
         self.bytes_sent = 0            # JSON text sent over WebSockets
         self.wire_bytes = 0            # what that came to on the wire (compressed frames)
         self.messages_sent = 0
@@ -110,6 +114,9 @@ class Stats:
             "tick_ms_p99": round(p99, 3),
             "ticks_total": self.ticks_total,
             "late_ticks_total": self.late_ticks,
+            "max_people": limits.MAX_PEOPLE,
+            "busy": rooms.busy() is not None,
+            "refused_busy_total": self.refused_busy,
             "bytes_sent_total": self.bytes_sent,
             "wire_bytes_sent_total": self.wire_bytes,
             "messages_sent_total": self.messages_sent,

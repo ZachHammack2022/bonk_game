@@ -97,7 +97,7 @@ from aiohttp import WSCloseCode, WSMsgType, web
 
 from bonk_game.envs.utils.maps import MAPS, agent_dir
 from bonk_game.server import auth, badges, limits, lobby, metrics, moderation, modes, playtest
-from bonk_game.server.room import PasswordNeeded, RoomFull, RoomManager, ServerFull, valid_code
+from bonk_game.server.room import PasswordNeeded, RoomFull, RoomManager, ServerBusy, ServerFull, valid_code
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 AGENT_KINDS = ("ppo", "a2c", "dqn", "ars", "bad")
@@ -303,6 +303,14 @@ async def cache_headers(request, handler):
     return response
 
 
+def busy_response():
+    """The server can't take anyone new right now: the page shows "busy" and
+    tries again by itself in a few seconds."""
+    return web.json_response({"error": "The servers are busy right now.", "busy": True,
+                              "retry": limits.BUSY_RETRY},
+                             status=503, headers={"Retry-After": str(limits.BUSY_RETRY)})
+
+
 async def create_room(request):
     if request.app[ROOMS].draining:
         return web.json_response({"error": "The server is restarting. Try again in a moment."},
@@ -313,8 +321,7 @@ async def create_room(request):
     try:
         room = request.app[ROOMS].create()
     except ServerFull:
-        return web.json_response({"error": "The server is full right now. Try again later."},
-                                 status=503)
+        return busy_response()
     # Every room is listed; it gets a password unless {"password": false}
     # (the host can change both in the lobby)
     try:
@@ -345,7 +352,7 @@ async def quick_play(request):
     try:
         room, new = rooms.quick_play(allow_new=lambda: request.app[ROOM_LIMIT].allow(ip))
     except ServerFull:
-        return web.json_response({"error": "The server is full right now. Try again later."}, status=503)
+        return busy_response()
     if room is None:
         return web.json_response({"error": "You're making rooms too quickly. Try again in a minute."},
                                  status=429)
@@ -569,6 +576,9 @@ async def websocket(request):
         except PasswordNeeded as e:
             token = None
             return await refuse(str(e), password=True, wrong=e.wrong)
+        except ServerBusy as e:
+            token = None
+            return await refuse(str(e), busy=True, retry=limits.BUSY_RETRY)
         except RoomFull as e:
             token = None
             return await refuse(str(e))
