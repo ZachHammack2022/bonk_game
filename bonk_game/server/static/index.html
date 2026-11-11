@@ -51,10 +51,12 @@
           <input id="name" maxlength="16" autocomplete="nickname" placeholder="Player">
         </div>
       </div>
-      <!-- One way in: the browser, where you join a game, make one or type a code.
+      <!-- The ways in: Quick play (straight into a game, with bots if nobody's
+           about), or the browser, where you pick a game, make one or type a code.
            Came with an invite link? Then it's straight into that game. -->
       <div id="home-play">
-        <button id="find" class="primary big">Play</button>
+        <button id="quick-play" class="primary big">Quick play</button>
+        <button id="find" class="big secondary-big">Find a game</button>
         <p id="find-help" class="dim small quick-help">Join a game or make your own.</p>
       </div>
       <form id="join-form" class="hidden">
@@ -86,6 +88,7 @@
         </div>
         <div class="browse-actions">
           <button class="me-button" data-me="ball" title="Your profile: ball, stats, settings"><span class="me-button-ball"></span><span class="me-button-name">Profile</span></button>
+          <button id="browse-quick" title="Straight into a game">Quick play</button>
           <button id="new-game" class="primary">New game</button>
         </div>
       </header>
@@ -112,7 +115,8 @@
         <div id="games-empty" class="games-empty hidden">
           <p id="games-empty-text"></p>
           <div class="row-buttons">
-            <button id="empty-public" class="primary">New game</button>
+            <button id="empty-quick" class="primary">Quick play</button>
+            <button id="empty-public">New game</button>
             <button id="clear-filters" class="hidden">Clear filters</button>
           </div>
         </div>

@@ -24,11 +24,12 @@ pip install -r requirements-server.txt
 python -m bonk_game.server            # http://localhost:8000 (--port to change)
 ```
 
-Open the page, pick a name and press **Play**. You'll see every game going: join one, or press **New game** to make your own and send friends the invite link. That's all anyone needs: the server runs the game, and the browser only sends your keys and draws what comes back.
+Open the page, pick a name and press **Quick play** to go straight into a game (with bots, if nobody's about), or **Find a game** to see every game going: join one, or press **New game** to make your own and send friends the invite link. That's all anyone needs: the server runs the game, and the browser only sends your keys and draws what comes back.
 
 ### Getting into a game
 
-- **Play** opens the game list. Search by room, host, player or 4-letter code (Enter joins), filter by mode or map.
+- **Quick play** puts you in the open game with the most people that has space, or makes one: Knockouts on Floating Platform, which starts by itself, with bots making it up to 4 players. Bots step aside as people come (someone arriving mid-match takes over a bot's seat).
+- **Find a game** opens the game list. Search by room, host, player or 4-letter code (Enter joins), filter by mode or map.
 - **New game** takes you straight to a new **public** room (anyone can join), named after you. In the lobby the host can rename it or make it **private** (listed with a lock; joining needs the password, which the server makes up). **Copy invite link** gives a link with the password in it, so friends get straight in.
 - **The host** (★, whoever made the room) picks the mode, map and settings, fills open seats with bots (Easy, Medium or Hard), and presses **Start match**. They can rename the room, switch it between public and private, remove people (they can't come back), and **End match** at any time (say, to change the map without waiting for bots to finish).
 - **Joining mid-match**: you take over a bot's seat, keeping its colour and score (straight away in Lives, Knockouts and Crown; at the next round otherwise), or watch until the next match.

@@ -36,6 +36,7 @@ GRAVITY = {"low": 0.6, "normal": 1.0, "high": 1.4}
 # slower than the original, which is "fast"
 SPEEDS = {"slow": 0.6, "normal": stepping.TIME_SCALE, "fast": 1.0}
 QUICK_BOTS = 3   # bots in a room Quick play makes
+QUICK_FILL = 4   # and they make it up to this many players: one bot steps aside for each person past 1
 # Room names (shown in the game browser) and passwords. Every room is listed;
 # one with a password needs it to get in (the invite link carries it)
 ROOM_NAME_LEN = 30
@@ -196,14 +197,16 @@ def check_settings(settings, msg, people, bot_options):
     return s, problem
 
 
-def seats(settings, people):
+def seats(settings, people, fill=None):
     """Who would play if the match started now: (member tokens, bot kinds).
     `people`: the connected members' tokens, in join order. The map says how
     many can play; bots past that sit this one out, and so do people (they
-    watch)."""
+    watch). `fill` (Quick play rooms): bots only make the players up to that
+    many, so they step aside as people come."""
     most = MAPS[settings["map"]].players[1]
     humans = list(people)[:most]
-    bots = settings["bots"][:most - len(humans)]
+    room = most - len(humans) if fill is None else min(most, fill) - len(humans)
+    bots = settings["bots"][:max(0, room)]
     return humans, bots
 
 
@@ -275,11 +278,11 @@ def own_colors(colors, wanted, teams=None):
     return out
 
 
-def lineup(settings, members, people):
+def lineup(settings, members, people, fill=None):
     """The seats as they'd be if the match started now, for the lobby.
     `members`: token -> Member; `people`: the connected members' tokens.
     People are shown by their public id (Member.pid), never their token."""
-    humans, bots = seats(settings, people)
+    humans, bots = seats(settings, people, fill)
     teams = teams_for(settings["mode"], [members[t].team for t in humans], len(bots))
     colors = colors_for([members[t].color for t in humans], len(bots), teams)
     own = own_colors(colors, [members[t].own_color for t in humans] + [None] * len(bots), teams)
