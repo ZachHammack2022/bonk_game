@@ -193,6 +193,19 @@
   </div>
 
   <!-- Joining a game with a password -->
+  <!-- The servers are busy: try again by itself in a few seconds (core.js busy) -->
+  <div id="busy-dialog" class="overlay hidden" role="alertdialog" aria-labelledby="busy-title">
+    <div class="card settings-card busy-card">
+      <h2 id="busy-title">The servers are busy</h2>
+      <p class="dim">Lots of people are playing right now. We'll keep trying to get you in.</p>
+      <p id="busy-count" class="busy-count" aria-live="polite"></p>
+      <div class="row-buttons">
+        <button id="busy-now" class="primary">Try now</button>
+        <button id="busy-cancel" class="ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="pw-dialog" class="overlay hidden" role="dialog" aria-labelledby="pw-title">
     <form id="pw-form" class="card settings-card">
       <h2 id="pw-title">Private game</h2>

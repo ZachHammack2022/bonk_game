@@ -156,6 +156,7 @@ Set up once: make a deploy token (`fly tokens create deploy -a bonk-game`) and a
 | `BONK_METRICS_DB` | in memory | where `/admin`'s history is kept (`/data/metrics.db` on Fly) |
 | `BONK_TRUST_PROXY` | off | `1` behind a proxy, so limits see each visitor's real IP |
 | `BONK_MAX_ROOMS` | 500 | rooms open at once |
+| `BONK_MAX_PEOPLE` | 100 | people online (every room) before the server is **busy**: nobody new gets in, and the page says "The servers are busy" and tries again by itself every `BONK_BUSY_RETRY` (15) seconds. People already in a room stay. It's also busy when matches keep falling behind (`BONK_BUSY_LATE`, 3 late ticks in `BONK_BUSY_WINDOW`, 30 s). `/admin` shows how close it is |
 | `BONK_ROOMS_PER_IP` | 10 | new rooms per IP per minute |
 | `BONK_MAX_MEMBERS` | 16 | people in a room, players and watchers |
 | `BONK_CONNECTIONS_PER_IP` | 20 | open connections per IP |

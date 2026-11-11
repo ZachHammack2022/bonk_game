@@ -166,6 +166,40 @@ function toast(text, error = false, actions = null) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add("hidden"), actions && actions.length ? 12000 : 3200);
 }
+// The servers are busy (a 503 with "busy", or a room that turned us away):
+// a dialog that counts down and tries `retry` again by itself, until it
+// works or you cancel
+const busy = {
+  timer: null,
+  retry: null,
+  show(seconds, retry) {
+    this.retry = retry;
+    let left = Math.max(3, Math.round(seconds || 15));
+    clearInterval(this.timer);
+    const tick = () => {
+      $("busy-count").textContent = `Trying again in ${left}…`;
+      if (left-- <= 0) this.now();
+    };
+    tick();
+    this.timer = setInterval(tick, 1000);
+    $("busy-dialog").classList.remove("hidden");
+  },
+  hide() {
+    clearInterval(this.timer);
+    this.timer = null;
+    $("busy-dialog").classList.add("hidden");
+  },
+  now() {
+    const retry = this.retry;
+    this.hide();
+    $("busy-count").textContent = "Trying…";
+    if (retry) retry();
+  },
+  get open() { return !$("busy-dialog").classList.contains("hidden"); },
+};
+$("busy-now").addEventListener("click", () => busy.now());
+$("busy-cancel").addEventListener("click", () => { busy.retry = null; busy.hide(); });
+
 function status(text) {
   $("status").textContent = text || "";
   $("status").classList.toggle("hidden", !text);
@@ -603,6 +637,18 @@ function onMessage(msg) {
       break;
     case "error":
       if (msg.refresh) { refreshForNewVersion(msg.message); break; }
+      if (msg.busy) {
+        // This room's server is busy: wait on the start page, and try again
+        const code = app.room, password = app.password, watch = app.watch;
+        app.fatal = true;
+        if (app.ws) app.ws.close();
+        app.ws = null;
+        status("");
+        history.replaceState({}, "", "/");
+        show("home");
+        busy.show(msg.retry, () => { app.watch = watch; openRoom(code, true, password); });
+        break;
+      }
       if (msg.password) {
         // The room has a password: ask for it, rather than going home
         app.fatal = true;

@@ -281,7 +281,8 @@ async function newGame(button) {
     const r = await fetch("/api/rooms", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: defaultRoomName(), password: false }) });
     const body = await r.json();
-    if (!r.ok) toast(body.error || "Couldn't create a game.", true);
+    if (r.status === 503 && body.busy) busy.show(body.retry, () => newGame(button));  // (core.js)
+    else if (!r.ok) toast(body.error || "Couldn't create a game.", true);
     else openRoom(body.room, true, body.password);
   } catch (e) {
     toast("Couldn't create a game. Is the server running?", true);
@@ -299,7 +300,8 @@ async function quickPlay(button) {
   try {
     const r = await fetch("/api/quickplay", { method: "POST" });
     const body = await r.json();
-    if (!r.ok) toast(body.error || "Couldn't find a game.", true);
+    if (r.status === 503 && body.busy) busy.show(body.retry, () => quickPlay(button));  // (core.js)
+    else if (!r.ok) toast(body.error || "Couldn't find a game.", true);
     else openRoom(body.room, true);
   } catch (e) {
     toast("Couldn't find a game. Is the server running?", true);

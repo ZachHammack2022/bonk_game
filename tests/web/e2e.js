@@ -47,6 +47,7 @@ function check(cond, what) {
     { cwd: ROOT, env: { ...process.env, PYTHONPATH: ROOT }, stdio: ["ignore", "inherit", "inherit"] });
   let server = startServer();
   let restarting = false;  // (the browser logs failed reconnects while the server is down)
+  let pretendBusy = false;  // (and the 503 a pretend-busy server answers with)
   const errors = [];
   let browser;
   const shot = async (page, name) => {
@@ -66,6 +67,7 @@ function check(cond, what) {
       page.on("console", (m) => {
         if (m.type() !== "error") return;
         if (restarting && /WebSocket|ERR_CONNECTION_REFUSED/.test(m.text())) return;
+        if (pretendBusy && /status of 503/.test(m.text())) return;
         errors.push(`${name}: ${m.text()}`);
       });
       return page;
@@ -600,8 +602,22 @@ function check(cond, what) {
     const qa = await open("qa");
     await qa.goto(base + "/");
     await qa.fill("#name", "Ada");
+    // The servers are busy (the first time): a dialog counts down, then
+    // tries again by itself
+    let busyOnce = true;
+    pretendBusy = true;
+    await qa.route("**/api/quickplay", (route) => {
+      if (!busyOnce) return route.continue();
+      busyOnce = false;
+      route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "busy", busy: true, retry: 3 }) });
+    });
     await qa.click("#quick-play");
-    await qa.waitForSelector("#game:not(.hidden)", { timeout: 8000 });
+    await qa.waitForSelector("#busy-dialog:not(.hidden)");
+    check(/Trying again in [0-9]/.test(await qa.textContent("#busy-count")), "busy servers say so, and count down to trying again");
+    await shot(qa, "busy");
+    await qa.waitForSelector("#game:not(.hidden)", { timeout: 12000 });
+    check(await qa.isHidden("#busy-dialog"), "then try again by themselves, and get in");
+    pretendBusy = false;
     const qaSlots = await qa.evaluate(() => app.match.slots.map((x) => x.kind));
     check(qaSlots.length === 4 && qaSlots.filter((k) => k === "human").length === 1,
       `Quick play starts a match by itself, you and 3 bots (${qaSlots.join(", ")})`);
